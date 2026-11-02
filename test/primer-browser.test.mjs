@@ -30,6 +30,10 @@ test('疾病概要入口、四段数据与单层返回', async t => {
     check(history.length===before+1 && history.state?.dp,'P4 history 压栈');
     check(panel.querySelector('[data-dp=back]').offsetWidth && panel.querySelector('[data-dp=close]').offsetWidth,'P5 两入口');
     history.back();await wait();check(panel.hidden && document.activeElement===btn && window.scrollY===y,'P4 P6 后退、焦点与滚动');
+    const afterBack=history.length;
+    history.forward();await wait();
+    check(!panel.hidden && history.state?.dp && history.length===afterBack && document.activeElement===panel.querySelector('.dp-panel') && window.scrollY===y,'前进恢复面板、焦点与滚动且不压栈');
+    history.back();await wait();check(panel.hidden && document.activeElement===btn && window.scrollY===y,'前进后再次后退');
     btn.click();await wait();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await wait();
     check(panel.hidden && document.activeElement===btn && window.scrollY===y,'P7 Esc');
     btn.click();await wait();panel.querySelector('[data-dp=close]').click();await wait();check(panel.hidden && document.activeElement===btn,'P5 关闭');

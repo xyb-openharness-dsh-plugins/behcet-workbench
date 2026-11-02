@@ -176,7 +176,7 @@
     try { return !!(global.history && global.history.state && global.history.state.dp) } catch (_) { return false }
   }
 
-  function open(trigger) {
+  function open(trigger, fromHistory) {
     if (state.open) return
     if (!data()) { console.warn('[disease-primer] 缺少 window.DISEASE_PRIMER，无法打开'); return }
     var el = build()
@@ -190,7 +190,9 @@
     el.hidden = false
     document.documentElement.classList.add('dp-lock')
     if (state.trigger) state.trigger.setAttribute('aria-expanded', 'true')
-    try { global.history.pushState({ dp: 1 }, '', HASH) } catch (_) { /* file:// 下可能受限，退化为无 history */ }
+    if (!fromHistory) {
+      try { global.history.pushState({ dp: 1 }, '', HASH) } catch (_) { /* file:// 下可能受限，退化为无 history */ }
+    }
     var panel = el.querySelector('.dp-panel')
     if (panel) panel.focus()
   }
@@ -226,7 +228,11 @@
   function back() { close() } // 单层：返回与关闭落到同一动作，但仍是两个独立入口（32 号要求）
 
   /* ---------- 事件 ---------- */
-  function onPop() { if (state.open) applyClose() }
+  function onPop() {
+    if (ourState()) {
+      if (!state.open) open(findTrigger(), true)
+    } else if (state.open) applyClose()
+  }
 
   function onKey(e) {
     if (!state.open) return
