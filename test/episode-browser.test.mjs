@@ -31,6 +31,9 @@ test('发作记录可新增未知结束、更正回看并遵守私密出口', as
     check(!document.querySelector('#draft').value.includes('测试私密原文'),'AI 私密过滤');
     go('复诊与准备','就诊准备与导出');
     check(!document.querySelector('#export-preview').textContent.includes('测试私密原文'),'摘要默认过滤');
+    let privateChoice=document.querySelector('[data-select="'+r.id+'"]');privateChoice.checked=true;privateChoice.dispatchEvent(new Event('change',{bubbles:true}));
+    go('病情一图秀','治疗与事件节点');
+    privateChoice=document.querySelector('[data-timeline-select="'+r.id+'"]');privateChoice.checked=true;privateChoice.dispatchEvent(new Event('change',{bubbles:true}));
     go('发作与病程','发作记录');
     document.querySelector('[data-correct="'+r.id+'"]').click();
     document.querySelector('#entry-date').value='';
@@ -47,6 +50,7 @@ test('发作记录可新增未知结束、更正回看并遵守私密出口', as
     document.querySelector('#entry-text').value='更正原文';
     document.querySelector('[data-save-correction]').click();
     check(r.endDate==='2026-01-05' && r.site==='舌' && r.history[0].endDate==='', '更正历史');
+    check(state.selected.has(r.id) && state.timelineSelected.has(r.id),'私密保持私密时保留显式选择');
     check(document.querySelector('main').textContent.includes('结束：未知') && document.querySelector('main').textContent.includes('测试私密原文'),'旧值回看');
     document.querySelector('[data-correct="'+r.id+'"]').click();
     document.querySelector('#entry-private').checked=false;
