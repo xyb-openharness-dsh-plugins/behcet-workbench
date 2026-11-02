@@ -2,9 +2,9 @@
 
 > 填写依据：starter `docs/28-INTERACTION-PATH-DESIGN.md`（判据 IP1–IP11）与
 > `skills/hvt-requirement-review/references/interaction-path-consistency.md`（X1–X4 走查）。
-> **文档编号**：INTERACTION-DESIGN ｜ **版本**：`v0.1.0-draft.1`（2026-11-02）｜ **状态**：**草案（M0 → M1 之间）**，`G1 未签认`，等待真实用户签认。
-> 签认时机：与场景清单、页面树同批（G1 包）。
-> **本表未签认不开 HTML 原型（IP1）**；G2 走查按本文逐条断言。
+> **文档编号**：INTERACTION-DESIGN ｜ **版本**：`v0.1.0-draft.1`（2026-11-02）｜ **状态**：用户已于 2026-11-02 在本会话确认 G1 草案；见 `docs/HVT-REVIEW.md`。
+> 确认范围包括当时提交的场景清单、页面树和交互草案；路径覆盖和独立审核仍未完成，不得写成已验证。
+> G2 走查按本文逐条断言；临床待核内容不上线为患者指导。
 > **0 患者访谈、0 临床审核**：本文场景、入口文案、步骤全部是**待验证的设计假设**，不是患者原话；表内医学相关内容（红旗症状、用药注意）标注为 **【待核】**，未经临床核验不得写进原型文案。
 > 同批文档：`docs/SCENARIOS.md`、`docs/PATIENT-FLOW.md`（待与现有草案核对）、`docs/DIFF-MATRIX.md`、`docs/DEV-PLAN.md`。
 > 场景 ID 以 `SCENARIOS.md` 为唯一来源，S01–S15 按语义对应；路径和页面树仍须 G1 前复核，双向覆盖尚未验证。
