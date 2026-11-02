@@ -6,15 +6,23 @@
 
 ## 疾病概要
 
-以下内容与[原型疾病概要](prototypes/v0.2/primer-data.js)同源，依据[临床资料册](docs/CLINICAL-DATA-2026.md)；本项目患者访谈 0 次、临床审核 0 次。
+以下文字与[原型疾病概要](prototypes/v0.2/primer-data.js)分别维护，均依据[临床资料册](docs/CLINICAL-DATA-2026.md)，尚无自动同步；本项目患者访谈 0 次、临床审核 0 次。
 
-**定义**：国家指南第 9 章以「白塞病/贝赫切特综合征」为题，覆盖黏膜和皮肤、眼、血管、神经与消化系统。图 9-1 写 ICBD 2013，正文与表 9-1 写 2014，差异原因未核。NHS 与国家指南的诊断框架结构性不同，不拼接为自测。来源：[国家指南 PDF（pdf），第 9 章 PDF 54–60 页、印刷 50–56 页](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)；[NHS 原页（fulltext），最后复核 2023-04-06](https://www.nhs.uk/conditions/behcets-disease/)。
+### 定义
 
-**医学资料规范和指南情况**：国家指南 2025 年版覆盖检查和分器官治疗。EULAR 2018 建议未取得原件，据二次来源[国家指南（pdf）](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)；EULAR 2025 更新未取得原件，据二次来源 [RheumNow（fulltext）](https://rheumnow.com/news/eular-2025-update-behcets-syndrome)。[PubMed 题录（registry）](https://pubmed.ncbi.nlm.nih.gov/41876291/)记录 DOI 10.1016/j.ard.2026.02.009，不是全文。
+国家指南第 9 章以「白塞病/贝赫切特综合征」为题，覆盖黏膜和皮肤、眼、血管、神经与消化系统。图 9-1 写 ICBD 2013，正文与表 9-1 写 2014，差异原因未核。NHS 与国家指南的诊断框架结构性不同，不拼接为自测。来源：[国家指南 PDF（pdf），第 9 章 PDF 54–60 页、印刷 50–56 页](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)；[NHS 原页（fulltext），最后复核 2023-04-06](https://www.nhs.uk/conditions/behcets-disease/)。
 
-**目前治疗全景概要**：国家指南第 9 章覆盖黏膜和皮肤、眼、血管、神经与消化系统的分器官治疗；此处只说明资料覆盖范围。来源：[国家指南（pdf）](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)。
+### 医学资料规范和指南情况
 
-**发展趋势**：2018 年 · EULAR 2018 版建议发表于 Ann Rheum Dis 2018;77:808–818，未取得原件，据二次来源[国家指南（pdf）](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)；2025 年 · 国家指南 2025 年版发布，第 9 章为白塞病/贝赫切特综合征；2026-03-23 · EULAR 2025 更新版在线发表，未取得原件，据二次来源 [RheumNow（fulltext）](https://rheumnow.com/news/eular-2025-update-behcets-syndrome)，另有 [PubMed 题录（registry）](https://pubmed.ncbi.nlm.nih.gov/41876291/)。
+国家指南 2025 年版覆盖检查和分器官治疗。EULAR 2018 建议未取得原件，据二次来源[国家指南（pdf）](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)；EULAR 2025 更新未取得原件，据二次来源 [RheumNow（fulltext）](https://rheumnow.com/news/eular-2025-update-behcets-syndrome)。[PubMed 题录（registry）](https://pubmed.ncbi.nlm.nih.gov/41876291/)记录 DOI 10.1016/j.ard.2026.02.009，不是全文。
+
+### 目前治疗全景概要
+
+国家指南第 9 章覆盖黏膜和皮肤、眼、血管、神经与消化系统的分器官治疗；此处只说明资料覆盖范围。来源：[国家指南（pdf）](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)。
+
+### 发展趋势
+
+2018 年 · EULAR 2018 版建议发表于 Ann Rheum Dis 2018;77:808–818，未取得原件，据二次来源[国家指南（pdf）](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)；2025 年 · 国家指南 2025 年版发布，第 9 章为白塞病/贝赫切特综合征；2026-03-23 · EULAR 2025 更新版在线发表，未取得原件，据二次来源 [RheumNow（fulltext）](https://rheumnow.com/news/eular-2025-update-behcets-syndrome)，另有 [PubMed 题录（registry）](https://pubmed.ncbi.nlm.nih.gov/41876291/)。
 
 ## 开发顺序
 

@@ -5,6 +5,39 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+test('空指标数组不影响其他记录，缺失数据仍显示错误', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'beipal-empty-metrics-'));
+  t.after(() => rm(dir, { recursive:true, force:true }));
+  const root = resolve('prototypes/v0.2');
+  await copyFile(join(root, 'metric-model.js'), join(dir, 'metric-model.js'));
+  const data = await readFile(join(root, 'demo-data.js'), 'utf8');
+  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const runProbe = async (suffix, probe) => {
+    await writeFile(join(dir, 'demo-data.js'), data + suffix);
+    await writeFile(join(dir, 'index.html'), html.replace('</body>', `<script>try { ${probe} document.body.dataset.emptyTest='PASS'; } catch(e) { document.body.dataset.emptyTest='FAIL: '+e.message; }</script></body>`));
+    return spawnSync(process.env.CHROMIUM || '/usr/bin/chromium', ['--headless','--no-sandbox','--disable-gpu','--dump-dom','file://' + join(dir, 'index.html')], {encoding:'utf8',timeout:30000});
+  };
+  const empty = await runProbe('\nwindow.BEIPAL_METRICS=[];', `
+    const check=(v,m)=>{if(!v)throw Error(m)};
+    check(document.querySelector('main').textContent.includes('最近的记录'),'看板未加载');
+    check(document.querySelector('main [data-correct]'),'其他记录丢失');
+    go('病情整理','指标检测');
+    check(document.querySelector('main').textContent.includes('暂无示例指标'),'指标空态缺失');
+    check(!document.querySelector('main').textContent.includes('示例数据不可用'),'误报数据不可用');
+    go('病情一图秀');
+    check(document.querySelector('#chart-panel').textContent.includes('当前范围没有可绘制的数值记录'),'图表空态缺失');
+    check(!document.querySelector('#chart-panel svg'),'空图表不应绘制');
+  `);
+  if (empty.error?.code === 'ENOENT') { t.skip('Chromium 不可用'); return; }
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.match(empty.stdout, /data-empty-test="PASS"/, empty.stdout.match(/data-empty-test="[^"]*"/)?.[0] || empty.stderr);
+  const missing = await runProbe('\ndelete window.BEIPAL_METRICS;', `
+    if (!document.querySelector('main [role=alert]')?.textContent.includes('示例数据不可用')) throw Error('缺失数据未报错');
+  `);
+  assert.equal(missing.status, 0, missing.stderr);
+  assert.match(missing.stdout, /data-empty-test="PASS"/, missing.stdout.match(/data-empty-test="[^"]*"/)?.[0] || missing.stderr);
+});
+
 test('浏览器显示空指标、极值图和逐点来源', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'beipal-metric-'));
   t.after(() => rm(dir, { recursive:true, force:true }));
