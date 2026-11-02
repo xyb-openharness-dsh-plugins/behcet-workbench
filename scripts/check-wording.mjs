@@ -21,7 +21,7 @@
  *   合法：「病程与诊断过程」「什么情况要马上就医」「待核」
  *   非法：「诊断为白塞病」「病情分级为中度」「建议服用」「可以停药」
  *
- * 豁免：确需在产品文案里出现时，在该行加注释 `wording-allow`，并在提交信息里说明理由。
+ * 不支持行级豁免：压缩代码可能整页只有一行，行级豁免会屏蔽其他命中；误报须修改规则并添加回归。静态模式覆盖有限，不能证明文案安全，也不能替代临床审核。
  *
  * 用法：
  *   node scripts/check-wording.mjs [--root .]
@@ -83,7 +83,6 @@ const RULES = [
 function analyze(rel, src) {
   const problems = []
   src.split('\n').forEach((line, i) => {
-    if (/wording-allow/.test(line)) return
     /* 纯注释行不算产品文案（本检查器自己的说明、开发注释） */
     if (/^\s*(?:\/\/|\*|\/\*|<!--)/.test(line)) return
     for (const [id, re, why] of RULES) {
@@ -111,7 +110,7 @@ if (args.includes('--self-test')) {
     ['非法·匹配指数', `<span>匹配度 87%</span>`, 1],
     ['非法·预后', `<p>预后良好，生存期约 5 年</p>`, 1],
     ['非法·判定列', `const row = { diagnosis: '白塞病' };`, 1],
-    ['豁免·wording-allow', `const note = '建议服用'; // wording-allow 引用医生原话`, 0],
+    ['同行标记不能屏蔽其他内容', `const note = '建议服用'; // wording-allow`, 1],
   ]
   let bad = 0
   for (const [name, src, want] of FIXTURES) {
@@ -120,7 +119,7 @@ if (args.includes('--self-test')) {
     if (!ok) bad++
     console.log(`${ok ? '✓' : '✗'} ${name}：期望 ${want} 条，实得 ${got}`)
   }
-  console.log(bad ? `✗ 自检失败 ${bad}/${FIXTURES.length}` : `✓ 自检通过 ${FIXTURES.length}/${FIXTURES.length}（合法话题词/豁免/7 类禁词三形态）`)
+  console.log(bad ? `✗ 自检失败 ${bad}/${FIXTURES.length}` : `✓ 自检通过 ${FIXTURES.length}/${FIXTURES.length}（合法话题词、违规样例与同行标记）`)
   process.exit(bad ? 1 : 0)
 }
 
@@ -135,7 +134,7 @@ for (const rel of files.sort()) problems.push(...analyze(rel, readFileSync(join(
 if (problems.length) {
   console.error('✗ 患者可见文案红线失败：')
   for (const p of problems) console.error('  ' + p)
-  console.error('  → 依据 docs/SPEC.md §「明确不做（边界清单）」与 docs/INTERACTION-DESIGN.md；确需保留请在该行加 wording-allow 并在提交信息里说明。')
+  console.error('  → 依据 docs/SPEC.md §「明确不做（边界清单）」与 docs/INTERACTION-DESIGN.md；误报须修订规则并补回归。')
   process.exit(1)
 }
 console.log(`✓ 患者可见文案红线：扫描 ${files.length} 个文件，${RULES.length} 条禁词规则，0 命中`)
