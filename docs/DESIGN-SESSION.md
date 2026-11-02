@@ -1,6 +1,6 @@
 # 互动设计记录
 
-状态：研究与需求草案；G1 未签。设计依据见 DESIGN-PROMPT 与 DESIGNER-BRIEF，原生会话合同见 prompts/DSH-AGENT-PANE-INTEGRATION.md。
+状态：研究与需求草案；用户已确认 G1 方向，HVT 审核未完成，见 HVT-REVIEW.md。设计依据见 DESIGN-PROMPT 与 DESIGNER-BRIEF，原生会话合同见 prompts/DSH-AGENT-PANE-INTEGRATION.md。
 
 | 决策 | 已确认内容 | 待验证 |
 | --- | --- | --- |
