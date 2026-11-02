@@ -147,6 +147,33 @@ test('发作开始日期支持日/月/未知精度，未知与月份不误排、
     check(m.history.at(-1).date==='2026-03' && m.history.at(-1).datePrecision==='month','更正历史保留月精度');
     check(document.querySelector('main').textContent.includes('开始：2026-03（仅月份）') && document.querySelector('main').textContent.includes('开始：2026-03-15'),'新旧值分别按精度显示');
 
+    // G 异常旧数据仅在测试中注入，验证未修改和真实更正的完整追溯。
+    for (const [id,date,precision] of [[900001,'2026-03-15','month'],[900002,'1800-01-01','day']]) {
+      const legacy={id,kind:'发作记录',date,datePrecision:precision,endDate:'',site:'口腔',text:'测试注入异常 '+id,source:'测试注入',private:false,history:[]};
+      state.records.push(legacy);state.timelineSelected.add(id);render();
+      go('病情一图秀','治疗与事件节点');
+      const unknown=[...document.querySelectorAll('#timeline-results section')].find(section=>section.querySelector('h3')?.textContent.includes('日期未知'));
+      check(unknown?.textContent.includes('测试注入异常 '+id) && ![...document.querySelectorAll('#timeline-results section')].filter(section=>section!==unknown).some(section=>section.textContent.includes('测试注入异常 '+id)),'异常值归入未知且不作排序标题');
+      go('发作与病程','发作记录');
+      click('[data-correct="'+id+'"]');
+      check(document.querySelector('#dialog-body').textContent.includes(date) && document.querySelector('#dialog-body').textContent.includes(precision),'更正表单展示原始值与原始精度');
+      click('[data-save-correction]');
+      check(legacy.date===date && legacy.datePrecision===precision && legacy.history.length===0,'直接保存不覆盖异常值或产生历史');
+      click('[data-correct="'+id+'"]');document.querySelector('#entry-text').value+='已修改';click('[data-save-correction]');
+      check(legacy.date===date && legacy.datePrecision===precision && legacy.history.length===1 && legacy.history[0].date===date && legacy.history[0].datePrecision===precision,'更正文案保留原始日期与精度');
+      check(document.querySelector('main').textContent.includes('原始值：'+date+'；原始精度：'+precision),'页面可回看原始异常值与精度');
+      click('[data-correct="'+id+'"]');prec('day');document.querySelector('#entry-date').value='2026-04-01';click('[data-save-correction]');
+      check(legacy.date==='2026-04-01' && legacy.history.at(-1).date===date && legacy.history.at(-1).datePrecision===precision,'日期更正保留原始精度');
+      check(document.querySelector('main').textContent.includes('原始值：'+date+'；原始精度：'+precision),'更正后历史可回看原始值');
+    }
+    click('[data-action=add]');document.querySelector('#entry-date').value='2026-07-10';prec('month');
+    check(document.querySelector('#entry-month').value==='2026-07','日转月自动填充');
+    prec('day');document.querySelector('#entry-date').value='2026-08-10';prec('month');
+    check(document.querySelector('#entry-month').value==='2026-08','再次切换刷新自动月份');
+    const monthInput=document.querySelector('#entry-month');monthInput.value='2026-06';monthInput.dispatchEvent(new Event('input',{bubbles:true}));
+    prec('day');document.querySelector('#entry-date').value='2026-09-10';prec('month');
+    check(monthInput.value==='2026-06','保留手动输入的月份');click('[data-action=cancel]');
+
     Date.now=realNow;
     document.body.dataset.datePrecisionTest='PASS';
   } catch(e) { document.body.dataset.datePrecisionTest='FAIL: '+e.message; } })();
