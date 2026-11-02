@@ -174,6 +174,23 @@ test('发作开始日期支持日/月/未知精度，未知与月份不误排、
     prec('day');document.querySelector('#entry-date').value='2026-09-10';prec('month');
     check(monthInput.value==='2026-06','保留手动输入的月份');click('[data-action=cancel]');
 
+    // H 异常结束日期仅为测试注入；未经明确更正时不得丢失。
+    for (const [id,badEnd] of [[900003,'2026-02-30'],[900004,'1800-01-01']]) {
+      const legacy={id,kind:'发作记录',date:'2026-01-01',datePrecision:'day',endDate:badEnd,site:'口腔',text:'测试注入异常结束 '+id,source:'测试注入',private:false,history:[]};
+      state.records.push(legacy);render();click('[data-correct="'+id+'"]');
+      check(document.querySelector('#dialog-body').textContent.includes('原始值：'+badEnd) && document.querySelector('#entry-end').disabled,'表单提示原始结束日期并默认保留');
+      click('[data-save-correction]');
+      check(legacy.endDate===badEnd && legacy.history.length===0,'直接保存保留异常结束日期且无历史');
+      click('[data-correct="'+id+'"]');document.querySelector('#entry-text').value+='已修改';click('[data-save-correction]');
+      check(legacy.endDate===badEnd && legacy.history.at(-1).endDate===badEnd,'修改其他字段保留原始结束日期');
+      click('[data-correct="'+id+'"]');click('#entry-end-replace');document.querySelector('#entry-end').value='2026-04-01';click('[data-save-correction]');
+      check(legacy.endDate==='2026-04-01' && legacy.history.at(-1).endDate===badEnd,'明确更正保留原始结束日期历史');
+      check(document.querySelector('main').textContent.includes('结束：待核（原始值：'+badEnd+'）'),'更正历史标明异常结束日期');
+    }
+    const clearEnd={id:900005,kind:'发作记录',date:'2026-01-01',datePrecision:'day',endDate:'2026-02-30',site:'',text:'测试清除异常结束',source:'测试注入',private:false,history:[]};
+    state.records.push(clearEnd);render();click('[data-correct="900005"]');click('#entry-end-replace');click('[data-save-correction]');
+    check(clearEnd.endDate==='' && clearEnd.history.at(-1).endDate==='2026-02-30','明确留空可设为未知并保留历史');
+
     Date.now=realNow;
     document.body.dataset.datePrecisionTest='PASS';
   } catch(e) { document.body.dataset.datePrecisionTest='FAIL: '+e.message; } })();
