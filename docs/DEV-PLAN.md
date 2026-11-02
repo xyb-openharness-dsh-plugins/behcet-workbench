@@ -29,14 +29,14 @@
 
 | # | 基线失败（实测） | 归属里程碑 | 处置要求 |
 | --- | --- | --- | --- |
-| BF-01 | `dsh-wb-cli audit`：**2026-11-02 初次 23/37 · 12 失败**；补入 `docs/DIFF-MATRIX.md` 与 `docs/DEV-PLAN.md` 后 **同日复跑 25/37 · 10 失败 · 2 待人工**（剩余 10 条见下 BF-02–BF-08/10） | M3–M5 | 10 条失败逐条销账；未销账不得声称 audit 通过（M7 判据是 audit 无 fail，不是「跑过」） |
+| BF-01 | `dsh-wb-cli audit`：**2026-11-02 初次 23/37 · 12 失败**；补入 `docs/DIFF-MATRIX.md` 与 `docs/DEV-PLAN.md` 后 **同日复跑 25/37 · 10 失败 · 2 待人工**（剩余 10 条见下 BF-02–BF-08/10）；**同日再补检查链后复跑 28/37 · 8 失败 · 1 待人工**（销账 BF-04 与 `ui/原型基线`） | M3–M5 | 8 条失败逐条销账；未销账不得声称 audit 通过（M7 判据是 audit 无 fail，不是「跑过」） |
 | BF-02 | 缺 `lib/version.js`、缺 `lib/layout.js`（面板参数唯一来源） | M5 | 补文件；`layout.js` 是 40 号 A 家族面板标准的唯一参数来源 |
 | BF-03 | `customFrame: true` 缺失 | M5 | 按顶栏三段式补 |
-| BF-04 | 检查链缺单测与文案红线检查 | M5 | 进 `npm run check` 链，不进链不算 |
+| BF-04 | ~~检查链缺单测与文案红线检查~~ **2026-11-02 销账**：`npm run check` 已补 `node scripts/check-wording.mjs`（患者可见文案红线，P 类禁词 7 条 + `--self-test` 12 例）与 `node --test test/*.test.mjs` | M5→已完成 | 已实测：audit 自 25/37 → **28/37**；正向对照（往原型注入「病情分级为中度活动」）会被拦下 |
 | BF-05 | 无 `public/index.html`、`lib/client.js` 自绘业务卡片 | M2/M5 | 原型与开发版同源；自绘卡片须换家族组件 |
 | BF-06 | README 缺 `## 疾病概要` | M1 | 36 号四段，P1–P8 探针须过 |
 | BF-07 | 缺 `prototypes/<vX>/primer-data.js`、原型无 primer 入口 | M2 | 与疾病概要同批 |
-| BF-08 | 无 `data/freeze-contract.md`、无 `prototypes/v0.2` | M3/M2 | G3 前置 |
+| BF-08 | `data/freeze-contract.md` 仍缺（**`prototypes/v0.2` 已于 2026-11-02 建立，audit 的 `ui/原型基线` 已转 pass**） | M3 | G3 前置 |
 | BF-09 | `node scripts/check-install.mjs` **继承 `DSH_HOME` 时误判**：把 CLI profile `/data/home/.dsh/profiles/web` 当判定基准，并报「缺本包」 | **M6（高风险）** | 该路径正是 AGENTS.md 明令**排除**的对象。**M6 必须用 `env -u DSH_HOME node scripts/check-install.mjs` 复核**，否则证据取错 |
 | BF-10 | 去掉 `DSH_HOME` 后的真实结论：**「✗ 这台机器上没有找到 DSH Desktop（io.dsh.desktop）」** | M6 | 见下 §装机目标 |
 | BF-11 | `cordis.patch.yml` 注入 `config.root`，但服务端 `Config = Schema.object({})` 未声明该键 | M5 | 现为 check 的 warning；**不能称「存储已接通」** |
