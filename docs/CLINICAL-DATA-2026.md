@@ -6,10 +6,11 @@
 
 | 来源类型 | 状态 | 使用边界 |
 |---|---|---|
-| 中国现行罕见病诊疗指南 | 待取得原件并核对版本、病种章节及页码 | 不得把目录、二次来源当成原文 |
-| 国际专业指南 | 待检索原文与更新状态 | 说明适用人群、日期及本地适用性 |
+| 中国罕见病诊疗指南（2025） | 已取得[官方 PDF 原件](https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf)，第9章 PDF 第54–60页（印刷50–56）；[发布通知](https://www.gov.cn/zhengce/zhengceku/202507/content_7031426.htm) | 供临床人员参考，图9-1为图像，具体内容尚未核对；不能当作患者自诊工具 |
+| EULAR 2018 建议 | 中国指南引用，期刊原文访问受限 | 未取得原文全文，不冒称已核实全文 |
+| EULAR 2025 更新 | [PubMed 题录](https://pubmed.ncbi.nlm.nih.gov/41876291/)：2026-03-23 在线发表，DOI 10.1016/j.ard.2026.02.009；出版商全文未取得 | 与中国2025指南的时点不同；[专业二次报道](https://rheumnow.com/news/eular-2025-update-behcets-syndrome)只作为二次来源，不冒称原文 |
 | 药品监管信息 | 待核验国家药监部门官方数据 | 不从境外审批推断中国适应证 |
-| 患者组织或公开患者叙述 | 待核实可触达及使用许可 | 与患者访谈分开；当前访谈为零 |
+| 患者组织或公开患者叙述 | [Behçet’s UK 患者故事](https://behcetsuk.org/your-behcets-stories/)、[Vasculitis Foundation 患者经历](https://vasculitisfoundation.org/marissas-fight-for-behcets-disease-diagnosis/)已读；中文组织候选尚未核实 | 个人叙述不代表人群，使用许可待核；与本项目访谈分开，当前访谈为零 |
 | 临床研究登记 | 未查询，未建快照 | 未查询不等于无试验；不可生成匹配结论 |
 
 ## 检索与快照
