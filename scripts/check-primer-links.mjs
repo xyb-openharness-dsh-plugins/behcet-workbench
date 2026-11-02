@@ -112,6 +112,27 @@ function evaluate(primer, { legacy = false } = {}) {
       err ? fails.push(`L3 ${at} 原件列 ${err}`) : oks.push(`L3 ${at} ✓`)
     }
   }
+  /* L12：治疗全景段末尾必须有一句固定出口（36 号 §2.2），且排列口径必须是登记过的一种。
+     2026-11-02 白塞病实测：模板原话只写「按病期与线序排列」，非肿瘤病种照抄即失真
+     （慢性复发病人没有病期与线序），改写又违反「原话照抄」——于是口径登记为两种。 */
+  const EXIT_CLAUSES = ['按病期与线序排列', '按受累器官与病情轻重排列']
+  const land = (primer.sections || []).find(s => s.id === 'landscape')
+  if (land) {
+    const texts = []
+    const push = (v) => {
+      if (typeof v === 'string') texts.push(v)
+      else if (Array.isArray(v)) v.forEach(push)
+      else if (v && typeof v === 'object') Object.values(v).forEach(push)
+    }
+    push(land.intro); push(land.points); push(land.groups)
+    const all = texts.join('\n')
+    checked++
+    if (!all.includes('不代表任何一项适合你') || !all.includes('需要问你的医生')) {
+      fails.push('L12 landscape 段缺固定出口（36 号 §2.2 原话须含「不代表任何一项适合你」「需要问你的医生」）')
+    } else if (!EXIT_CLAUSES.some(c => all.includes(c))) {
+      fails.push(`L12 landscape 固定出口的排列口径未登记（只认：${EXIT_CLAUSES.join(' / ')}）——非肿瘤病种用第二种，并在 SPEC 注明`)
+    } else oks.push('L12 landscape 固定出口 ✓')
+  }
   return { oks, fails, warns, checked }
 }
 
@@ -165,7 +186,9 @@ const FIXTURES = [
   { name: 'kind=pdf 但链接不是 pdf', data: { sections: [{ id: 'e', sources: [{ org: 'X', original: true, kind: 'pdf', url: 'https://www.nccn.org/professionals/physician_gls/pdf/anal' }] }] }, expect: 'L1' },
   { name: 'http 而非 https', data: { sections: [{ id: 'e', sources: [{ org: 'X', original: false, secondaryUrl: 'http://example.com/a' }] }] }, expect: 'L2' },
   { name: '只给域名首页', data: { sections: [{ id: 'e', sources: [{ org: 'X', original: true, kind: 'fulltext', url: 'https://www.esmo.org/' }] }] }, expect: 'L1' },
-  { name: 'nolink 缺 note', data: { sections: [{ id: 'e', sources: [{ org: 'X', original: true, nolink: true }] }] }, expect: 'L4' }
+  { name: 'nolink 缺 note', data: { sections: [{ id: 'e', sources: [{ org: 'X', original: true, nolink: true }] }] }, expect: 'L4' },
+  { name: '治疗全景缺固定出口', data: { sections: [{ id: 'landscape', groups: [{ label: '1', points: ['一般治疗：口腔卫生'] }] }] }, expect: 'L12' },
+  { name: '固定出口口径未登记', data: { sections: [{ id: 'landscape', points: ['以上是文献与指南里列出的手段，按器官排列，不代表任何一项适合你。选哪一个，这一句需要问你的医生。'] }] }, expect: 'L12' }
 ]
 
 function selfTest() {
