@@ -17,7 +17,8 @@ test('复诊准备区分资料和问题，导出失败保留选择并可重试',
     go('复诊与准备','就诊准备与导出');
     check(!document.querySelector('[data-select="3"]').checked,'私密问题默认不选');
     check(!document.querySelector('#export-preview').textContent.includes('下次复诊想问的问题'),'默认预览排除私密');
-    for(const id of [1,2,4,5])select(id,false);
+    // 不写死 id：示例数据增删记录后仍应能清空默认选择
+    for(const el of document.querySelectorAll('[data-select]'))if(el.checked)select(el.dataset.select,false);
     check(document.querySelector('[data-action=download]').disabled,'空选择不可下载');
     select(4,true);select(5,true);select(3,true);
     let preview=document.querySelector('#export-preview').textContent;

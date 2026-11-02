@@ -1,7 +1,8 @@
 // Synthetic demonstration data only; this is the sole initial record source.
 window.BEIPAL_DEMO_RECORDS = [
   { id: 1, kind: '发作记录', date: '2026-10-18', endDate: '', site: '口腔', text: '口腔不适，影响进食（示例）', source: '本人记录 · 合成数据', private: false, history: [] },
-  { id: 2, kind: '当前用药', date: '2026-10-10', datePrecision: 'day', drug: '示例药物', dose: '', text: '剂量未记录', source: '本人抄录 · 合成数据', private: false, history: [] },
+  { id: 2, kind: '当前用药', date: '2026-10-10', datePrecision: 'day', endDate: '', ongoing: true, drug: '示例药物', dose: '', text: '剂量未记录', source: '本人抄录 · 合成数据', private: false, history: [] },
+  { id: 6, kind: '当前用药', date: '2026-05-02', datePrecision: 'day', endDate: '2026-08-20', ongoing: false, drug: '示例既往药物', dose: '', text: '疗程结束（示例）', source: '本人抄录 · 合成数据', private: false, history: [] },
   { id: 3, kind: '问题清单', date: '2026-10-25', text: '下次复诊想问的问题（示例）', source: '本人记录 · 合成数据', private: true, history: [] },
   { id: 4, kind: '资料库', date: '2026-10-18', department: '口腔科', text: '口腔科示例记录：口腔不适', source: '口腔科合成记录', original: { title: '口腔科合成原件', text: '合成原件：口腔科记录口腔不适。' }, private: false, history: [] },
   { id: 5, kind: '资料库', date: '2026-10-18', department: '眼科', text: '眼科示例记录：眼部不适', source: '眼科合成记录', original: { title: '眼科合成原件', text: '合成原件：眼科记录眼部不适。' }, private: false, history: [] }
@@ -13,6 +14,5 @@ window.BEIPAL_METRICS = [
   {id:'c', name:'示例指标 C', group:'示例测量', unit:'mm', method:'示例方法丙', laboratory:'合成示例机构', source:'合成示例 · 无原件', color:'#76609c', points:[{date:'2026-09-25',value:12}]}
 ];
 window.BEIPAL_EVENTS = [
-  {date:'2026-05-20',type:'治疗',label:'示例治疗记录'},
   {date:'2026-09-05',type:'事件',label:'示例复诊记录'}
 ];
