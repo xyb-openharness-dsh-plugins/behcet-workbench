@@ -1,0 +1,66 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { runPage } from './helpers/cdp-probe.mjs';
+
+// 用 CDP 轮询探针结果：--dump-dom 会在页面 load 前后取快照，与脚本执行存在竞态，
+// 并发跑测试时会偶发「快照截在脚本中间」，无法作为断言依据。
+test('资料目录登记原件、本机模拟抽取需授权、候选逐条采纳才入库、撤回清空', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'beipal-files-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const root = resolve('prototypes/v0.2');
+  for (const name of ['demo-data.js', 'metric-model.js']) await copyFile(join(root, name), join(dir, name));
+  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const probe = `<script>try{
+    const check=(v,m)=>{if(!v)throw Error(m)};
+    const q=s=>{const el=document.querySelector(s);if(!el)throw Error('缺少元素 '+s);return el};
+    const click=s=>q(s).click();
+    go('资料目录与云解析');
+    check(document.querySelector('main h1').textContent.includes('资料目录'),'入口页未打开');
+    check(document.querySelector('main').textContent.includes('还没有登记原件'),'空目录状态缺失');
+    const dt=new DataTransfer();
+    dt.items.add(new File(['2026-09-01 复查记录：口腔溃疡好转\\n医生建议三个月后复诊'],'demo-note.txt',{type:'text/plain'}));
+    const input=q('#file-input');
+    input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+    check(state.files.length===1,'原件未登记');
+    const f=state.files[0];
+    check(q('main').textContent.includes('demo-note.txt'),'目录未列出原件');
+    // 直接写入内存文本：FileReader 是异步的，测试不等 IO；文件读取本身是浏览器原生行为
+    f.content='2026-09-01 复查记录：口腔溃疡好转\\n医生建议三个月后复诊';
+    click('[data-parse="'+f.id+'"]');
+    click('[data-parse-run="'+f.id+'"]');
+    check(q('#parse-err').textContent.includes('勾选'),'未授权也能抽取');
+    check(state.candidates.length===0,'未授权已产生候选');
+    q('#parse-consent').checked=true;
+    click('[data-parse-run="'+f.id+'"]');
+    check(state.candidates.length===2,'候选数量不对：'+state.candidates.length);
+    click('[data-drop="'+state.candidates[1].id+'"]');
+    check(state.candidates.length===1,'丢弃未生效');
+    const before=state.records.length;
+    click('[data-accept="'+state.candidates[0].id+'"]');
+    check(state.records.length===before+1,'采纳未入库');
+    const rec=state.records[0];
+    check(rec.kind==='资料库'&&rec.fileId===f.id&&rec.original&&rec.original.title==='demo-note.txt','采纳记录未保留原件引用');
+    const box=q('[data-file-private="'+f.id+'"]');
+    box.checked=true;box.dispatchEvent(new Event('change',{bubbles:true}));
+    check(rec.private===true,'私密原件未同步到记录');
+    go('看板');
+    click('[data-action=discuss]');
+    check(!q('#draft').value.includes('口腔溃疡好转'),'私密原件文本进了 AI 草稿');
+    go('资料目录与云解析');
+    click('[data-parse="'+f.id+'"]');
+    q('#parse-consent').checked=true;
+    click('[data-parse-run="'+f.id+'"]');
+    check(state.candidates.length>0,'再次抽取无候选');
+    click('[data-parse-revoke]');
+    check(state.candidates.length===0,'撤回未清空候选');
+    window.__filesTest='PASS';
+  }catch(e){window.__filesTest='FAIL: '+e.message}</script>`;
+  const page = html.replace('</body>', probe + '</body>');
+  assert.ok(page.includes('__filesTest="PASS"' ) || page.includes("__filesTest='PASS'"), '探针未注入');
+  await writeFile(join(dir, 'index.html'), page);
+  const result = await runPage('file://' + join(dir, 'index.html'), 'window.__filesTest || ""');
+  assert.equal(result, 'PASS');
+});

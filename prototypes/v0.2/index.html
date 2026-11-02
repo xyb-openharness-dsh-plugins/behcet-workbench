@@ -35,11 +35,11 @@ const DEMO_OK=Array.isArray(window.BEIPAL_DEMO_RECORDS)&&Array.isArray(window.BE
 const demoRecords=DEMO_OK?window.BEIPAL_DEMO_RECORDS:[];
 const demoMetrics=DEMO_OK?window.BEIPAL_METRICS:[];
 const demoEvents=DEMO_OK?window.BEIPAL_EVENTS:[];
-let state={view:'看板',sub:'',records:demoRecords.map(r=>({...r,history:[...(r.history||[])]})),selected:new Set(demoRecords.filter(r=>!r.private).map(r=>r.id)),timelineSelected:new Set(),width:35,range:'all',zoom:100,pin:null,showEvents:true,metricIds:new Set((DEMO_OK?window.BEIPAL_METRIC_MODEL.build(demoMetrics):[]).slice(0,3).map(m=>m.id)),flipped:new Set()};
+let state={view:'看板',sub:'',records:demoRecords.map(r=>({...r,history:[...(r.history||[])]})),selected:new Set(demoRecords.filter(r=>!r.private).map(r=>r.id)),timelineSelected:new Set(),width:35,range:'all',zoom:100,pin:null,showEvents:true,metricIds:new Set((DEMO_OK?window.BEIPAL_METRIC_MODEL.build(demoMetrics):[]).slice(0,3).map(m=>m.id)),flipped:new Set(),files:[],candidates:[],fileDialog:null,filesTab:'目录'};
 const $=s=>document.querySelector(s);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(el.timer);el.timer=setTimeout(()=>el.hidden=true,3000)}
 function go(view,sub=''){state.view=view;state.sub=sub||((subs[view]||[])[0]||'');render();$('#main').focus({preventScroll:true});window.scrollTo(0,0)}
-function nav(){ $('#nav').innerHTML=pages.map(p=>`<button data-view="${p}" ${p===state.view?'aria-current="page"':''}>${p}</button>`).join('')+'<button data-action="privacy">授权与隐私</button><button data-action="directory">资料目录与云解析</button>' }
+function nav(){let extra=['授权与隐私','资料目录与云解析'];$('#nav').innerHTML=pages.concat(extra).map(p=>`<button ${extra.includes(p)?'data-go':'data-view'}="${p}" ${p===state.view?'aria-current="page"':''}>${p}</button>`).join('')}
 function rawStartNote(r){return datePrecision(r)==='unknown'&&(r.date||r.datePrecision&&r.datePrecision!=='unknown')?`（原始值：${r.date||'空'}；原始精度：${r.datePrecision||'未声明'}，待核，不参与排序）`:''}
 function endText(r){return !r.endDate?'未知':isDayDate(r.endDate)?r.endDate:`待核（原始值：${r.endDate}）`}
 function rec(r,owner=false){let history=owner?r.history:r.history.filter(h=>h&&typeof h==='object'&&h.private===false);return `<div class="row"><span class="tag ${r.private?'private-tag':''}">${r.private?'私密':'本人记录'}</span> <small>${esc(dateText(r))} · ${esc(r.source)}</small>${r.kind==='当前用药'&&r.drug!==undefined?`<p>${esc(treatmentFields(r))}</p>`:''}${r.kind==='发作记录'?`<p>开始：${esc(startText(r)+rawStartNote(r))} · 结束：${esc(endText(r))} · 部位：${esc(r.site||'未知')}</p>`:''}<p>${esc(r.text)}</p><details><summary>⋯ 更多</summary><button data-correct="${r.id}">改这一条</button>${history.length?`<p>更正前：${history.map(h=>esc(typeof h==='string'?h:`${r.kind==='当前用药'?treatmentFields({...h,kind:r.kind}):`开始：${startText(h)}${rawStartNote(h)} · 结束：${endText(h)} · 部位：${h.site||'未知'} · `}原文：${h.text} · 来源：${h.source} · ${h.private===true?'私密':h.private===false?'非私密':'隐私状态未知'}`)).join('；')}</p>`:''}</details></div>`}
@@ -111,7 +111,66 @@ function oneChart(){return `<div class="card"><h2>指标与时间节点</h2><p>�
 function refreshChart(){let panel=$('#chart-panel');if(panel)panel.innerHTML=chartPanel();updateChartScrollHint()}
 function updateChartScrollHint(){let w=document.querySelector('#chart-panel .chart-wrap'),h=$('#chart-scroll-hint');if(!w||!h)return;h.hidden=w.scrollWidth<=w.clientWidth+1}
 function showSource(id,date){let m=metrics.find(m=>m.id===id),p=m?.points.find(p=>p.key===date);if(!p)return;dialog('合成记录来源',`<p>${esc(m.name)} · ${esc(p.value ?? '未记录')} ${esc((Object.hasOwn(p,'unit')?p.unit:m.unit)||'单位未知')}</p><p>采样日期：${esc(p.date||(p.rawDate ? '日期待核：'+p.rawDate : '日期待核'))}；报告日期：未知</p><p>来源：${esc(p.source||m.source||'来源待补')}；方法：${esc((Object.hasOwn(p,'method')?p.method:m.method)||'未知')}；机构：${esc((Object.hasOwn(p,'laboratory')?p.laboratory:m.laboratory)||'未知')}</p><p>报告引用：无原件；转录原文：未知；参考区间：未转录；核对状态：示例，未核对</p><p>这是合成示例，没有原始报告或真实患者资料。</p>`,`<button data-action="cancel">关闭</button>`)}
-function content(){const v=state.view,s=state.sub;if(v==='看板')return dashboard();let body='';if(v==='复诊与准备'&&s==='就诊准备与导出')body=visit();else if(s==='什么情况要马上就医')body='<div class="card"><h2>求助信息</h2><p>相关内容尚待临床审核，原型暂不提供判断或指导。</p></div>';else if(s==='整理草稿 / 核对')body='<div class="card"><h2>整理草稿 / 核对</h2><p>示例原型未连接文件导入或云解析。资料不会上传；手工记录可继续使用。</p><button data-view="病情整理" data-sub="资料库">查看资料库</button></div>';else if(v==='病情一图秀'&&s==='治疗与事件节点')body=timeline()+`<div aria-live="polite" aria-atomic="true">${timelineResults()}</div>`;else if(v==='病情一图秀')body=oneChart();else if(v==='病情整理'&&s==='指标检测')body=metricCards();else if(['发作记录','症状记录','当前用药','用药前检查记录','问题清单','工作·费用·异地就医','血管','消化道','资料库','指标检测','心理与家庭','生育·性健康与用药'].includes(s))body=recordPage();else body=`<div class="card"><h2>${esc(s)}</h2><div class="empty">此处尚无示例资料。可先查看相关记录，或回看板选择其他任务。</div><div class="actions"><button data-view="发作与病程" data-sub="发作记录">查看发作记录</button><button data-view="看板">回到看板</button></div></div>`;return pageHeader(esc(v),'整理本人记录与原文；示例内容不构成医学判断。')+`<div class="tabs" role="tablist" aria-label="${esc(v)}">${subs[v].map(x=>`<button role="tab" aria-selected="${x===s}" data-view="${v}" data-sub="${x}">${x}</button>`).join('')}</div>`+body}
+/* 资料目录与云解析：原件只在本次会话登记名称/大小（文本类另外只在本机内存读一份用于演示抽取），
+   不上传、不复制到记录里。云解析入口未接通 MinerU，按钮叫「本机模拟抽取」并写明不联网。
+   候选必须逐条采纳才进资料库，候选本身不是事实。 */
+function fmtSize(n){return n>=1024?`${(n/1024).toFixed(1)} KB`:`${n} B`}
+function filesPage(){
+  let f=state.files
+  return `<div class="eyebrow">设置 · 本人可控</div><h1>资料目录与云解析</h1>
+  <p class="muted">原件只在本次演示里登记名称与大小：不复制内容、不上传、刷新即清空。文本类原件会另外在本机内存读一份，仅用于下面的模拟抽取，不离开本机。</p>
+  <div class="card"><h2>登记原件</h2>
+    <p>选择自己电脑上的文件登记到资料目录；登记不等于解析，也不等于已核对。</p>
+    <label class="field">选择文件（可多选）<input type="file" id="file-input" multiple accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg"></label>
+    <p class="muted">PDF 与图片在本演示中不做 OCR，登记后只能手工记录；不要把真实病历上传到任何在线服务。</p>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>已登记的原件（${f.length}）</h2>
+    ${f.length?`<div class="list">${f.map(x=>`<div class="row"><div class="spread"><div><h3>${esc(x.name)}</h3>
+      <p class="muted">${fmtSize(x.size)} · 登记时间 ${esc(x.addedAt)} · 关联记录 ${state.records.filter(r=>r.fileId===x.id).length} 条${x.private?' · 私密':''}</p></div>
+      <div class="actions"><label><input type="checkbox" data-file-private="${x.id}" ${x.private?'checked':''}> 私密原件</label>
+      <button data-parse="${x.id}">模拟抽取</button>
+      <button data-file-del="${x.id}">移除</button></div></div>
+      ${x.content?'':'<p class="muted">该类型在本演示中不解析（无 OCR/PDF 解析），可手工记录。</p>'}</div>`).join('')}</div>`
+    :'<div class="empty">还没有登记原件。原件只登记名称与大小，不复制内容。</div>'}
+  </div>
+  <div class="card" style="margin-top:16px"><h2>候选（${state.candidates.length}）</h2>
+    <p class="muted">抽取结果只是候选，必须逐条采纳才进资料库；候选本身不是事实，也不会自动生成日期或诊断。</p>
+    ${state.candidates.length?`<div class="list">${state.candidates.map(c=>`<div class="row"><p>${esc(c.text)}</p>
+      <p class="muted">来自：${esc(c.fileName)}</p>
+      <div class="actions"><button data-accept="${c.id}">采纳为一条记录</button><button data-drop="${c.id}">丢弃</button></div></div>`).join('')}</div>`
+    :'<div class="empty">没有候选。先登记一个文本类原件，再点「模拟抽取」。</div>'}
+    ${state.candidates.length?'<div class="actions"><button data-parse-revoke="1">撤回授权并清空候选</button></div>':''}
+  </div>
+  <div class="card" style="margin-top:16px"><h2>云解析与留存（未接通）</h2>
+    <p>真正的云端解析（MinerU）在本项目里尚未核实：没有接入、没有报价、没有留存与删除条款。因此本原型只提供本机模拟抽取，不会把文件发给任何服务。</p>
+    <p class="muted">将来若接通，须每次显式授权、发送前告知服务方/原件/用途，并在界面上给出撤回与删除本地候选的路径；服务方侧删除无法由本台承诺，也不会用于训练或二次外发。</p>
+  </div>`}
+
+function privacyPage(){return `<div class="eyebrow">设置 · 本人可控</div><h1>授权与隐私</h1>
+  <div class="card"><h2>私密的三个出口</h2><p>私密记录默认不进入摘要、导出和 AI 草稿。摘要与导出可由本人逐条选择；私密内容目前不能进入 AI 草稿，也不能作为 AI 改写来源。</p>
+  <p class="muted">私密是记录本身的属性；由私密记录改写成的问题同样算私密。</p></div>
+  <div class="card" style="margin-top:16px"><h2>代记授权</h2><p>代记授权、撤回与读取范围仅为设计占位，尚未连接身份或权限服务；当前演示没有账号体系。</p></div>
+  <div class="card" style="margin-top:16px"><h2>资料目录</h2><p>原件登记、私密标记与云解析授权在「资料目录与云解析」里；本演示不缓存原件内容，刷新即清空。</p>
+  <div class="actions"><button data-go="资料目录与云解析">去资料目录</button><button data-view="看板">回到看板</button></div></div>`}
+
+/* 本机模拟抽取：把文本按行切成候选，不判断内容、不补日期、不打分。 */
+function runMockExtract(file){
+  let lines=String(file.content||'').split(/\r?\n/).map(t=>t.trim()).filter(t=>t.length>=4&&t.length<=160).slice(0,6)
+  state.candidates=lines.map((text,i)=>({id:Date.now()+i,fileId:file.id,fileName:file.name,text}))
+  return state.candidates.length
+}
+function registerFiles(list){
+  let added=0
+  ;[...list].forEach(f=>{
+    let id=Date.now()+Math.random(),entry={id,name:f.name,size:f.size,type:f.type||'',addedAt:new Date().toISOString().slice(0,10),private:false,content:'',blob:f}
+    state.files.push(entry);added++
+    if(/^(text\/|application\/json)/.test(f.type||'')||/\.(txt|md|csv|json)$/i.test(f.name)){
+      if(f.size<=65536){let rd=new FileReader();rd.onload=()=>{entry.content=String(rd.result||'')};rd.readAsText(f)}
+    }
+  })
+  render();if(added)toast(`已登记 ${added} 个原件（仅本会话）`)
+}
+function content(){const v=state.view,s=state.sub;if(v==='资料目录与云解析')return filesPage();if(v==='授权与隐私')return privacyPage();if(v==='看板')return dashboard();let body='';if(v==='复诊与准备'&&s==='就诊准备与导出')body=visit();else if(s==='什么情况要马上就医')body='<div class="card"><h2>求助信息</h2><p>相关内容尚待临床审核，原型暂不提供判断或指导。</p></div>';else if(s==='整理草稿 / 核对')body='<div class="card"><h2>整理草稿 / 核对</h2><p>原件在「资料目录与云解析」里登记；本演示只登记名称与大小，不上传、不缓存内容。抽取结果只是候选，需逐条采纳。</p><button data-go="资料目录与云解析">去资料目录</button><button data-view="病情整理" data-sub="资料库">查看资料库</button></div>';else if(v==='病情一图秀'&&s==='治疗与事件节点')body=timeline()+`<div aria-live="polite" aria-atomic="true">${timelineResults()}</div>`;else if(v==='病情一图秀')body=oneChart();else if(v==='病情整理'&&s==='指标检测')body=metricCards();else if(['发作记录','症状记录','当前用药','用药前检查记录','问题清单','工作·费用·异地就医','血管','消化道','资料库','指标检测','心理与家庭','生育·性健康与用药'].includes(s))body=recordPage();else body=`<div class="card"><h2>${esc(s)}</h2><div class="empty">此处尚无示例资料。可先查看相关记录，或回看板选择其他任务。</div><div class="actions"><button data-view="发作与病程" data-sub="发作记录">查看发作记录</button><button data-view="看板">回到看板</button></div></div>`;return pageHeader(esc(v),'整理本人记录与原文；示例内容不构成医学判断。')+`<div class="tabs" role="tablist" aria-label="${esc(v)}">${subs[v].map(x=>`<button role="tab" aria-selected="${x===s}" data-view="${v}" data-sub="${x}">${x}</button>`).join('')}</div>`+body}
 function render(){nav();$('#main').innerHTML=DEMO_OK?content():'<div class="notice" role="alert"><h1>示例数据不可用</h1><p>无法加载示例数据或指标读模型。请检查 demo-data.js 和 metric-model.js 是否存在，然后刷新页面。</p></div>';$('.top .status').textContent=DEMO_OK?'合成示例 · 仅本页临时演示 · 未连接宿主':'示例数据不可用 · 未连接宿主';updateChartScrollHint()}
 let dialogOpener=null,dialogOpenerSelector=null;
 function dialog(title,body,foot){dialogOpener=document.activeElement instanceof Element?document.activeElement:null;dialogOpenerSelector=dialogOpener?.dataset.correct?`[data-correct="${dialogOpener.dataset.correct}"]`:dialogOpener?.dataset.action==='add'?'[data-action="add"]':null;$('#dialog-title').textContent=title;$('#dialog-body').innerHTML=body;$('#dialog-foot').innerHTML=foot;$('#dialog').showModal()}
@@ -121,4 +180,45 @@ function width(n){state.width=Math.max(25,Math.min(45,n));$('#pane').style.width
 function flipCard(card){let id=card.dataset.card;state.flipped.has(id)?state.flipped.delete(id):state.flipped.add(id);let flipped=state.flipped.has(id),name=metrics.find(m=>m.id===id)?.name||'指标';card.dataset.flipped=flipped;card.setAttribute('aria-label',`${name}，${flipped?'趋势面，按 Enter 或空格返回':'最新值，按 Enter 或空格查看趋势'}`);card.querySelectorAll('.mface').forEach(face=>{let hidden=face.classList.contains('front')?flipped:!flipped;face.inert=hidden;face.setAttribute('aria-hidden',hidden)});}
 document.addEventListener('click',e=>{let timelineSource=e.target.closest('[data-timeline-source]');if(timelineSource){let r=state.records.find(x=>String(x.id)===timelineSource.dataset.timelineSource);if(r)dialog('记录来源',`<p>${esc(dateText(r))} · ${esc(r.department||'科别未知')}</p><p>来源：${esc(r.source||'来源未知')}</p>${r.history.length?'<p>当前记录已更正；原件保留原始内容。</p>':''}${r.original?`<h3>${esc(r.original.title)}</h3><p>${esc(r.original.text)}</p><p>以上为合成演示原件，并非真实病历。</p>`:'<p>无原件；仅有当前记录，未提供原始文件。</p>'}`,`<button data-action="cancel">关闭</button>`);return}let source=e.target.closest('[data-source]');if(source){source.focus({preventScroll:true});showSource(source.dataset.source,source.dataset.date);return}let card=e.target.closest('.mcard');if(card&&!e.target.closest('button,a,input,select,textarea,[role=button]')){flipCard(card);return}let point=e.target.closest('[data-point]');if(point){togglePin(point.dataset.point,point.dataset.date);return}let b=e.target.closest('button');if(!b)return;if(b.dataset.range){state.range=b.dataset.range;document.querySelectorAll('[data-range]').forEach(el=>el.setAttribute('aria-pressed',el===b));refreshChart();return}if(b.dataset.pin){state.pin={id:b.dataset.pin,date:b.dataset.date};refreshChart();return}if(b.hasAttribute('data-clear-pin')){state.pin=null;refreshChart();return}if(b.dataset.source){showSource(b.dataset.source,b.dataset.date);return}if(b.dataset.view){go(b.dataset.view,b.dataset.sub);return}if(b.dataset.correct){let r=state.records.find(x=>x.id===+b.dataset.correct);dialog('改这一条',r.kind==='发作记录'?episodeForm(r):r.kind==='当前用药'?treatmentForm(r):`<p>更正后可查看之前的内容。仅影响当前演示。</p><label class="field">记录内容<textarea id="entry-text">${esc(r.text)}</textarea></label>`,`<button data-action="cancel">取消</button><button class="primary" data-save-correction="${r.id}">保存更正</button>`);return}if(b.dataset.saveCorrection){let r=state.records.find(x=>x.id===+b.dataset.saveCorrection);if(r.kind==='当前用药'){let updated=readTreatment();if(!updated)return;let keys=['drug','dose','text','date','datePrecision','endDate','ongoing','source','private'];if(keys.every(k=>(updated[k]??'')===(r[k]??''))){$('#dialog').close();toast('内容未变');return}r.history.push(Object.fromEntries(keys.map(k=>[k,r[k]])));let wasPrivate=r.private;Object.assign(r,updated);if(!wasPrivate&&r.private){state.selected.delete(r.id);state.timelineSelected.delete(r.id)}}else if(r.kind==='发作记录'){let updated=readEpisode();if(!updated)return;if($('#entry-end-replace')&&!$('#entry-end-replace').checked)updated.endDate=r.endDate;if(!$('#entry-precision').dataset.touched&&(rawStartNote(r)||(!r.datePrecision&&updated.date===r.date))){updated.date=r.date;updated.datePrecision=r.datePrecision}let same=['date','datePrecision','endDate','site','text','source','private'].every(k=>(updated[k]??(k==='private'?false:''))===(r[k]??(k==='private'?false:'')));if(same){$('#dialog').close();toast('内容未变');return}r.history.push({date:r.date,datePrecision:r.datePrecision,endDate:r.endDate,site:r.site,text:r.text,source:r.source,private:r.private});let wasPrivate=r.private;Object.assign(r,updated);if(!wasPrivate&&r.private){state.selected.delete(r.id);state.timelineSelected.delete(r.id)}}else{let text=$('#entry-text').value.trim();if(!text){toast('请填写记录内容');return}r.history.push(r.text);r.text=text}$('#draft').value='';render();$('#dialog').close();toast('已在本次演示中保存更正');return}switch(b.dataset.action){case 'add':if(state.sub==='当前用药'){dialog('记录治疗',treatmentForm(),`<button data-action="cancel">取消</button><button class="primary" data-action="save-treatment">保存示例</button>`);break}if(state.sub==='发作记录'){dialog('手工补一条发作',episodeForm(),`<button data-action="cancel">取消</button><button class="primary" data-action="save-episode">保存示例</button>`);break}dialog('手工补一条',`<p>仅保存到本次页面演示；刷新后重置。</p><label class="field">日期<input id="entry-date" type="date"></label><label class="field">本人记录<textarea id="entry-text" placeholder="按自己的话记录"></textarea></label><label><input type="checkbox" id="entry-private" ${['问题清单','心理与家庭','生育·性健康与用药'].includes(state.sub)?'checked':''}> 标记为私密（私密问题建议保留标记）</label>`,`<button data-action="cancel">取消</button><button class="primary" data-action="save">保存示例</button>`);break;case 'save-treatment':{let entry=readTreatment();if(!entry)return;state.records.push({id:Date.now(),kind:'当前用药',...entry,history:[]});render();$('#dialog').close();toast('已添加到本次演示');break}case 'save-episode':{let entry=readEpisode();if(!entry)return;state.records.push({id:Date.now(),kind:'发作记录',...entry,history:[]});render();$('#dialog').close();toast('已添加到本次演示');break}case 'save':{let text=$('#entry-text').value.trim(),date=$('#entry-date').value;if(!text||!date){toast('请填写日期与记录内容');return}state.records.push({id:Date.now(),kind:state.sub,date,text,source:'本人记录 · 本次演示',private:$('#entry-private').checked,history:[]});render();$('#dialog').close();toast('已添加到本次演示');break}case 'cancel':$('#dialog').close();break;case 'directory':dialog('资料目录与云解析',`<p>这是设置入口的占位演示。尚未接入目录选择、文件导入或云解析，也不会上传资料。</p><p>解析授权、撤回、候选核对与失败恢复尚未实现；可从资料库手工添加示例记录。</p>`,`<button data-action="cancel">关闭</button><button data-action="open-library">打开资料库</button>`);break;case 'open-library':$('#dialog').close();go('病情整理','资料库');break;case 'privacy':dialog('授权与隐私',`<p>私密记录默认不进入摘要、导出和 AI 草稿。摘要及导出可由本人逐条选择；私密内容目前不能进入 AI 草稿。</p><p>代记授权、撤回与读取范围仅为设计占位，尚未连接身份或权限服务。</p>`,`<button data-action="cancel">知道了</button>`);break;case 'discuss':{let rs=state.records.filter(r=>!r.private);$('#draft').value='讨论草稿（合成示例；本人记录，不等于医学审核）\n'+rs.map(r=>`${treatmentFields(r)||episodeFields(r)||dateText(r)+' '}${r.text}｜${r.source}`).join('\n')+'\n请帮助我整理这些记录中想问的问题。';openPane();toast('已生成草稿预览；没有发送');break}case 'download':{let chosen=visitSelection();if(!chosen.length)break;let groups=[['资料',chosen.filter(r=>r.kind!=='问题清单')],['问题',chosen.filter(r=>r.kind==='问题清单')]];let text='小贝宝 · 复诊材料示例\n合成数据；本人记录，不等于医学审核；原件不随文本导出\n\n'+groups.map(([title,items])=>title+'\n'+(items.length?items.map(visitLine).join('\n'):'未选择')).join('\n\n');let url;try{url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));let a=document.createElement('a');a.href=url;a.download='beipal-demo.txt';a.click();$('#export-status').textContent='已发起下载；请在浏览器中确认文件是否保存。';}catch(err){$('#export-status').textContent='导出未能发起，已保留选择，请重试。';}finally{if(url)setTimeout(()=>URL.revokeObjectURL(url),1000)}break}}});
 document.addEventListener('keydown',e=>{if(e.target.matches('.mcard')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();flipCard(e.target);return}if(e.target.matches('circle[data-source]')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();showSource(e.target.dataset.source,e.target.dataset.date);return}if(e.target.matches('[data-point]')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();togglePin(e.target.dataset.point,e.target.dataset.date)}});document.addEventListener('input',e=>{if(e.target.id==='entry-month')e.target.dataset.manual='true';if(e.target.id==='chart-zoom'){state.zoom=Number(e.target.value);$('#zoom-value').textContent=state.zoom+'%';refreshChart()}});document.addEventListener('change',e=>{if(e.target.id==='entry-end-replace'){$('#entry-end').disabled=!e.target.checked;return}if(e.target.id==='t-precision'){$('#t-day-field').hidden=e.target.value!=='day';$('#t-month-field').hidden=e.target.value!=='month';return}if(e.target.id==='entry-month')e.target.dataset.manual='true';if(e.target.id==='entry-precision'){e.target.dataset.touched='true';let p=e.target.value,df=$('#entry-date-field'),mf=$('#entry-month-field'),un=$('#entry-unknown-note');if(df)df.style.display=p==='day'?'':'none';if(mf)mf.style.display=p==='month'?'':'none';if(un)un.style.display=p==='unknown'?'':'none';if(p==='month'){let mi=$('#entry-month'),di=$('#entry-date');if(mi&&di&&isDayDate(di.value)&&!mi.dataset.manual&&(!mi.value||mi.dataset.auto==='true')){mi.value=di.value.slice(0,7);mi.dataset.auto='true'}}return}if(e.target.dataset.timelineSelect){let id=+e.target.dataset.timelineSelect;e.target.checked?state.timelineSelected.add(id):state.timelineSelected.delete(id);$('#timeline-results').outerHTML=timelineResults();return}if(e.target.id==='show-events'){state.showEvents=e.target.checked;refreshChart();return}if(e.target.dataset.metric){let id=e.target.dataset.metric;if(e.target.checked&&state.metricIds.size>=4){e.target.checked=false;toast('先去掉一项再选择新的指标');return}e.target.checked?state.metricIds.add(id):state.metricIds.delete(id);refreshChart();return}if(e.target.dataset.select){let id=+e.target.dataset.select;e.target.checked?state.selected.add(id):state.selected.delete(id);let preview=document.querySelector('#export-preview');if(preview)preview.innerHTML=visitPreview()}});$('#dialog').addEventListener('close',()=>{let target=dialogOpener?.isConnected?dialogOpener:dialogOpenerSelector&&document.querySelector(dialogOpenerSelector);if(target){let details=target.closest('details');if(details)details.open=true;target.focus({preventScroll:true})}else $('#main').focus({preventScroll:true});dialogOpener=null;dialogOpenerSelector=null});window.addEventListener('resize',updateChartScrollHint);$('#close-dialog').onclick=()=>$('#dialog').close();$('#large').onclick=()=>document.body.classList.toggle('big');$('#pane-toggle').onclick=()=>$('#pane').hidden?openPane():closePane();$('#pane-close').onclick=closePane;$('#copy').onclick=async()=>{let t=$('#draft').value;if(!t){$('#copy-status').textContent='先在页面选择“和 AI 讨论”生成草稿。';return}try{await navigator.clipboard.writeText(t);$('#copy-status').textContent='已复制草稿；没有发送。'}catch{$('#copy-status').textContent='复制不可用，请选中文字手动复制。';$('#draft').focus();$('#draft').select()}};$('#splitter').addEventListener('keydown',e=>{let n=state.width;if(e.key==='ArrowLeft')n+=2;else if(e.key==='ArrowRight')n-=2;else if(e.key==='Home')n=25;else if(e.key==='End')n=45;else return;e.preventDefault();width(n)});$('#splitter').addEventListener('pointerdown',e=>{e.currentTarget.setPointerCapture(e.pointerId)});$('#splitter').addEventListener('pointermove',e=>{if(!e.currentTarget.hasPointerCapture(e.pointerId))return;let r=$('.layout').getBoundingClientRect();width(Math.round((r.right-e.clientX)/r.width*100))});render();
+
+/* ── 资料目录与云解析的交互（本机演示，不联网） ───────────────────── */
+function fileById(id){return state.files.find(f=>f.id===id)}
+function needFile(id){let f=fileById(id);if(!f)toast('原件已不在目录中');return f}
+document.addEventListener('change',e=>{
+  let t=e.target
+  if(t.id==='file-input'){if(t.files&&t.files.length)registerFiles(t.files);t.value='';return}
+  if(t.dataset.filePrivate){let f=needFile(+t.dataset.filePrivate);if(!f)return
+    f.private=t.checked
+    if(t.checked){state.records.forEach(r=>{if(r.fileId===f.id)r.private=true});toast('原件已标为私密：其记录同步为私密')}
+    else toast('原件取消私密；已生成的记录不会自动公开，需逐条确认')
+    render();return}
+})
+document.addEventListener('click',async e=>{
+  let b=e.target.closest('button');if(!b)return
+  if(b.dataset.go){go(b.dataset.go);return}
+  if(b.dataset.parse){let f=needFile(+b.dataset.parse);if(!f)return
+    dialog('模拟抽取（不联网）',`<p>将要在本机读取的原件：</p><p><strong>${esc(f.name)}</strong>（${fmtSize(f.size)}）</p>
+      <p class="muted">本演示只在你的浏览器里按行切出候选，不会把文件发送给任何服务，也不会生成日期或诊断。</p>
+      ${f.content?'':'<p>该类型在本演示中不能抽取（没有 OCR/PDF 解析），可登记后手工记录。</p>'}
+      <label><input type="checkbox" id="parse-consent"> 我已了解：本次抽取只在本机进行</label><p id="parse-err" role="alert"></p>`,
+      `<button data-action="cancel">取消</button><button class="primary" data-parse-run="${f.id}">开始本机抽取</button>`);return}
+  if(b.dataset.parseRun){let f=needFile(+b.dataset.parseRun);if(!f)return
+    if(!document.querySelector('#parse-consent').checked){document.querySelector('#parse-err').textContent='请先勾选「只在本机进行」再开始';return}
+    if(!f.content&&f.blob&&f.blob.text){try{f.content=await f.blob.text()}catch{}}
+    if(!f.content){document.querySelector('#parse-err').textContent='该类型不支持本机抽取，请手工记录';return}
+    let n=runMockExtract(f);$('#dialog').close();render();toast(n?`已生成 ${n} 条候选，需逐条采纳`:'这份文本里没有可切出的候选行');return}
+  if(b.dataset.parseRevoke){state.candidates=[];render();toast('已撤回授权，候选缓存已清空');return}
+  if(b.dataset.accept){let c=state.candidates.find(x=>x.id===+b.dataset.accept);if(!c)return
+    let f=fileById(c.fileId)
+    state.records.unshift({id:Date.now(),kind:'资料库',date:new Date().toISOString().slice(0,10),text:c.text,source:`原件：${c.fileName}`,fileId:c.fileId,original:{title:c.fileName,text:c.text},private:!!(f&&f.private),history:[]})
+    state.candidates=state.candidates.filter(x=>x.id!==c.id);render();toast('已采纳为一条资料记录，可在资料库回看');return}
+  if(b.dataset.drop){state.candidates=state.candidates.filter(x=>x.id!==+b.dataset.drop);render();return}
+  if(b.dataset.fileDel){let f=needFile(+b.dataset.fileDel);if(!f)return
+    dialog('移除原件',`<p>从资料目录移除 <strong>${esc(f.name)}</strong>？</p><p class="muted">已采纳的记录会保留，但不再关联这个原件；本演示不留存文件内容。</p>`,
+      `<button data-action="cancel">取消</button><button class="primary" data-file-del-confirm="${f.id}">移除</button>`);return}
+  if(b.dataset.fileDelConfirm){let id=+b.dataset.fileDelConfirm
+    state.files=state.files.filter(f=>f.id!==id);state.candidates=state.candidates.filter(c=>c.fileId!==id)
+    state.records.forEach(r=>{if(r.fileId===id){r.fileId=null;r.original=null}})
+    $('#dialog').close();render();toast('已移除原件；相关记录保留为「无原件」');return}
+})
 </script></body></html>
