@@ -1,0 +1,12 @@
+{
+  "verifiedAt": "2026-10-16",
+  "scope": "Official documentation reviewed for optional POI guidance; no live API or account permission test",
+  "credentialsBundled": false,
+  "sources": [
+    { "topic": "web-service-key", "url": "https://lbs.amap.com/api/webservice/guide/create-project/get-key" },
+    { "topic": "poi-v5", "url": "https://lbs.amap.com/api/webservice/guide/api-advanced/newpoisearch" },
+    { "topic": "static-map", "url": "https://lbs.amap.com/api/webservice/guide/api/staticmaps" },
+    { "topic": "geocoding", "url": "https://lbs.amap.com/api/webservice/guide/api/georegeo" },
+    { "topic": "error-codes", "url": "https://lbs.amap.com/api/webservice/guide/tools/info" }
+  ]
+}

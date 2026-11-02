@@ -1,0 +1,5 @@
+- insert:
+    - id: behcet-main
+      name: "@xyb-community/behcet-workbench"
+      config:
+        root: !!js dshHomePath('behcet')

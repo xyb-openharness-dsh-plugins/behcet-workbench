@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>整页视图 · 参考实现演示</title>
+<link rel="stylesheet" href="../../assets/patterns/page-view.css">
+<style>
+  :root{ --tz:1; --accent:#7B4C9A; --surface:#fff; --page-bg:#FAF8FB; --ink:#4A2D5C; --line:#E6DFEC; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#FAF8FB;color:#4A2D5C;
+       font:15px/1.75 "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+  .home{max-width:880px;margin:0 auto;padding:40px 24px 120vh} /* 故意超高，用来验 A5 滚动位置恢复 */
+  h1{font-size:24px;margin:0 0 8px}
+  .hint{font-size:13px;color:#7a6a8a;margin:0 0 28px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .card{text-align:left;padding:16px;border:1px solid var(--line);border-radius:12px;background:#fff;
+        cursor:pointer;font:inherit;color:inherit}
+  .card:hover{border-color:var(--accent)}
+  .card b{display:block;font-size:15px;margin-bottom:4px}
+  .card small{color:#7a6a8a;font-size:12px}
+  /* 演示用的假内容块 */
+  .fake-rows{display:grid;gap:8px}
+  .fake-row{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;background:#fff;
+            border:1px solid var(--line);border-radius:10px;font-size:13px}
+  .fake-row span:last-child{color:#7a6a8a}
+</style>
+</head>
+<body>
+<main class="home" id="home">
+  <h1>整页视图演示</h1>
+  <p class="hint">点卡片打开整页；层内可继续点开二级页。Esc 退一层，浏览器返回键等价返回，✕ 直接回主页。顶部留了很长的空白，用来验证「关掉以后主页停回原处」。</p>
+  <div class="cards">
+    <button class="card" data-open="pathology"><b>病理报告</b><small>长文本 + 来源，会进二层</small></button>
+    <button class="card" data-open="labs"><b>化验记录</b><small>表格密度演示</small></button>
+    <button class="card" data-open="chart"><b>一图秀放大</b><small>宽屏承载</small></button>
+  </div>
+</main>
+
+<script type="module">
+import { createPageView } from '../../assets/patterns/page-view.js'
+
+const rows = (n, label) => Array.from({length:n}, (_,i)=>
+  `<div class="fake-row"><span>${label} ${i+1}</span><span>2026-0${(i%9)+1}-1${i%9}</span></div>`).join('')
+
+const pv = createPageView({ crumbRoot: '主页' })
+
+/* 三层：主页 › 病理报告 › 报告原文 —— 用来验 A2（Esc 只退一层） */
+const detailPage = {
+  key: 'pathology-detail',
+  title: '报告原文（2026-03-12）',
+  crumb: '病理报告 › 报告原文',
+  render(body) {
+    body.innerHTML = `
+      <div class="pv-inner">
+        <section class="pv-section">
+          <h2>原文照抄</h2>
+          <div class="pv-prose"><pre>（此处为演示占位）
+送检材料：右大腿肿物扩大切除标本
+镜下描述：梭形细胞肿瘤，细胞密度中等，可见多形性…
+核分裂象：约 8 个 / 10 HPF
+坏死：约 15%
+注：以上为示例文本，非真实报告。</pre></div>
+          <p class="pv-note">原文只照抄，不改写、不解释、不下结论。</p>
+        </section>
+      </div>`
+  }
+}
+
+const pathologyPage = {
+  key: 'pathology',
+  title: '病理报告',
+  crumb: '病理报告',
+  render(body, api) {
+    body.innerHTML = `
+      <div class="pv-inner">
+        <section class="pv-section">
+          <h2>本页演示什么</h2>
+          <p class="pv-note">内容多的东西不该塞进 480px 弹窗。这一页能放原文、能放来源、能继续往下点开一层。</p>
+        </section>
+        <section class="pv-section">
+          <h2>记录</h2>
+          <div class="fake-rows">${rows(6, '病理记录')}</div>
+        </section>
+      </div>`
+    const btn = document.createElement('button')
+    btn.className = 'pv-btn'
+    btn.textContent = '看报告原文（进第三层）'
+    btn.addEventListener('click', () => api.open(detailPage))
+    body.querySelector('.pv-inner').append(btn)
+  }
+}
+
+const labsPage = {
+  key: 'labs',
+  title: '化验记录',
+  crumb: '化验记录',
+  render(body) {
+    body.innerHTML = `<div class="pv-inner">
+      <section class="pv-section"><h2>最近 12 次</h2><div class="fake-rows">${rows(12,'化验')}</div></section>
+      <p class="pv-note">演示用假数据，不含真实患者信息。</p></div>`
+  }
+}
+
+const chartPage = {
+  key: 'chart',
+  title: '一图秀 · 放大查看',
+  crumb: '一图秀',
+  render(body) {
+    body.innerHTML = `<div class="pv-inner">
+      <section class="pv-section"><h2>放大不改变合同</h2>
+        <p class="pv-note">图中的可比性、归一化、单点不连线等规则，在整页视图里一条都不放宽。这里只演示宽度。</p></section>
+      <div style="height:280px;border:1px dashed var(--line);border-radius:12px;display:grid;place-items:center;color:#9c8fae">（图表占位）</div></div>`
+  }
+}
+
+pv.defineAll([pathologyPage, labsPage, chartPage, detailPage])
+
+document.getElementById('home').addEventListener('click', e => {
+  const b = e.target.closest('[data-open]')
+  if (b) pv.open(b.dataset.open)
+})
+
+/* 深链：地址带 #page=labs 刷新后直接开这一页 */
+pv.openFromHash()
+</script>
+</body>
+</html>

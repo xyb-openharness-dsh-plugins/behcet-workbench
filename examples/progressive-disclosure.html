@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>渐进披露 · 社区工作台组件参考</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #29453d; background: #f7f8f4; font: 16px/1.7 system-ui,sans-serif; }
+  main { max-width: 760px; margin: 40px auto; padding: 24px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  h1 { font-size: clamp(24px,5vw,32px); line-height: 1.4; }
+  h2 { font-size: 20px; }
+  p { margin: 8px 0 18px; }
+  .muted { color: #5b6d65; }
+  section, .config { margin: 24px 0; padding: 24px; background: #fff; border: 1px solid #d6dfd7; border-radius: 12px; }
+  label { display: block; margin: 12px 0; }
+  input { display: block; width: 100%; min-height: 44px; padding: 10px 12px; font: inherit; border: 1px solid #aabeb2; border-radius: 6px; }
+  summary { cursor: pointer; min-height: 44px; padding: 8px 0; }
+  :focus-visible { outline: 2px solid #396b56; outline-offset: 4px; }
+  .config summary { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .config summary::before { content: '▸'; }
+  .config[open] summary::before { content: '▾'; }
+  .config summary span:first-of-type { flex: 1; }
+  .badge { color: #745525; background: #f8f0d9; padding: 0 8px; border-radius: 6px; }
+  .help { position: relative; }
+  .help summary { list-style: none; border: 1px solid #aabeb2; border-radius: 24px; padding: 8px 14px; white-space: nowrap; }
+  .help summary::-webkit-details-marker { display: none; }
+  .help-panel { position: absolute; z-index: 2; right: 0; width: min(320px,calc(100vw - 48px)); padding: 20px; border: 1px solid #b5c8bb; border-radius: 12px; background: #fff; box-shadow: 0 12px 30px #2745371c; }
+  .help-panel ol { padding-left: 24px; }
+  .notice { border-left: 3px solid #b86842; padding: 10px 14px; background: #fff5ee; }
+  @media (max-width: 480px) { main { margin: 8px auto; padding: 16px; } section,.config { padding: 18px; } }
+</style>
+<main>
+  <header>
+    <h1>把主体留给任务</h1>
+    <details class="help">
+      <summary aria-label="展开或收起操作教学">💡 怎么用</summary>
+      <div class="help-panel">
+        <strong>三步完成</strong>
+        <ol><li>填写本次任务的核心信息。</li><li>需要时展开配置或详细说明。</li><li>完成操作后查看和保存结果。</li></ol>
+        <small>再次点击“怎么用”或使用键盘收起。</small>
+      </div>
+    </details>
+  </header>
+  <p class="muted">这是无依赖的交互组件参考，未连接真实API，不保存数据。</p>
+  <section aria-label="主要任务">
+    <h2>当前任务</h2>
+    <label>任务名称<input placeholder="核心输入常显，说明按需展开"></label>
+    <p>实际项目在这里放主要操作和结果，避免被申请教程与高级参数挤走。</p>
+  </section>
+  <details class="config">
+    <summary><span>外部服务配置与申请说明</span><span class="badge">示例 · 未配置</span></summary>
+    <h2>需要时再配置</h2>
+    <p>申请教程、配置字段和详细参数集中在这里，摘要保留当前状态。</p>
+    <label>示例配置<input placeholder="此字段不提交；折叠再展开会保留输入"></label>
+    <ol><li>前往实际服务的官方申请页面。</li><li>按项目约定在后端保存凭据。</li><li>完成真实连接检查后再更新摘要。</li></ol>
+  </details>
+  <p class="notice">错误示例：如果本步必须的服务不可用，应在任务旁直接提示，并引导打开配置，不能把阻断原因藏进折叠区域。</p>
+</main>
+</html>

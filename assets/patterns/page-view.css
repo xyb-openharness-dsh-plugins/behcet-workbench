@@ -1,0 +1,116 @@
+/* 32 号 · 整页视图（Full-Page View）参考样式
+ * 用法：业务页根元素加 .pv-scope，然后引入本文件。
+ * 只定义结构与密度；颜色走项目令牌，--pv-accent / --pv-surface / --pv-ink 由项目覆盖。
+ * 字号一律 calc(NNpx * var(--tz))，--tz 由项目的字号三档提供，缺省回退 1。
+ */
+.pv-scope{
+  --pv-accent: var(--accent, #7B4C9A);
+  --pv-surface: var(--surface, #FFFFFF);
+  --pv-page: var(--page-bg, #FAF8FB);
+  --pv-ink: var(--ink, #4A2D5C);
+  --pv-line: var(--line, #E6DFEC);
+  --pv-scrim: var(--scrim, rgba(40, 28, 52, .34));
+  --pv-tz: var(--tz, 1);
+  --pv-radius: 14px;
+  --pv-head: 56px;
+}
+
+/* ---------- 浮层与面板 ---------- */
+.pv-overlay{
+  position: fixed; inset: 0; z-index: 60;
+  display: flex;
+  background: var(--pv-scrim);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  animation: pv-fade .18s ease-out both;
+}
+.pv-overlay[hidden]{ display: none !important; }
+
+.pv-panel{
+  position: absolute;
+  inset: clamp(8px, 1.2vw, 16px);
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  background: var(--pv-page);
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  box-shadow: 0 18px 48px rgba(30, 20, 40, .22);
+  overflow: hidden;
+  animation: pv-rise .2s cubic-bezier(.22,.7,.24,1) both;
+}
+
+/* ---------- 顶栏 ---------- */
+.pv-head{
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0; min-height: var(--pv-head);
+  padding: 0 12px 0 8px;
+  background: var(--pv-surface);
+  border-bottom: 1px solid var(--pv-line);
+}
+.pv-head-actions{ display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pv-head-title{
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.pv-crumb{
+  font-size: calc(11px * var(--pv-tz)); color: color-mix(in srgb, var(--pv-ink) 62%, transparent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pv-title{
+  font-size: calc(15px * var(--pv-tz)); font-weight: 700; color: var(--pv-ink);
+  margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.pv-btn{
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: calc(13px * var(--pv-tz));
+  padding: 7px 11px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--pv-line); background: var(--pv-surface); color: var(--pv-ink);
+}
+.pv-btn:hover{ border-color: var(--pv-accent); color: var(--pv-accent); }
+.pv-btn:focus-visible{ outline: 3px solid color-mix(in srgb, var(--pv-accent) 34%, transparent); outline-offset: 2px; }
+.pv-btn-icon{ padding: 7px 9px; }
+.pv-btn[disabled]{ opacity: .55; cursor: not-allowed; }
+
+/* ---------- 内容区：唯一滚动容器 ---------- */
+.pv-body{
+  flex: 1; min-height: 0; min-width: 0;
+  overflow: auto; overscroll-behavior: contain;
+  padding: 24px clamp(16px, 1.6vw, 28px) 56px;
+}
+.pv-inner{ max-width: 1180px; margin: 0 auto; }
+.pv-section{ margin: 0 0 26px; }
+.pv-section > h2{
+  font-size: calc(14px * var(--pv-tz)); font-weight: 700; color: var(--pv-ink);
+  margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--pv-line);
+}
+.pv-note{ font-size: calc(12px * var(--pv-tz)); color: color-mix(in srgb, var(--pv-ink) 66%, transparent); line-height: 1.8; }
+
+/* 记号：越宽越要防止正文跑成一行 140 字 */
+.pv-prose{ max-width: 68ch; line-height: 1.85; }
+.pv-prose pre{
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--pv-surface); border: 1px solid var(--pv-line); border-radius: 10px;
+  padding: 12px; margin: 0; font-size: calc(13px * var(--pv-tz));
+}
+
+/* ---------- 背景滚动锁：浮层开着的期间，宿主文档不许滚 ----------
+ * 只锁 html 不锁 body：overflow 写在 body 上在 Safari 里会漏（html 仍可滚）。
+ * 打开前 page-view.js 记住 scrollY，关掉后先摘类再 scrollTo 还原。
+ */
+html.pv-lock{ overflow: hidden; }
+
+/* ---------- 窄屏：就是整屏 ---------- */
+@media (max-width: 760px){
+  .pv-panel{ inset: 0; border-radius: 0; border: 0; }
+  .pv-body{ padding: 18px 16px 44px; }
+}
+
+/* ---------- 减少动效：不位移，但终态必须可见 ---------- */
+@media (prefers-reduced-motion: reduce){
+  .pv-overlay, .pv-panel{ animation: none !important; }
+  .pv-overlay{ -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+@keyframes pv-fade{ from{ opacity: 0 } to{ opacity: 1 } }
+@keyframes pv-rise{ from{ opacity: 0; transform: translateY(10px) scale(.996) } to{ opacity: 1; transform: none } }

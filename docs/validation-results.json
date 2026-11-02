@@ -1,0 +1,68 @@
+{
+  "environment": {
+    "node": "v23.6.1",
+    "platform": "Darwin",
+    "architecture": "arm64"
+  },
+  "offlineTests": {
+    "total": 10,
+    "passed": 10
+  },
+  "generatedProject": {
+    "npmRunCheck": "passed",
+    "pack": "passed",
+    "version": "0.1.0",
+    "archiveBytes": 130907,
+    "archiveSha256": "92d5a3d2146f9e2e26bb8ebb72116337b25d9d9a7de58fc7cd0e4b2972a8a63c",
+    "archiveFiles": 14,
+    "requiredEntries": [
+      "package/package.json",
+      "package/cordis.patch.yml",
+      "package/dsh/index.js",
+      "package/lib/client.js",
+      "package/assets/tokens.css"
+    ],
+    "developerAbsolutePathsInPackedText": 0,
+    "installedIntoDesktop": false
+  },
+  "cliVerification": {
+    "version": "1.1.0",
+    "tests": 15,
+    "passed": 15,
+    "check": "passed",
+    "activation": "npm link --ignore-scripts --no-audit --no-fund",
+    "actualPathCommandVersion": "1.1.0",
+    "gitSync": "local bare remote: fast-forward passed; dirty/diverged refused",
+    "pack": "actual tgz produced; lifecycle scripts refused before execution",
+    "remotePush": "not performed; remote not specified",
+    "desktopInstall": false
+  },
+  "gitDistribution": {
+    "repository": "https://github.com/xyb-openharness-dsh-plugins/xyb-workbench-starter.git",
+    "confirmedAt": "2026-10-16",
+    "initialRemoteState": "ls-remote succeeded with no refs",
+    "branch": "main",
+    "scope": "source Git distribution; no npm or workbench market publication"
+  },
+  "verification1_2_0": {
+    "version": "1.2.0",
+    "date": "2026-10-16",
+    "check": "passed",
+    "tests": 22,
+    "passed": 22,
+    "actualPathCommandVersion": "1.2.0",
+    "newProjectResources": "status, market, reusable-pattern and optional POI guides/templates/examples copied",
+    "desktopInstall": false,
+    "marketSubmission": false,
+    "poiNormalizationTests": 3,
+    "poiLiveApiTested": false
+  },
+  "verification1_2_1": {
+    "version": "1.2.1",
+    "date": "2026-10-16",
+    "check": "passed",
+    "files": 87,
+    "scope": "dialog design contract and templates; no new runtime implementation or tests",
+    "desktopInstall": false
+  }
+}

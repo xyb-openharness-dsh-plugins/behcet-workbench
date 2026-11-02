@@ -1,0 +1,18 @@
+{
+  "packageName": "@xyb-community/behcet-workbench",
+  "title": "小贝宝 BeiPal 白塞病工作台",
+  "repository": "https://github.com/xyb-openharness-dsh-plugins/behcet-workbench",
+  "description": "帮助白塞病成年患者及授权代记者整理从疑似到长期随访的资料。",
+  "slug": "behcet",
+  "targetUsers": "成年白塞病患者及其授权代记者",
+  "scenario": "整理疑似、确诊及长期随访中的发作、检查、治疗和多科就诊资料，准备复诊问题。",
+  "completion": "患者能核对和回顾自己的记录，按选择整理复诊资料，并查到原始来源。",
+  "coreFlow": [
+    "建立患者档案或由授权代记者记录",
+    "记录发作与来源资料并核对",
+    "查看随时间变化的检查、治疗和症状",
+    "选择资料和问题准备复诊"
+  ],
+  "layoutMode": "business-first",
+  "businessWidth": 0.65
+}

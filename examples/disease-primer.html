@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>36 号 · 疾病概要（「?」入口）演示</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237B4C9A'/%3E%3Ctext x='16' y='23' font-size='19' font-family='PingFang SC,sans-serif' font-weight='700' fill='%23fff' text-anchor='middle'%3E%3F%3C/text%3E%3C/svg%3E">
+<!--
+  用法（项目里三步）：
+    ① <link rel="stylesheet" href="primer.css">        放在项目 style.css 之后
+    ② <script src="primer-data.js"></script>            window.DISEASE_PRIMER
+    ③ <script src="primer.js"></script>                 body 末尾
+  本例为了能直接双击打开，样式与脚本都从 ../assets/patterns 取相对路径（经典脚本，file:// 可用）。
+-->
+<link rel="stylesheet" href="../assets/patterns/disease-primer.css">
+<style>
+  :root{
+    --paper:#FAF8FB; --surface:#fff; --ink:#2B2430; --ink-2:#4F4557; --muted:#7C7286;
+    --line:#E6E0EC; --violet:#7B4C9A; --violet-deep:#4A2D5C; --violet-soft:#F3EEF8;
+    --tz:1; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  .topbar{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .brand strong{font-size:16px}
+  .brand span{color:var(--muted);font-size:12.5px;margin-left:6px}
+  .top-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:9px;padding:0 12px;min-height:34px;font-size:12.5px;color:var(--ink);cursor:pointer}
+  main{max-width:860px;margin:0 auto;padding:22px 16px 80px}
+  h1{font-size:23px;margin:0 0 8px}
+  /* 36 号 §4.3：站点级 p 规则必须限定作用域——浮窗挂在 body 下，
+     裸 p{max-width} 会把浮窗里的 .dp-lead/.dp-src 一并卡窄，导致 P9 失败。 */
+  main p{color:var(--ink-2);margin:0 0 12px;max-width:70ch}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+  .hint{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><strong>演示工作台</strong><span>36 号 · 疾病概要</span></div>
+  <div class="top-actions">
+    <button class="chip" type="button">设置</button>
+    <button class="chip" type="button">v0.0.1</button>
+    <!-- 不写这个按钮也行：模块会自动插一个「?」到 .top-actions 末尾 -->
+    <button type="button" data-primer-open aria-haspopup="dialog" aria-controls="disease-primer"
+            aria-label="疾病概要：定义、医学资料与指南情况、治疗全景、发展趋势" title="疾病概要">?</button>
+  </div>
+</header>
+
+<main>
+  <h1>这一页是「?」入口的最小示例</h1>
+  <p>点右上角的「?」，会打开一整页疾病概要：定义、医学资料与指南情况、治疗全景、发展趋势。关掉它有三个入口——
+     左上角「返回」、右上角「关闭」、以及浏览器/键盘的 Esc，每个都只退一层。</p>
+  <div class="card">
+    <b>为什么是整页而不是弹窗</b>
+    <p class="hint">四段内容加起来必然超过 1.5 屏。塞进弹窗只有两种结果：压成摘要（等于没写）、或者内部再套一层滚动（等于整页但更挤）。
+       判据见 docs/32-FULL-PAGE-VIEW.md。</p>
+  </div>
+  <div class="card">
+    <b>为什么趋势段写得像流水账</b>
+    <p class="hint">因为「发展趋势」最容易滑成判断。展望类、推荐类的词一个都不留，只写发生了什么事、在哪一天、出自哪份文件。</p>
+  </div>
+  <!-- 下面几块只是把页面撑长，用来验证「关掉概要页后滚动位置不变」。真实项目不需要。 -->
+  <div class="card"><b>占位段 1</b><p class="hint">滚动位置测试用填充。</p></div>
+  <div class="card"><b>占位段 2</b><p class="hint">滚动位置测试用填充。</p></div>
+  <div class="card"><b>占位段 3</b><p class="hint">滚动位置测试用填充。</p></div>
+  <div class="card"><b>占位段 4</b><p class="hint">滚动位置测试用填充。</p></div>
+  <div class="card"><b>占位段 5</b><p class="hint">滚动位置测试用填充。</p></div>
+  <div class="card"><b>占位段 6</b><p class="hint">滚动位置测试用填充。</p></div>
+  <div class="card"><b>占位段 7</b><p class="hint">滚动位置测试用填充。</p></div>
+  <div class="card"><b>占位段 8</b><p class="hint">滚动位置测试用填充。</p></div>
+</main>
+
+<script src="./disease-primer-data.js"></script>
+<script src="../assets/patterns/disease-primer.js"></script>
+</body>
+</html>

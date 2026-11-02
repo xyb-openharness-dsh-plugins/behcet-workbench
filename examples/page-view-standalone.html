@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>整页视图 · 单文件演示（file:// 双击可开）</title>
+<style>
+/* 32 号 · 整页视图（Full-Page View）参考样式
+ * 用法：业务页根元素加 .pv-scope，然后引入本文件。
+ * 只定义结构与密度；颜色走项目令牌，--pv-accent / --pv-surface / --pv-ink 由项目覆盖。
+ * 字号一律 calc(NNpx * var(--tz))，--tz 由项目的字号三档提供，缺省回退 1。
+ */
+.pv-scope{
+  --pv-accent: var(--accent, #7B4C9A);
+  --pv-surface: var(--surface, #FFFFFF);
+  --pv-page: var(--page-bg, #FAF8FB);
+  --pv-ink: var(--ink, #4A2D5C);
+  --pv-line: var(--line, #E6DFEC);
+  --pv-scrim: var(--scrim, rgba(40, 28, 52, .34));
+  --pv-tz: var(--tz, 1);
+  --pv-radius: 14px;
+  --pv-head: 56px;
+}
+
+/* ---------- 浮层与面板 ---------- */
+.pv-overlay{
+  position: fixed; inset: 0; z-index: 60;
+  display: flex;
+  background: var(--pv-scrim);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  animation: pv-fade .18s ease-out both;
+}
+.pv-overlay[hidden]{ display: none !important; }
+
+.pv-panel{
+  position: absolute;
+  inset: clamp(8px, 1.2vw, 16px);
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  background: var(--pv-page);
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  box-shadow: 0 18px 48px rgba(30, 20, 40, .22);
+  overflow: hidden;
+  animation: pv-rise .2s cubic-bezier(.22,.7,.24,1) both;
+}
+
+/* ---------- 顶栏 ---------- */
+.pv-head{
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0; min-height: var(--pv-head);
+  padding: 0 12px 0 8px;
+  background: var(--pv-surface);
+  border-bottom: 1px solid var(--pv-line);
+}
+.pv-head-actions{ display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pv-head-title{
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.pv-crumb{
+  font-size: calc(11px * var(--pv-tz)); color: color-mix(in srgb, var(--pv-ink) 62%, transparent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pv-title{
+  font-size: calc(15px * var(--pv-tz)); font-weight: 700; color: var(--pv-ink);
+  margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.pv-btn{
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: calc(13px * var(--pv-tz));
+  padding: 7px 11px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--pv-line); background: var(--pv-surface); color: var(--pv-ink);
+}
+.pv-btn:hover{ border-color: var(--pv-accent); color: var(--pv-accent); }
+.pv-btn:focus-visible{ outline: 3px solid color-mix(in srgb, var(--pv-accent) 34%, transparent); outline-offset: 2px; }
+.pv-btn-icon{ padding: 7px 9px; }
+.pv-btn[disabled]{ opacity: .55; cursor: not-allowed; }
+
+/* ---------- 内容区：唯一滚动容器 ---------- */
+.pv-body{
+  flex: 1; min-height: 0; min-width: 0;
+  overflow: auto; overscroll-behavior: contain;
+  padding: 24px clamp(16px, 1.6vw, 28px) 56px;
+}
+.pv-inner{ max-width: 1180px; margin: 0 auto; }
+.pv-section{ margin: 0 0 26px; }
+.pv-section > h2{
+  font-size: calc(14px * var(--pv-tz)); font-weight: 700; color: var(--pv-ink);
+  margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--pv-line);
+}
+.pv-note{ font-size: calc(12px * var(--pv-tz)); color: color-mix(in srgb, var(--pv-ink) 66%, transparent); line-height: 1.8; }
+
+/* 记号：越宽越要防止正文跑成一行 140 字 */
+.pv-prose{ max-width: 68ch; line-height: 1.85; }
+.pv-prose pre{
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--pv-surface); border: 1px solid var(--pv-line); border-radius: 10px;
+  padding: 12px; margin: 0; font-size: calc(13px * var(--pv-tz));
+}
+
+/* ---------- 窄屏：就是整屏 ---------- */
+@media (max-width: 760px){
+  .pv-panel{ inset: 0; border-radius: 0; border: 0; }
+  .pv-body{ padding: 18px 16px 44px; }
+}
+
+/* ---------- 减少动效：不位移，但终态必须可见 ---------- */
+@media (prefers-reduced-motion: reduce){
+  .pv-overlay, .pv-panel{ animation: none !important; }
+  .pv-overlay{ -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+@keyframes pv-fade{ from{ opacity: 0 } to{ opacity: 1 } }
+@keyframes pv-rise{ from{ opacity: 0; transform: translateY(10px) scale(.996) } to{ opacity: 1; transform: none } }
+
+</style>
+<style>
+  :root{ --tz:1; --accent:#7B4C9A; --surface:#fff; --page-bg:#FAF8FB; --ink:#4A2D5C; --line:#E6DFEC; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#FAF8FB;color:#4A2D5C;
+       font:15px/1.75 "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+  .home{max-width:880px;margin:0 auto;padding:40px 24px 120vh} /* 故意超高，用来验 A5 滚动位置恢复 */
+  h1{font-size:24px;margin:0 0 8px}
+  .hint{font-size:13px;color:#7a6a8a;margin:0 0 28px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .card{text-align:left;padding:16px;border:1px solid var(--line);border-radius:12px;background:#fff;
+        cursor:pointer;font:inherit;color:inherit}
+  .card:hover{border-color:var(--accent)}
+  .card b{display:block;font-size:15px;margin-bottom:4px}
+  .card small{color:#7a6a8a;font-size:12px}
+  /* 演示用的假内容块 */
+  .fake-rows{display:grid;gap:8px}
+  .fake-row{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;background:#fff;
+            border:1px solid var(--line);border-radius:10px;font-size:13px}
+  .fake-row span:last-child{color:#7a6a8a}
+</style>
+</head>
+<body>
+<main class="home" id="home">
+  <h1>整页视图演示</h1>
+  <p class="hint">点卡片打开整页；层内可继续点开二级页。Esc 退一层，浏览器返回键等价返回，✕ 直接回主页。顶部留了很长的空白，用来验证「关掉以后主页停回原处」。</p>
+  <div class="cards">
+    <button class="card" data-open="pathology"><b>病理报告</b><small>长文本 + 来源，会进二层</small></button>
+    <button class="card" data-open="labs"><b>化验记录</b><small>表格密度演示</small></button>
+    <button class="card" data-open="chart"><b>一图秀放大</b><small>宽屏承载</small></button>
+  </div>
+</main>
+
+<script>
+(function(){
+"+"
+/* 32 号 · 整页视图（Full-Page View）参考实现
+ * 无依赖、file:// 可直接跑。规范见 docs/32-FULL-PAGE-VIEW.md。
+ *
+ * 最小用法：
+ *   import { createPageView } from './page-view.js'
+ *   const pv = createPageView({ crumbRoot: '主页' })
+ *   pv.open({
+ *     key: 'pathology',
+ *     title: '病理报告',
+ *     crumb: '病理报告',
+ *     render: (body, api) => { body.innerHTML = '<p>…</p>' }
+ *   })
+ *   // 退一层：pv.back()   全关：pv.close()   Esc 与浏览器返回键已内置
+ *
+ * 深链：pv.define({ key, title, crumb, render }) 注册后，地址带 #page=key 刷新可直达。
+ */
+
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+
+function createPageView(options = {}) {
+  const crumbRoot = options.crumbRoot || '主页'
+  const root = options.root || document.body
+  const routes = new Map()
+  const stack = []          // [{ key, title, crumb, render, contentEl, scrollTop, trigger }]
+  let overlay = null
+  let panel = null
+  let bodyEl = null
+  let titleEl = null
+  let crumbEl = null
+  let backBtn = null
+  let lastFocus = null
+  let lastPointerTarget = null
+  let syncingHistory = false
+
+  // 鼠标点击在部分浏览器里不会把焦点给按钮，只记 activeElement 会让 A4 形同虚设。
+  // 所以在捕获阶段记一次 pointerdown 的落点，作为"触发者"的兜底。
+  if (typeof document !== 'undefined') {
+    document.addEventListener('pointerdown', e => { lastPointerTarget = e.target }, true)
+  }
+
+  function define(def) { routes.set(def.key, def); return api }
+  function defineAll(list) { (list || []).forEach(define); return api }
+
+  /* ---------- DOM 骨架（只建一次，多层复用同一个 panel） ---------- */
+  function ensureShell() {
+    if (overlay) return
+    overlay = document.createElement('div')
+    overlay.className = 'pv-overlay'
+    overlay.hidden = true
+    overlay.setAttribute('role', 'dialog')
+    overlay.setAttribute('aria-modal', 'true')
+
+    panel = document.createElement('div')
+    panel.className = 'pv-panel'
+    panel.tabIndex = -1
+
+    const head = document.createElement('div')
+    head.className = 'pv-head'
+
+    const actions = document.createElement('div')
+    actions.className = 'pv-head-actions'
+    backBtn = document.createElement('button')
+    backBtn.type = 'button'
+    backBtn.className = 'pv-btn'
+    backBtn.innerHTML = '← 返回'
+    backBtn.addEventListener('click', () => api.back())
+    const closeBtn = document.createElement('button')
+    closeBtn.type = 'button'
+    closeBtn.className = 'pv-btn pv-btn-icon'
+    closeBtn.innerHTML = '✕'
+    closeBtn.setAttribute('aria-label', '关闭并回到' + crumbRoot)
+    closeBtn.addEventListener('click', () => api.close())
+    actions.append(backBtn, closeBtn)
+
+    const headTitle = document.createElement('div')
+    headTitle.className = 'pv-head-title'
+    crumbEl = document.createElement('span')
+    crumbEl.className = 'pv-crumb'
+    titleEl = document.createElement('h2')
+    titleEl.className = 'pv-title'
+    headTitle.append(crumbEl, titleEl)
+
+    head.append(actions, headTitle)
+    bodyEl = document.createElement('div')
+    bodyEl.className = 'pv-body'
+    panel.append(head, bodyEl)
+    overlay.append(panel)
+    root.append(overlay)
+
+    overlay.addEventListener('keydown', onKeydown)
+  }
+
+  /* ---------- 打开一层 ---------- */
+  function open(keyOrDef, params) {
+    const def = typeof keyOrDef === 'string' ? routes.get(keyOrDef) : keyOrDef
+    if (!def || typeof def.render !== 'function') {
+      console.warn('[page-view] 未注册的页面：', keyOrDef)
+      return null
+    }
+    const top = stack[stack.length - 1]
+    if (top && top.key === def.key) return top      // 连点不叠层
+
+    ensureShell()
+    if (!stack.length) lastFocus = pickTrigger()
+
+    const entry = {
+      key: def.key,
+      title: def.title || def.key,
+      crumb: def.crumb || def.title || def.key,
+      render: def.render,
+      params: params || {},
+      contentEl: document.createElement('div'),
+      scrollTop: 0
+    }
+    stack.push(entry)
+
+    // 每层独立内容节点，切层只换 DOM 引用，不重跑 render（保住表单/图表状态）
+    bodyEl.replaceChildren(entry.contentEl)
+    overlay.hidden = false
+    paintHead()
+    try {
+      const node = def.render(entry.contentEl, api, entry.params)
+      if (node && node.nodeType === 1) entry.contentEl.append(node)
+    } catch (e) {
+      entry.contentEl.innerHTML = '<p class="pv-note">这一页没能打开：' + String(e && e.message || e) + '</p>'
+    }
+    bodyEl.scrollTop = 0
+
+    pushHistory(entry.key)
+    requestAnimationFrame(() => {
+      const first = panel.querySelector(FOCUSABLE)
+      ;(first || panel).focus()
+    })
+    return entry
+  }
+
+  /** 触发者：优先当前焦点（键盘激活），否则用最近一次 pointerdown 的落点（鼠标激活）。 */
+  function pickTrigger() {
+    const active = document.activeElement
+    if (active && active !== document.body && active !== document.documentElement) return active
+    const p = lastPointerTarget
+    if (p && p.closest) {
+      const el = p.closest('button,a,[tabindex],[data-open]')
+      if (el) return el
+    }
+    return active || null
+  }
+
+  /* ---------- 退一层 / 全关：以 history 为唯一真源 ----------
+   * 不用 replaceState 假装退栈——那样 history 会多出一条"假的当前页"，
+   * 浏览器返回键就会退到一个不存在的位置（2026-10-25 探针 A3 实测踩到）。
+   */
+  function back() {
+    if (!stack.length) return
+    const depth = stack.length
+    if (historyUsable()) {
+      try { history.back() } catch { applyDepth(depth - 1); return }
+      // history 是异步的：250ms 内没等到 popstate 就自己应用，避免"点了没反应"
+      setTimeout(() => { if (stack.length === depth) applyDepth(depth - 1) }, 250)
+      return
+    }
+    applyDepth(depth - 1)
+  }
+
+  function close() {
+    if (!stack.length) return
+    const depth = stack.length
+    if (historyUsable()) {
+      try { history.go(-depth) } catch { applyDepth(0); return }
+      setTimeout(() => { if (stack.length === depth) applyDepth(0) }, 250)
+      return
+    }
+    applyDepth(0)
+  }
+
+  /** 把视图同步到指定栈深；0 = 回主页。popstate 与降级路径共用这一条。 */
+  function applyDepth(depth) {
+    const target = Math.max(0, Math.min(depth | 0, stack.length))
+    while (stack.length > target) {
+      const top = stack.pop()
+      if (bodyEl) top.scrollTop = bodyEl.scrollTop   // 记住被退掉那层的位置
+    }
+    if (!stack.length) { teardown(); return }
+    const prev = stack[stack.length - 1]
+    overlay.hidden = false
+    bodyEl.replaceChildren(prev.contentEl)
+    paintHead()
+    bodyEl.scrollTop = prev.scrollTop || 0
+    requestAnimationFrame(() => {
+      const first = panel.querySelector(FOCUSABLE)
+      ;(first || panel).focus()
+    })
+  }
+
+  function historyUsable() {
+    return typeof history !== 'undefined' && typeof history.pushState === 'function'
+  }
+
+  function teardown() {
+    if (!overlay) return
+    overlay.hidden = true
+    bodyEl.replaceChildren()
+    try { lastFocus && lastFocus.focus && lastFocus.focus() } catch {}
+  }
+
+  function paintHead() {
+    const top = stack[stack.length - 1]
+    titleEl.textContent = top.title || '未命名页'      // A9：不许出现空标题
+    crumbEl.textContent = crumbRoot + ' › ' + (top.crumb || top.title)
+    backBtn.hidden = false                            // A10：返回与关闭两个入口都在
+    panel.setAttribute('aria-label', top.title || '详情')
+  }
+
+  /* ---------- 键盘：Esc 一层一退；Tab 在层内循环 ---------- */
+  function onKeydown(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      api.back()                                       // A2：深 3 层也只退一层
+      return
+    }
+    if (e.key !== 'Tab') return
+    const list = Array.from(panel.querySelectorAll(FOCUSABLE)).filter(el => el.offsetParent !== null)
+    if (!list.length) return
+    const first = list[0], last = list[list.length - 1]
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+  }
+
+  /* ---------- history：浏览器返回键 = back() ---------- */
+  function pushHistory(key) {
+    if (!historyUsable() || syncingHistory) return
+    try { history.pushState({ pv: stack.length }, '', '#page=' + encodeURIComponent(key)) } catch {}
+  }
+  function onPopState(e) {
+    const depth = e.state && typeof e.state.pv === 'number' ? e.state.pv : 0
+    applyDepth(depth)
+  }
+  if (typeof window !== 'undefined') window.addEventListener('popstate', onPopState)
+
+  /* ---------- 深链：地址带 #page=key 直接可开（A7） ---------- */
+  function openFromHash() {
+    if (typeof location === 'undefined') return false
+    const m = /(?:^#|&)page=([^&]+)/.exec(location.hash || '')
+    if (!m) return false
+    const key = decodeURIComponent(m[1])
+    if (!routes.has(key)) {
+      console.warn('[page-view] 地址里这一页不存在，已回主页：', key)
+      return false
+    }
+    open(key)
+    return true
+  }
+
+  const api = {
+    define, defineAll, open, back, close, openFromHash,
+    home: () => api.close(),
+    get depth() { return stack.length },
+    get current() { const t = stack[stack.length - 1]; return t ? t.key : null }
+  }
+  return api
+}
+
+window.createPageView = createPageView
+})();
+
+const rows = (n, label) => Array.from({length:n}, (_,i)=>
+  `<div class="fake-row"><span>${label} ${i+1}</span><span>2026-0${(i%9)+1}-1${i%9}</span></div>`).join('')
+
+const pv = createPageView({ crumbRoot: '主页' })
+
+/* 三层：主页 › 病理报告 › 报告原文 —— 用来验 A2（Esc 只退一层） */
+const detailPage = {
+  key: 'pathology-detail',
+  title: '报告原文（2026-03-12）',
+  crumb: '病理报告 › 报告原文',
+  render(body) {
+    body.innerHTML = `
+      <div class="pv-inner">
+        <section class="pv-section">
+          <h2>原文照抄</h2>
+          <div class="pv-prose"><pre>（此处为演示占位）
+送检材料：右大腿肿物扩大切除标本
+镜下描述：梭形细胞肿瘤，细胞密度中等，可见多形性…
+核分裂象：约 8 个 / 10 HPF
+坏死：约 15%
+注：以上为示例文本，非真实报告。</pre></div>
+          <p class="pv-note">原文只照抄，不改写、不解释、不下结论。</p>
+        </section>
+      </div>`
+  }
+}
+
+const pathologyPage = {
+  key: 'pathology',
+  title: '病理报告',
+  crumb: '病理报告',
+  render(body, api) {
+    body.innerHTML = `
+      <div class="pv-inner">
+        <section class="pv-section">
+          <h2>本页演示什么</h2>
+          <p class="pv-note">内容多的东西不该塞进 480px 弹窗。这一页能放原文、能放来源、能继续往下点开一层。</p>
+        </section>
+        <section class="pv-section">
+          <h2>记录</h2>
+          <div class="fake-rows">${rows(6, '病理记录')}</div>
+        </section>
+      </div>`
+    const btn = document.createElement('button')
+    btn.className = 'pv-btn'
+    btn.textContent = '看报告原文（进第三层）'
+    btn.addEventListener('click', () => api.open(detailPage))
+    body.querySelector('.pv-inner').append(btn)
+  }
+}
+
+const labsPage = {
+  key: 'labs',
+  title: '化验记录',
+  crumb: '化验记录',
+  render(body) {
+    body.innerHTML = `<div class="pv-inner">
+      <section class="pv-section"><h2>最近 12 次</h2><div class="fake-rows">${rows(12,'化验')}</div></section>
+      <p class="pv-note">演示用假数据，不含真实患者信息。</p></div>`
+  }
+}
+
+const chartPage = {
+  key: 'chart',
+  title: '一图秀 · 放大查看',
+  crumb: '一图秀',
+  render(body) {
+    body.innerHTML = `<div class="pv-inner">
+      <section class="pv-section"><h2>放大不改变合同</h2>
+        <p class="pv-note">图中的可比性、归一化、单点不连线等规则，在整页视图里一条都不放宽。这里只演示宽度。</p></section>
+      <div style="height:280px;border:1px dashed var(--line);border-radius:12px;display:grid;place-items:center;color:#9c8fae">（图表占位）</div></div>`
+  }
+}
+
+pv.defineAll([pathologyPage, labsPage, chartPage, detailPage])
+
+document.getElementById('home').addEventListener('click', e => {
+  const b = e.target.closest('[data-open]')
+  if (b) pv.open(b.dataset.open)
+})
+
+/* 深链：地址带 #page=labs 刷新后直接开这一页 */
+pv.openFromHash()
+</script>
+</body>
+</html>
