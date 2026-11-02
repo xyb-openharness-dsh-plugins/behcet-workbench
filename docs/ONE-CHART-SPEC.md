@@ -64,4 +64,4 @@
 
 ## 当前文件版本
 
-当前原型三个文件 SHA-256：HTML `7be3f35d684752431f93c53ffae4eabc326cc96a3061ba24c2fccc77703fe293`；数据 `9e131884cf18250c8c52e7f3ca4cc515bc1b36eb0ba5f0a1d5d708fbdedd9211`；读模型 `08ec8be1cc69b239de0d452fc7ff17d20dfed0c00ba329e210358e54ef2fd058`。历史浏览器抽样及测试证据对应其记录时的文件版本，见 [原型评审](PROTOTYPE-REVIEW.md)，不自动构成当前版本的完整验收。
+当前原型文件 SHA-256 及测试证据见 [原型评审](PROTOTYPE-REVIEW.md)。历史浏览器抽样仅对应其记录时的文件版本，不自动构成当前版本的完整验收。

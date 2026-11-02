@@ -11,6 +11,10 @@
         if (!groups.has(key)) groups.set(key, {fields, points: []});
         groups.get(key).points.push({...point, key: String(index), date: validDate(point.date) ? point.date : '', rawDate: point.date, numeric: typeof point.value === 'number' && Number.isFinite(point.value)});
       });
+      if (!groups.size) {
+        const fields = ['unit', 'method', 'laboratory'].map(k => metric[k]);
+        groups.set(JSON.stringify(fields.map(v => known(v) ? v.trim() : null)), {fields, points: []});
+      }
       const allDated = [...groups.entries()].flatMap(([groupKey, group]) => group.points.filter(p => p.date).map(p => ({date:p.date, groupKey})));
       return [...groups.entries()].map(([groupKey, {fields, points}], index) => {
         const interrupted = (a,b) => allDated.some(p => p.groupKey !== groupKey && p.date >= a && p.date <= b);
@@ -25,7 +29,8 @@
         const previousDate = latest ? [...new Set(dated.map(p=>p.date))].at(-2) : null;
         const previousRows = dated.filter(p=>p.date === previousDate);
         const previous = previousRows.length === 1 ? previousRows[0] : null;
-        const delta = complete && latest?.numeric && previous?.numeric && !interrupted(previous.date, latest.date) ? latest.value - previous.value : null;
+        const difference = complete && latest?.numeric && previous?.numeric && !interrupted(previous.date, latest.date) ? latest.value - previous.value : null;
+        const delta = Number.isFinite(difference) ? difference : null;
         // A nonnumeric or ambiguous day breaks the path; never bridge over it.
         const segments = []; let segment = [];
         for (const p of dated) {

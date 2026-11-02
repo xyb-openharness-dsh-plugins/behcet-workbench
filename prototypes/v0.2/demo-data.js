@@ -1,6 +1,6 @@
 // Synthetic demonstration data only; this is the sole initial record source.
 window.BEIPAL_DEMO_RECORDS = [
-  { id: 1, kind: '发作记录', date: '2026-10-18', text: '口腔不适，影响进食（示例）', source: '本人记录 · 合成数据', private: false, history: [] },
+  { id: 1, kind: '发作记录', date: '2026-10-18', endDate: '', site: '口腔', text: '口腔不适，影响进食（示例）', source: '本人记录 · 合成数据', private: false, history: [] },
   { id: 2, kind: '当前用药', date: '2026-10-10', text: '示例药物，剂量未记录', source: '本人抄录 · 合成数据', private: false, history: [] },
   { id: 3, kind: '问题清单', date: '2026-10-25', text: '下次复诊想问的问题（示例）', source: '本人记录 · 合成数据', private: true, history: [] }
 ];
