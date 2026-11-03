@@ -1,6 +1,6 @@
 # 把 M6（装机验证）交给 Mac 端 agent
 
-> 文档编号：HANDOFF-DESKTOP-MAC ｜ 版本：`v0.1.0-draft.1`（2026-11-02）｜ 状态：待对方执行；本机未验证。
+> 文档编号：HANDOFF-DESKTOP-MAC ｜ 版本：`v0.1.0-draft.2`（2026-11-03）｜ 状态：SSH 与应用存在性已验证；实际 profile 和工作台装机未验证。
 > 用途：本机（instabox，Linux）无法完成 M6/V1–V3，因为 DSH Desktop 官方不支持 Linux。要让装机、真实加载和真机截图成为**实测**而不是「未验证」，需要一台装有 DSH Desktop 的 Mac。
 
 ## 一、为什么需要这台 Mac
@@ -12,7 +12,9 @@
 
 因此 M6 的**唯一**可行路径是在 Mac 上做。
 
-## 二、需要 Mac 端 agent 提供的信息（缺一不可）
+## 二、连接状态及仍需核实的信息
+
+2026-11-03 通过 Tailscale SSH 实测可登录 Mac mini，远端用户名 `sammini`；`/Applications/DSH Desktop.app` 存在，版本 0.12.1。该结果只证明 SSH 和应用文件存在，未证明应用正在运行、profile 已定位或工作台已安装。下面保留原交接清单供后续核验：
 
 1. **可登录的用户名**与登录方式（下列任一）：
    - 把下面第三节的公钥加进该用户的 `~/.ssh/authorized_keys`（推荐，最小授权）；或
