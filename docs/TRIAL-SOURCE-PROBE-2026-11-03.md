@@ -9,7 +9,7 @@
 | [药物临床试验登记与信息公示平台](https://www.chinadrugtrials.org.cn/) | 首页 HTTP 200；自动检索 FAILED | 搜索返回 HTTP 202 和 JavaScript 挑战；不能记为零条 |
 | [WHO ICTRP](https://trialsearch.who.int/) | 首页 HTTP 200 | 本轮未执行检索；未查，不计覆盖 |
 
-探索性 CTG 检索 `query.cond=Behcet`、首登记日期 2026-02-03 至 2026-11-03，返回总计 10 个命中；查询 `pageSize=1`，返回下一页令牌，未读取全部记录。同义词查询计数不同，不可把单词命中当完整覆盖。研究登记状态不等于当前有效，也不等于患者可入组。
+探索性 CTG 检索 `query.cond=Behcet`、首登记日期 2026-02-03 至 2026-11-03，返回总计 10 个命中；查询 `pageSize=1`，返回下一页令牌，未读取全部记录。2026-11-03 本会话独立复核同一[官方 API 查询](https://clinicaltrials.gov/api/v2/studies?query.cond=Behcet&filter.advanced=AREA%5BStudyFirstPostDate%5DRANGE%5B2026-02-03%2C2026-11-03%5D&pageSize=1&countTotal=true&fields=NCTId)获得 HTTP 200、`totalCount=10` 和 `nextPageToken`；仅核实第一页及分页信号。同义词查询计数不同，不可把单词命中当完整覆盖。研究登记状态不等于当前有效，也不等于患者可入组。
 
 ChiCTR 探索性检索的中文、英文及不同字段返回不同数量；多词合并发现新旧两种注册号格式。日期范围、详情、分页和去重结果尚未逐条核验。访问控制失败应如实记录，不把非正式路径视为稳定接口。
 
