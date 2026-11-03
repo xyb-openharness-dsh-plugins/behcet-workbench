@@ -60,6 +60,52 @@ window.BEIPAL_PATHWAY_MODEL = (function () {
     return v === undefined || v === null || String(v).trim() === '' ? fallback : String(v);
   }
 
+  // 与 metric-model 的可比性契约保持一致：点自有字段优先（空值/未知词也算点自己的
+  // 未知值，不回退到指标级），只有点未声明该字段时才回退；未知维度归入同一未知组。
+  const COMPARABLE_FIELDS = ['unit', 'method', 'laboratory'];
+
+  function known(v) {
+    return typeof v === 'string' && v.trim() !== ''
+      && !/^(未知|不详|未记录|待核|unknown)$/i.test(v.trim());
+  }
+
+  function pointField(p, m, key) {
+    const raw = Object.hasOwn(p, key) ? p[key] : m[key];
+    return known(raw) ? raw.trim() : '';
+  }
+
+  function metricGroups(m) {
+    const groups = new Map();
+    for (const [index, p] of (Array.isArray(m.points) ? m.points : []).entries()) {
+      if (!p || typeof p !== 'object') continue;
+      const fields = {};
+      for (const key of COMPARABLE_FIELDS) fields[key] = pointField(p, m, key);
+      const groupKey = JSON.stringify(COMPARABLE_FIELDS.map(key => fields[key] || null));
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          ...fields,
+          complete: COMPARABLE_FIELDS.every(key => fields[key] !== ''),
+          points: []
+        });
+      }
+      groups.get(groupKey).points.push({ point: p, index });
+    }
+    return [...groups.values()];
+  }
+
+  function datedPoints(group) {
+    return group.points
+      .filter(x => isDay(x.point.date))
+      .sort((a, b) => String(a.point.date).localeCompare(String(b.point.date)) || a.index - b.index);
+  }
+
+  function groupSuffix(g) {
+    const field = (label, v) => label + (v ? ' ' + v : '未记录');
+    return '（可比组：' + field('单位', g.unit)
+      + '；' + field('方法', g.method)
+      + '；' + field('机构', g.laboratory) + '）';
+  }
+
   function block(summary, items) {
     return { summary, items };
   }
@@ -102,30 +148,52 @@ window.BEIPAL_PATHWAY_MODEL = (function () {
     }
     const rows = [];
     const trend = [];
+    let hasComparableGroup = false;
     for (const m of (Array.isArray(metrics) ? metrics : [])) {
       if (!m || typeof m !== 'object' || !Array.isArray(m.points)) continue;
-      const points = m.points
-        .filter(p => p && isDay(p.date))
-        .slice()
-        .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-      const inside = points.filter(p => p.date >= range.start && (!range.end || p.date <= range.end));
-      const prior = points.filter(p => p.date < range.start).slice(-1)[0];
-      if (!inside.length) continue;
+      const groups = metricGroups(m);
+      if (!groups.length) continue;
       const name = text(m.name, '指标名未记录');
-      for (const p of inside) {
+      const metricRows = [];
+      const labelled = groups.length > 1 || groups.some(g => !g.complete);
+      for (const g of groups) {
+        g.dated = datedPoints(g);
+        const inside = g.dated.filter(x => x.point.date >= range.start && (!range.end || x.point.date <= range.end));
+        if (!inside.length) continue;
+        for (const x of inside) metricRows.push({ ...x, group: g });
+        if (labelled) hasComparableGroup = true;
+        const counts = new Map();
+        for (const x of g.dated) counts.set(x.point.date, (counts.get(x.point.date) || 0) + 1);
+        const lastDate = inside[inside.length - 1].point.date;
+        const lastAt = inside.filter(x => x.point.date === lastDate);
+        const last = lastAt.length === 1 ? lastAt[0].point : null;
+        const before = g.dated.filter(x => x.point.date < range.start);
+        const priorDate = before.length ? before[before.length - 1].point.date : null;
+        const priorAt = priorDate ? before.filter(x => x.point.date === priorDate) : [];
+        const prior = priorAt.length === 1 ? priorAt[0].point : null;
+        const numeric = p => typeof p.value === 'number' && Number.isFinite(p.value);
+        // 同一可比组内，非数值、同日并列都不能被跨过去做趋势；跨组值不参与本组比较。
+        const between = prior && last
+          ? g.dated.filter(x => x.point.date >= prior.date && x.point.date <= last.date)
+          : [];
+        const pathStable = between.every(x => numeric(x.point) && counts.get(x.point.date) === 1);
+        const comparable = g.complete && prior && last && numeric(prior) && numeric(last) && pathStable;
+        trend.push(name + (comparable
+          ? ' 阶段前最近 ' + text(prior.value) + ' → 阶段内最后 ' + text(last.value)
+          : ' 阶段内 ' + inside.length + ' 个点') + (labelled ? groupSuffix(g) : ''));
+      }
+      if (!metricRows.length) continue;
+      metricRows.sort((a, b) => String(a.point.date).localeCompare(String(b.point.date)) || a.index - b.index);
+      for (const { point: p, group: g } of metricRows) {
         const value = text(p.value, '值未记录');
-        const unit = text(p.unit || m.unit, '单位未记录');
-        const method = text(p.method || m.method, '方法未记录');
-        const lab = text(p.laboratory || m.laboratory, '机构未记录');
+        const unit = text(g.unit, '单位未记录');
+        const method = text(g.method, '方法未记录');
+        const lab = text(g.laboratory, '机构未记录');
         rows.push([
           name + ' · ' + p.date,
           value + ' ' + unit + '（' + method + ' / ' + lab + '；来源：' + text(m.source || p.source) + '）'
         ]);
       }
-      const last = inside[inside.length - 1];
-      trend.push(name + (prior
-        ? ' 阶段前最近 ' + text(prior.value) + ' → 阶段内最后 ' + text(last.value)
-        : ' 阶段内 ' + inside.length + ' 个点'));
     }
     if (!rows.length) {
       return missingBlock('本阶段没有可归入的指标点，不补写趋势');
@@ -133,7 +201,9 @@ window.BEIPAL_PATHWAY_MODEL = (function () {
     const pointCount = rows.length;
     rows.push(['阶段范围', range.start + ' 至 ' + (range.end || '未记录（进行中或结束未知）')]);
     rows.push(['参考语境', '单位、方法、机构随点并列；示例数据未提供参考范围，本页不补写。']);
-    const summary = '阶段内 ' + pointCount + ' 个记录点；' + trend.join('；') + '。仅按日期并排数值，不判断好坏。';
+    const summary = '阶段内 ' + pointCount + ' 个记录点；' + trend.join('；') + '。'
+      + (hasComparableGroup ? '不同单位、方法、机构的记录拆成可比组，不跨组比较。' : '')
+      + '仅按日期并排数值，不判断好坏。';
     return block(summary, rows);
   }
 

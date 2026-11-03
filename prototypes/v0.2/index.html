@@ -300,23 +300,42 @@ function metricCards(){
   let unmapped=cat?[...recorded].filter(id=>!cat.byId.has(id)).length:0;
   return `<div class="metric-section"><h2>示例指标卡</h2><p class="muted">仅相同且已知的单位、方法和机构可比较；合成记录不作医学判断。</p><p class="muted metric-catalog-note" role="status">目录共 ${listed} 项 · ${inCat} 项有记录 · ${missing} 项暂无记录${unmapped?` · ${unmapped} 项未归类`:''}。未记录只表示尚未录入，不代表检查结果，也不代表需要补做；不同单位、方法、机构分开看。</p>${metrics.length?'':'<div class="empty">暂无示例指标。目录仍按类别列出全部检查项。</div>'}${groups.map(g=>renderMetricGroup(g)).join('')}</div>`;
 }
-function metricOption(m,item){
-  let title=[m.method,m.unit].filter(Boolean).join(' · '),label=item?item.displayName:m.name,series=item?metrics.filter(x=>x.metricId===item.metricId&&x.points.length):[];
-  return `<label title="${esc(title)}"><input type="checkbox" data-metric="${esc(m.id)}" ${state.metricIds.has(m.id)?'checked':''}>${esc(label)}${series.length>1?` · ${esc(m.method||'方法未知')}`:''}</label>`;
+function metricOption(m,item,label){
+  let title=[m.unit,m.method,m.laboratory].filter(Boolean).join(' · '),text=label??(item?item.displayName:m.name);
+  return `<label title="${esc(title)}"><input type="checkbox" data-metric="${esc(m.id)}" ${state.metricIds.has(m.id)?'checked':''}>${esc(text)}</label>`;
+}
+/* 选择项正文只放简称；同名项才补单位/方法/机构，仍相同再补组序，避免两个复选框同名。 */
+function optionLabelMap(entries){
+  let base=e=>e.item?e.item.displayName:e.m.name;
+  let counts=new Map();entries.forEach(e=>{let b=base(e);counts.set(b,(counts.get(b)||0)+1)});
+  let ids=entries.map(e=>counts.get(base(e))>1?[base(e),e.m.unit||'单位未知',e.m.method||'方法未知',e.m.laboratory||'机构未知'].join(' · '):base(e));
+  let idCounts=new Map();ids.forEach(x=>idCounts.set(x,(idCounts.get(x)||0)+1));
+  let seen=new Map();
+  ids.forEach((x,i)=>{if(idCounts.get(x)>1){let n=(seen.get(x)||0)+1;seen.set(x,n);ids[i]=`${x} · 第 ${n} 组`}});
+  return new Map(entries.map((e,i)=>[e.m,ids[i]]));
 }
 function metricOptions(){
-  let cat=metricCatalog();
-  if(!cat)return groups().map(g=>`<strong>${esc(g)}</strong>${metrics.filter(m=>m.group===g).map(m=>metricOption(m,null)).join('')}`).join('');
-  let used=new Set();
-  let out=cat.categoryOrder.map(id=>{
-    let category=cat.categories.find(x=>x.id===id),items=cat.items.filter(i=>i.categoryId===id);
-    let rec=items.map(i=>({item:i,series:metrics.filter(m=>m.metricId===i.metricId&&m.points.length)})).filter(x=>x.series.length);
-    rec.forEach(x=>x.series.forEach(m=>used.add(m.id)));
-    return `<strong>${esc(category.name)} <span class="cat-count">${items.length} 项 · ${rec.length} 项有记录</span></strong>${rec.map(x=>x.series.map(m=>metricOption(m,x.item)).join('')).join('')}${rec.length?'':'<p class="muted small-note">目录中暂无记录。</p>'}`;
-  }).join('');
-  let other=metrics.filter(m=>!used.has(m.id)&&!cat.byId.has(m.metricId)&&m.points.length);
-  if(other.length)out+=`<strong>其他已记录指标（待核对）</strong>${other.map(m=>metricOption(m,null)).join('')}`;
-  return out;
+  let cat=metricCatalog(),sections=[],list=[];
+  if(!cat){
+    groups().forEach(g=>{
+      let rows=metrics.filter(m=>m.group===g).map(m=>({m,item:null}));
+      list.push(...rows);sections.push({head:`<strong>${esc(g)}</strong>`,rows,note:''});
+    });
+  } else {
+    let used=new Set();
+    cat.categoryOrder.forEach(id=>{
+      let category=cat.categories.find(x=>x.id===id),items=cat.items.filter(i=>i.categoryId===id);
+      let rec=items.map(i=>({item:i,series:metrics.filter(m=>m.metricId===i.metricId&&m.points.length)})).filter(x=>x.series.length);
+      let rows=rec.flatMap(x=>x.series.map(m=>({m,item:x.item})));
+      rec.forEach(x=>x.series.forEach(m=>used.add(m.id)));
+      list.push(...rows);
+      sections.push({head:`<strong>${esc(category.name)} <span class="cat-count">${items.length} 项 · ${rec.length} 项有记录</span></strong>`,rows,note:rec.length?'':'<p class="muted small-note">目录中暂无记录。</p>'});
+    });
+    let other=metrics.filter(m=>!used.has(m.id)&&!cat.byId.has(m.metricId)&&m.points.length).map(m=>({m,item:null}));
+    if(other.length){list.push(...other);sections.push({head:'<strong>其他已记录指标（待核对）</strong>',rows:other,note:''})}
+  }
+  let labels=optionLabelMap(list);
+  return sections.map(s=>s.head+s.rows.map(e=>metricOption(e.m,e.item,labels.get(e.m))).join('')+s.note).join('');
 }
 function checkDelta(m){
   if(m.latestRows&&m.latestRows.length>1)return `同日 ${m.latestRows.length} 条，未并列单个数值`;
@@ -358,7 +377,7 @@ function endLabels(items){
   items.sort((a,b)=>a.y-b.y).forEach((it,i)=>{ if(i&&it.y<items[i-1].y+16)it.y=items[i-1].y+16 })
   return items.map(it=>{
     let ly=it.y+4>244?it.y-12:it.y+4
-    return `<text x="${it.x}" y="${ly}" text-anchor="end" class="chart-end-value" fill="${esc(it.m.color)}">${esc(it.last.value)} ${esc(it.m.unit||'单位未知')}</text>`
+    return `<text x="${it.x}" y="${ly}" text-anchor="end" class="chart-end-value" data-series="${esc(it.m.id)}" fill="${esc(it.m.color)}">${esc(it.last.value)} ${esc(it.m.unit||'单位未知')}</text>`
   }).join('')
 }
 function visibleIndex(id){return [...state.metricIds].indexOf(id)}
@@ -366,23 +385,35 @@ function visibleIndex(id){return [...state.metricIds].indexOf(id)}
    有开始与结束日期 → 条；只有开始 → 点；勾了仍在进行 → 画到右缘并加箭头。
    精度不是具体到日的不参与画条，避免把月份当某一天。 */
 function treatmentLane(x,start,end){
-  let winEnd=labelOf(end)
+  // 条只裁到绘图区 [60,730]；标题仍保留本人抄录的真实起止日期。
+  let clampBar=(a,b)=>{
+    let x1=Math.max(60,Math.min(730,a)),x2=Math.max(x1,Math.min(730,b)),w=Math.max(4,x2-x1);
+    if(x1+w>730)x1=730-w;
+    if(x1<60)x1=60;
+    return [x1,w];
+  };
   return state.records.filter(r=>r.kind==='当前用药'&&r.private!==true&&isDayDate(r.date)).map(r=>{
-    let s0=day(r.date)
-    if(s0<start||s0>end)return ''
-    let name=esc(r.drug||r.text||'治疗记录')
-    if(r.ongoing)return `<rect data-treatment="${r.id}" x="${x(r.date)}" y="28" width="${Math.max(4,730-x(r.date))}" height="8" rx="4" fill="#9a5d35"><title>${esc(r.date)} 起，仍在进行 · ${name}</title></rect><path d="M732 32 h8 m-5 -4 l5 4 -5 4" stroke="#9a5d35" stroke-width="2" fill="none"/>`
-    if(isDayDate(r.endDate)&&day(r.endDate)>=s0){
-      let e2=day(r.endDate)>end?winEnd:r.endDate
-      return `<rect data-treatment="${r.id}" x="${x(r.date)}" y="28" width="${Math.max(4,x(e2)-x(r.date))}" height="8" rx="4" fill="#9a5d35"><title>${esc(r.date)} 至 ${esc(r.endDate)} · ${name}</title></rect>`
+    let s0=day(r.date),name=esc(r.drug||r.text||'治疗记录')
+    if(r.ongoing){
+      if(s0>end)return ''
+      let [bx,w]=clampBar(x(r.date),730)
+      return `<rect data-treatment="${r.id}" x="${bx}" y="28" width="${w}" height="8" rx="4" fill="#9a5d35"><title>${esc(r.date)} 起，仍在进行 · ${name}</title></rect><path d="M732 32 h8 m-5 -4 l5 4 -5 4" stroke="#9a5d35" stroke-width="2" fill="none"/>`
     }
+    if(isDayDate(r.endDate)&&day(r.endDate)>=s0){
+      let e0=day(r.endDate)
+      if(e0<start||s0>end)return ''
+      let [bx,w]=clampBar(x(r.date),x(r.endDate))
+      return `<rect data-treatment="${r.id}" x="${bx}" y="28" width="${w}" height="8" rx="4" fill="#9a5d35"><title>${esc(r.date)} 至 ${esc(r.endDate)} · ${name}</title></rect>`
+    }
+    if(s0<start||s0>end)return ''
     return `<circle data-treatment="${r.id}" cx="${x(r.date)}" cy="32" r="5" fill="#9a5d35"><title>${esc(r.date)} · ${name}</title></circle>`
   }).join('')
 }
 function labelOf(ms){return new Date(ms).toISOString().slice(0,10)}
 function chartPanel(){let {start,end}=chartWindow(),x=d=>60+(day(d)-start)/(end-start||1)*670,visible=metrics.filter(m=>state.metricIds.has(m.id)),label=d=>new Date(d).toISOString().slice(0,10),has=visible.some(m=>m.dated.some(p=>p.numeric&&day(p.date)>=start&&day(p.date)<=end));/* 各指标独立归一化，所以末点的 y 必须用各自的 bounds 算，再统一做避让。 */
-let lab=visible.map(m=>{let b=bounds(m),yy=p=>250-b(p)*150,pts=m.dated.filter(p=>p.numeric&&day(p.date)>=start&&day(p.date)<=end);if(!pts.length)return null;let last=pts.reduce((a,c)=>day(c.date)>=day(a.date)?c:a);return {m,last,x:x(last.date),y:yy(last)}}).filter(Boolean)
-let graph=has?`<p class="scroll-hint" id="chart-scroll-hint" hidden>图表比当前宽度更宽：请左右滚动查看完整时间范围 →</p><div class="chart-wrap"><svg viewBox="0 0 790 320" role="group" aria-label="示例指标时间图，各组独立缩放，不同指标不可比较"><text x="5" y="28" class="chart-label">治疗</text><text x="5" y="58" class="chart-label">事件</text>${state.showEvents?treatmentLane(x,start,end):''}${state.showEvents?events.filter(e=>e.type!=='治疗'&&day(e.date)>=start&&day(e.date)<=end).map(e=>`<circle cx="${x(e.date)}" cy="62" r="5" fill="#9a5d35"><title>${esc(e.date)} ${esc(e.label)}</title></circle>`).join(''):''}${[100,150,200,250].map(y=>`<line x1="60" y1="${y}" x2="730" y2="${y}" class="chart-grid"/>`).join('')}${visible.map(m=>{let b=bounds(m),y=p=>250-b(p)*150,pts=m.dated.filter(p=>p.numeric&&day(p.date)>=start&&day(p.date)<=end);return `${m.segments.map(seg=>seg.filter(p=>day(p.date)>=start&&day(p.date)<=end)).filter(seg=>seg.length>1).map(seg=>`<path data-series="${esc(m.id)}" pathLength="1" class="series-path" stroke="${esc(m.color)}" d="${seg.map((p,i)=>`${i?'L':'M'} ${x(p.date)} ${y(p)}`).join(' ')}"/>`).join('')}${pts.map(p=>`<circle tabindex="0" role="button" aria-pressed="${isPinned(m.id,p.key)}" aria-label="${esc(m.name)} ${esc(p.value)} ${esc(m.unit||'单位未知')} ${esc(p.date)}，按下固定详情" data-point="${esc(m.id)}" data-date="${p.key}" cx="${x(p.date)}" cy="${y(p)}" r="6" class="chart-point ${isPinned(m.id,p.key)?'active':''}" fill="${esc(m.color)}"><title>${esc(m.name)} ${esc(p.value)} · ${esc(p.date)}</title></circle>`).join('')}`}).join('')}<text x="60" y="280" class="chart-label">${label(start)}</text><text x="730" y="280" text-anchor="end" class="chart-label">${label(end)}</text>${endLabels(lab)}</svg></div>`:'<div class="empty">当前范围没有可绘制的数值记录。</div>';return `${graph}<p class="muted">单位、方法或机构未知时仅显示点；同日无序及非数值处断线。治疗按开始到结束画条，只有开始日期时画点，勾了「仍在进行」画到右缘；事件单独一行，两者不表示因果。文字和日期待核记录请在指标卡查看。</p><div class="legend">${visible.map(m=>`<span style="--series:${esc(m.color)}">${esc(m.name)} · ${esc(m.unit||'单位未知')} · ${esc(m.method||'方法未知')} · ${esc(m.laboratory||'机构未知')}</span>`).join('')}</div>${pinHTML()}`}
+let lab=visible.map(m=>{let b=bounds(m),yy=p=>250-b(p)*150,pts=m.dated.filter(p=>p.numeric&&day(p.date)>=start&&day(p.date)<=end);if(!pts.length)return null;let lastDay=Math.max(...pts.map(p=>day(p.date))),sameDay=m.dated.filter(p=>day(p.date)===lastDay);if(sameDay.length>1)return {m,ambiguous:sameDay.length};let last=pts.find(p=>day(p.date)===lastDay);return {m,last,x:x(last.date),y:yy(last)}}).filter(Boolean)
+let endItems=lab.filter(x=>x.last),ambiguous=lab.filter(x=>x.ambiguous),ambiguousNote=ambiguous.length?`<p class="muted chart-end-ambiguous">${ambiguous.map(x=>`<span data-series="${esc(x.m.id)}">${esc(x.m.name)} 同日 ${x.ambiguous} 条，未取末值</span>`).join('；')}。</p>`:''
+let graph=has?`<p class="scroll-hint" id="chart-scroll-hint" hidden>图表比当前宽度更宽：请左右滚动查看完整时间范围 →</p><div class="chart-wrap"><svg viewBox="0 0 790 320" role="group" aria-label="示例指标时间图，各组独立缩放，不同指标不可比较"><text x="5" y="28" class="chart-label">治疗</text><text x="5" y="58" class="chart-label">事件</text>${state.showEvents?treatmentLane(x,start,end):''}${state.showEvents?events.filter(e=>e.type!=='治疗'&&day(e.date)>=start&&day(e.date)<=end).map(e=>`<circle cx="${x(e.date)}" cy="62" r="5" fill="#9a5d35"><title>${esc(e.date)} ${esc(e.label)}</title></circle>`).join(''):''}${[100,150,200,250].map(y=>`<line x1="60" y1="${y}" x2="730" y2="${y}" class="chart-grid"/>`).join('')}${visible.map(m=>{let b=bounds(m),y=p=>250-b(p)*150,pts=m.dated.filter(p=>p.numeric&&day(p.date)>=start&&day(p.date)<=end);return `${m.segments.map(seg=>seg.filter(p=>day(p.date)>=start&&day(p.date)<=end)).filter(seg=>seg.length>1).map(seg=>`<path data-series="${esc(m.id)}" pathLength="1" class="series-path" stroke="${esc(m.color)}" d="${seg.map((p,i)=>`${i?'L':'M'} ${x(p.date)} ${y(p)}`).join(' ')}"/>`).join('')}${pts.map(p=>`<circle tabindex="0" role="button" aria-pressed="${isPinned(m.id,p.key)}" aria-label="${esc(m.name)} ${esc(p.value)} ${esc(m.unit||'单位未知')} ${esc(p.date)}，按下固定详情" data-point="${esc(m.id)}" data-date="${p.key}" cx="${x(p.date)}" cy="${y(p)}" r="6" class="chart-point ${isPinned(m.id,p.key)?'active':''}" fill="${esc(m.color)}"><title>${esc(m.name)} ${esc(p.value)} · ${esc(p.date)}</title></circle>`).join('')}`}).join('')}<text x="60" y="280" class="chart-label">${label(start)}</text><text x="730" y="280" text-anchor="end" class="chart-label">${label(end)}</text>${endLabels(endItems)}</svg></div>`:'<div class="empty">当前范围没有可绘制的数值记录。</div>';return `${graph}${ambiguousNote}<p class="muted">单位、方法或机构未知时仅显示点；同日无序及非数值处断线；同日多条末点不任取，只说明未取末值。治疗按开始到结束画条，只有开始日期时画点，勾了「仍在进行」画到右缘；事件单独一行，两者不表示因果。文字和日期待核记录请在指标卡查看。</p><div class="legend">${visible.map(m=>`<span style="--series:${esc(m.color)}">${esc(m.name)} · ${esc(m.unit||'单位未知')} · ${esc(m.method||'方法未知')} · ${esc(m.laboratory||'机构未知')}</span>`).join('')}</div>${pinHTML()}`}
 function oneChart(){return `<div class="card"><h2>指标与时间节点</h2><p>示例记录按日期展示；治疗和事件分开排列，不表示因果关系。</p><div class="onechart-layout"><aside class="chart-sidebar"><fieldset><legend>时间范围</legend><div class="range-buttons">${[['90','近 3 月'],['180','近 6 月'],['365','近 12 月'],['all','全部']].map(([v,t])=>`<button data-range="${v}" aria-pressed="${state.range===v}">${t}</button>`).join('')}</div></fieldset><label>缩放窗口 <input id="chart-zoom" type="range" min="40" max="100" step="10" value="${state.zoom}"> <output id="zoom-value">${state.zoom}%</output></label><fieldset><legend>选择指标（最多 4 项）</legend><div class="metric-options">${metricOptions()}</div></fieldset><label><input id="show-events" type="checkbox" ${state.showEvents?'checked':''}>显示治疗与事件</label></aside><div class="chart-content" id="chart-panel">${chartPanel()}</div></div></div>`}
 function refreshChart(){let panel=$('#chart-panel');if(panel)panel.innerHTML=chartPanel();updateChartScrollHint()}
 function updateChartScrollHint(){let w=document.querySelector('#chart-panel .chart-wrap'),h=$('#chart-scroll-hint');if(!w||!h)return;h.hidden=w.scrollWidth<=w.clientWidth+1}
@@ -394,7 +425,7 @@ function fmtSize(n){return n>=1024?`${(n/1024).toFixed(1)} KB`:`${n} B`}
 function filesPage(){
   let f=state.files
   return `<div class="eyebrow">设置 · 本人可控</div><h1>资料目录与云解析</h1>
-  <p class="muted">原件只在本次演示里登记名称与大小：不复制内容、不上传、刷新即清空。文本类原件会另外在本机内存读一份，仅用于下面的模拟抽取，不离开本机。</p>
+  <p class="muted">原件只在本次演示里登记名称与大小：不上传、不复制进记录、刷新即清空。文本类原件会另外在本机内存读一份，仅用于下面的模拟抽取，不离开本机；撤回时清空这份文本缓存。</p>
   <div class="card"><h2>登记原件</h2>
     <p>选择自己电脑上的文件登记到资料目录；登记不等于解析，也不等于已核对。</p>
     <label class="field">选择文件（可多选）<input type="file" id="file-input" multiple accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg"></label>
@@ -402,20 +433,21 @@ function filesPage(){
   </div>
   <div class="card" style="margin-top:16px"><h2>已登记的原件（${f.length}）</h2>
     ${f.length?`<div class="list">${f.map(x=>`<div class="row"><div class="spread"><div><h3>${esc(x.name)}</h3>
-      <p class="muted">${fmtSize(x.size)} · 登记时间 ${esc(x.addedAt)} · 关联记录 ${state.records.filter(r=>r.fileId===x.id).length} 条${x.private?' · 私密':''}</p></div>
+      <p class="muted">${fmtSize(x.size)} · 登记时间 ${esc(x.addedAt)} · 关联记录 ${state.records.filter(r=>r.fileId===x.id).length} 条${x.private?' · <span class="tag private-tag">私密原件</span>':''}</p></div>
       <div class="actions"><label><input type="checkbox" data-file-private="${x.id}" ${x.private?'checked':''}> 私密原件</label>
       <button data-parse="${x.id}">模拟抽取</button>
       <button data-file-del="${x.id}">移除</button></div></div>
-      ${x.content?'':'<p class="muted">该类型在本演示中不解析（无 OCR/PDF 解析），可手工记录。</p>'}</div>`).join('')}</div>`
-    :'<div class="empty">还没有登记原件。原件只登记名称与大小，不复制内容。</div>'}
+      ${isTextFile(x)?(x.content?'':'<p class="muted">本机文本缓存为空；再次「模拟抽取」会重新读取本机文件。</p>'):'<p class="muted">该类型在本演示中不解析（无 OCR/PDF 解析），可手工记录。</p>'}</div>`).join('')}</div>`
+    :'<div class="empty">还没有登记原件。原件登记名称与大小；文本类会为本机模拟抽取读取一份文本，不上传。</div>'}
   </div>
   <div class="card" style="margin-top:16px"><h2>候选（${state.candidates.length}）</h2>
     <p class="muted">抽取结果只是候选，必须逐条采纳才进资料库；候选本身不是事实，也不会自动生成日期或诊断。</p>
-    ${state.candidates.length?`<div class="list">${state.candidates.map(c=>`<div class="row"><p>${esc(c.text)}</p>
-      <p class="muted">来自：${esc(c.fileName)}</p>
-      <div class="actions"><button data-accept="${c.id}">采纳为一条记录</button><button data-drop="${c.id}">丢弃</button></div></div>`).join('')}</div>`
+    ${state.candidates.length?`<div class="list">${state.candidates.map(c=>{let cf=fileById(c.fileId),p=!!(cf&&cf.private);return `<div class="row" data-candidate="${c.id}" data-private="${p?1:0}"><p>${p?'<span class="tag private-tag">私密原件</span> ':''}${esc(c.text)}</p>
+      <p class="muted">来自：${esc(c.fileName)}${p?' · 私密原件候选，采纳后为私密记录，不进入摘要、导出和 AI 草稿':''}</p>
+      <div class="actions"><button data-accept="${c.id}">采纳为一条记录</button><button data-drop="${c.id}">丢弃</button></div></div>`}).join('')}</div>`
     :'<div class="empty">没有候选。先登记一个文本类原件，再点「模拟抽取」。</div>'}
-    ${state.candidates.length?'<div class="actions"><button data-parse-revoke="1">撤回授权并清空候选</button></div>':''}
+    ${state.candidates.length||state.files.some(f=>f.content)?`<div class="actions"><button data-parse-revoke="1">${state.candidates.length?'撤回本机授权并清空候选':'清空本机文本缓存'}</button></div>`:''}
+    <p class="muted" id="parse-retention-note">撤回只清空本页候选与本机文本缓存；已采纳记录、原件登记信息和磁盘上的原件保留，可重新授权抽取。本演示没有上传过文件，也没有云端副本可删，因此不会声称已删除云端资料。</p>
   </div>
   <div class="card" style="margin-top:16px"><h2>云解析与留存（未接通）</h2>
     <p>真正的云端解析（MinerU）在本项目里尚未核实：没有接入、没有报价、没有留存与删除条款。因此本原型只提供本机模拟抽取，不会把文件发给任何服务。</p>
@@ -426,27 +458,27 @@ function privacyPage(){return `<div class="eyebrow">设置 · 本人可控</div>
   <div class="card"><h2>私密的三个出口</h2><p>私密记录默认不进入摘要、导出和 AI 草稿。摘要与导出可由本人逐条选择；私密内容目前不能进入 AI 草稿，也不能作为 AI 改写来源。</p>
   <p class="muted">私密是记录本身的属性；由私密记录改写成的问题同样算私密。</p></div>
   <div class="card" style="margin-top:16px"><h2>代记授权</h2><p>代记授权、撤回与读取范围仅为设计占位，尚未连接身份或权限服务；当前演示没有账号体系。</p></div>
-  <div class="card" style="margin-top:16px"><h2>资料目录</h2><p>原件登记、私密标记与云解析授权在「资料目录与云解析」里；本演示不缓存原件内容，刷新即清空。</p>
+  <div class="card" style="margin-top:16px"><h2>资料目录</h2><p>原件登记、私密标记与云解析授权在「资料目录与云解析」里；文本类原件会为本机模拟抽取读取一份文本，不上传，撤回时清空，刷新即全部清空。</p>
   <div class="actions"><button data-go="资料目录与云解析">去资料目录</button><button data-view="看板">回到看板</button></div></div>`}
 
-/* 本机模拟抽取：把文本按行切成候选，不判断内容、不补日期、不打分。 */
+/* 本机模拟抽取：把文本按行切成候选，不判断内容、不补日期、不打分。
+   候选保留原件当时的私密状态；渲染时再按当前原件状态派生，避免标记滞后。 */
 function runMockExtract(file){
   let lines=String(file.content||'').split(/\r?\n/).map(t=>t.trim()).filter(t=>t.length>=4&&t.length<=160).slice(0,6)
-  state.candidates=lines.map((text,i)=>({id:Date.now()+i,fileId:file.id,fileName:file.name,text}))
+  state.candidates=lines.map((text,i)=>({id:Date.now()+i,fileId:file.id,fileName:file.name,text,private:!!file.private}))
   return state.candidates.length
 }
+function isTextFile(f){return /^(text\/|application\/json)/.test(f.type||'')||/\.(txt|md|csv|json)$/i.test(f.name)}
 function registerFiles(list){
   let added=0
   ;[...list].forEach(f=>{
     let id=Date.now()+Math.random(),entry={id,name:f.name,size:f.size,type:f.type||'',addedAt:new Date().toISOString().slice(0,10),private:false,content:'',blob:f}
     state.files.push(entry);added++
-    if(/^(text\/|application\/json)/.test(f.type||'')||/\.(txt|md|csv|json)$/i.test(f.name)){
-      if(f.size<=65536){let rd=new FileReader();rd.onload=()=>{entry.content=String(rd.result||'')};rd.readAsText(f)}
-    }
+    if(isTextFile(f)&&f.size<=65536){let rd=new FileReader();rd.onload=()=>{entry.content=String(rd.result||'')};rd.readAsText(f)}
   })
   render();if(added)toast(`已登记 ${added} 个原件（仅本会话）`)
 }
-function content(){const v=state.view,s=state.sub;if(v==='资料目录与云解析')return filesPage();if(v==='授权与隐私')return privacyPage();if(v==='看板')return dashboard();let body='';if(v==='复诊与准备'&&s==='就诊准备与导出')body=visit();else if(v==='复诊与准备'&&s==='医嘱记录')body=doctorAdvicePage();else if(s==='什么情况要马上就医')body='<div class="card"><h2>求助信息</h2><p>相关内容尚待临床审核，原型暂不提供判断或指导。</p></div>';else if(s==='整理草稿 / 核对')body='<div class="card"><h2>整理草稿 / 核对</h2><p>原件在「资料目录与云解析」里登记；本演示只登记名称与大小，不上传、不缓存内容。抽取结果只是候选，需逐条采纳。</p><button data-go="资料目录与云解析">去资料目录</button><button data-view="病情整理" data-sub="资料库">查看资料库</button></div>';else if(v==='病情一图秀'&&s==='治疗与事件节点')body=timeline()+`<div aria-live="polite" aria-atomic="true">${timelineResults()}</div>`;else if(v==='病情一图秀')body=oneChart();else if(v==='病情整理'&&s==='指标检测')body=metricCards();else if(['发作记录','症状记录','当前用药','用药前检查记录','问题清单','工作·费用·异地就医','血管','消化道','资料库','指标检测','心理与家庭','生育·性健康与用药'].includes(s))body=recordPage();else body=`<div class="card"><h2>${esc(s)}</h2><div class="empty">此处尚无示例资料。可先查看相关记录，或回看板选择其他任务。</div><div class="actions"><button data-view="发作与病程" data-sub="发作记录">查看发作记录</button><button data-view="看板">回到看板</button></div></div>`;return pageHeader(esc(v),'整理本人记录与原文；示例内容不构成医学判断。')+`<div class="tabs" role="tablist" aria-label="${esc(v)}">${subs[v].map(x=>`<button role="tab" aria-selected="${x===s}" data-view="${v}" data-sub="${x}">${x}</button>`).join('')}</div>`+body}
+function content(){const v=state.view,s=state.sub;if(v==='资料目录与云解析')return filesPage();if(v==='授权与隐私')return privacyPage();if(v==='看板')return dashboard();let body='';if(v==='复诊与准备'&&s==='就诊准备与导出')body=visit();else if(v==='复诊与准备'&&s==='医嘱记录')body=doctorAdvicePage();else if(s==='什么情况要马上就医')body='<div class="card"><h2>求助信息</h2><p>相关内容尚待临床审核，原型暂不提供判断或指导。</p></div>';else if(s==='整理草稿 / 核对')body='<div class="card"><h2>整理草稿 / 核对</h2><p>原件在「资料目录与云解析」里登记；本演示只登记名称与大小，文本类会为本机模拟抽取读取一份文本，不上传，撤回时清空。抽取结果只是候选，需逐条采纳。</p><button data-go="资料目录与云解析">去资料目录</button><button data-view="病情整理" data-sub="资料库">查看资料库</button></div>';else if(v==='病情一图秀'&&s==='治疗与事件节点')body=timeline()+`<div aria-live="polite" aria-atomic="true">${timelineResults()}</div>`;else if(v==='病情一图秀')body=oneChart();else if(v==='病情整理'&&s==='指标检测')body=metricCards();else if(['发作记录','症状记录','当前用药','用药前检查记录','问题清单','工作·费用·异地就医','血管','消化道','资料库','指标检测','心理与家庭','生育·性健康与用药'].includes(s))body=recordPage();else body=`<div class="card"><h2>${esc(s)}</h2><div class="empty">此处尚无示例资料。可先查看相关记录，或回看板选择其他任务。</div><div class="actions"><button data-view="发作与病程" data-sub="发作记录">查看发作记录</button><button data-view="看板">回到看板</button></div></div>`;return pageHeader(esc(v),'整理本人记录与原文；示例内容不构成医学判断。')+`<div class="tabs" role="tablist" aria-label="${esc(v)}">${subs[v].map(x=>`<button role="tab" aria-selected="${x===s}" data-view="${v}" data-sub="${x}">${x}</button>`).join('')}</div>`+body}
 function render(){nav();$('#main').innerHTML=DEMO_OK?content():'<div class="notice" role="alert"><h1>示例数据不可用</h1><p>无法加载示例数据或指标读模型。请检查 demo-data.js 和 metric-model.js 是否存在，然后刷新页面。</p></div>';let label=currentDataset?currentDataset.label:'示例数据';$('.top .status').textContent=DEMO_OK?`合成示例 · ${label} · 仅本页临时演示 · 未连接宿主`:'示例数据不可用 · 未连接宿主';$('.top .status').title=DEMO_OK?`合成示例 · ${label} · 仅本页临时演示 · 未连接宿主`:'示例数据不可用 · 未连接宿主';updateDatasetButton();updateChartScrollHint()}
 let dialogOpener=null,dialogOpenerSelector=null;
 function dialog(title,body,foot){dialogOpener=document.activeElement instanceof Element?document.activeElement:null;dialogOpenerSelector=dialogOpener?.dataset.correct?`[data-correct="${dialogOpener.dataset.correct}"]`:dialogOpener?.dataset.action==='add'?'[data-action="add"]':null;$('#dialog-title').textContent=title;$('#dialog-body').innerHTML=body;$('#dialog-foot').innerHTML=foot;$('#dialog').showModal()}
@@ -554,6 +586,7 @@ document.addEventListener('change',e=>{
   if(t.id==='file-input'){if(t.files&&t.files.length)registerFiles(t.files);t.value='';return}
   if(t.dataset.filePrivate){let f=needFile(+t.dataset.filePrivate);if(!f)return
     f.private=t.checked
+    state.candidates.forEach(c=>{if(c.fileId===f.id)c.private=!!f.private})
     let newlyPrivate=[]
     if(t.checked){
       state.records.forEach(r=>{if(r.fileId===f.id&&r.private!==true){r.private=true;newlyPrivate.push(r.id)}})
@@ -570,7 +603,7 @@ document.addEventListener('click',async e=>{
   if(b.dataset.parse){let f=needFile(+b.dataset.parse);if(!f)return
     dialog('模拟抽取（不联网）',`<p>将要在本机读取的原件：</p><p><strong>${esc(f.name)}</strong>（${fmtSize(f.size)}）</p>
       <p class="muted">本演示只在你的浏览器里按行切出候选，不会把文件发送给任何服务，也不会生成日期或诊断。</p>
-      ${f.content?'':'<p>该类型在本演示中不能抽取（没有 OCR/PDF 解析），可登记后手工记录。</p>'}
+      ${isTextFile(f)?'':'<p>该类型在本演示中不能抽取（没有 OCR/PDF 解析），可登记后手工记录。</p>'}
       <label><input type="checkbox" id="parse-consent"> 我已了解：本次抽取只在本机进行</label><p id="parse-err" role="alert"></p>`,
       `<button data-action="cancel">取消</button><button class="primary" data-parse-run="${f.id}">开始本机抽取</button>`);return}
   if(b.dataset.parseRun){let f=needFile(+b.dataset.parseRun);if(!f)return
@@ -578,14 +611,14 @@ document.addEventListener('click',async e=>{
     if(!f.content&&f.blob&&f.blob.text){try{f.content=await f.blob.text()}catch{}}
     if(!f.content){document.querySelector('#parse-err').textContent='该类型不支持本机抽取，请手工记录';return}
     let n=runMockExtract(f);$('#dialog').close();render();toast(n?`已生成 ${n} 条候选，需逐条采纳`:'这份文本里没有可切出的候选行');return}
-  if(b.dataset.parseRevoke){state.candidates=[];render();toast('已撤回授权，候选缓存已清空');return}
+  if(b.dataset.parseRevoke){let had=state.candidates.length;state.candidates=[];state.files.forEach(f=>{f.content=''});render();toast(had?'已撤回本机抽取授权：候选与本机文本缓存已清空；已采纳记录、登记信息和磁盘原件保留。本演示未上传文件，没有云端副本可删。':'已清空本机文本缓存；已采纳记录、登记信息和磁盘原件保留。本演示未上传文件，没有云端副本可删。');return}
   if(b.dataset.accept){let c=state.candidates.find(x=>x.id===+b.dataset.accept);if(!c)return
-    let f=fileById(c.fileId)
-    state.records.unshift({id:Date.now(),kind:'资料库',date:new Date().toISOString().slice(0,10),text:c.text,source:`原件：${c.fileName}`,fileId:c.fileId,original:{title:c.fileName,text:c.text},private:!!(f&&f.private),history:[]})
-    state.candidates=state.candidates.filter(x=>x.id!==c.id);render();toast('已采纳为一条资料记录，可在资料库回看');return}
+    let f=fileById(c.fileId),p=!!(f&&f.private)
+    state.records.unshift({id:Date.now(),kind:'资料库',date:'',datePrecision:'unknown',text:c.text,source:`原件：${c.fileName}`,fileId:c.fileId,original:{title:c.fileName,text:c.text},private:p,history:[]})
+    state.candidates=state.candidates.filter(x=>x.id!==c.id);render();toast(p?'已采纳为私密资料记录（日期未知，可在资料库回看）':'已采纳为一条资料记录（日期未知，可在资料库回看）');return}
   if(b.dataset.drop){state.candidates=state.candidates.filter(x=>x.id!==+b.dataset.drop);render();return}
   if(b.dataset.fileDel){let f=needFile(+b.dataset.fileDel);if(!f)return
-    dialog('移除原件',`<p>从资料目录移除 <strong>${esc(f.name)}</strong>？</p><p class="muted">已采纳的记录会保留，但不再关联这个原件；本演示不留存文件内容。</p>`,
+    dialog('移除原件',`<p>从资料目录移除 <strong>${esc(f.name)}</strong>？</p><p class="muted">移除登记、相关候选与本机文本缓存；已采纳的记录保留，但不再关联这个原件。你电脑上的原文件不会被删除，本演示也没有云端副本。</p>`,
       `<button data-action="cancel">取消</button><button class="primary" data-file-del-confirm="${f.id}">移除</button>`);return}
   if(b.dataset.fileDelConfirm){let id=+b.dataset.fileDelConfirm
     state.files=state.files.filter(f=>f.id!==id);state.candidates=state.candidates.filter(c=>c.fileId!==id)

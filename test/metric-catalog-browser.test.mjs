@@ -135,3 +135,25 @@ test('切换示例组 B 后目录仍同源、空单位与同日多条不造假',
     check(!JUDGMENT.test(txt('main')),'B 组出现判读词');
   `, 'catalog-b');
 });
+
+test('同名可比指标的选择标签能区分单位，悬停仍保留方法与机构', async t => {
+  await runProbe(t, `
+    const check=(v,m)=>{if(!v)throw Error(m)};
+    check(window.BEIPAL_SET_B,'缺少示例组 B');
+    applyDataset('courseB');
+    go('病情一图秀');
+    const labels=[...document.querySelectorAll('.metric-options label')].map(l=>l.textContent.trim());
+    const d=labels.filter(t=>t.startsWith('示例指标 D'));
+    check(d.length===2,'B 组 D 应有两个可比组，实为 '+d.length);
+    check(new Set(d).size===2,'同名可比指标的选择标签重复：'+d.join(' | '));
+    check(d.some(t=>t.includes('mg/L')),'已知单位未进入标签');
+    check(d.some(t=>t.includes('单位未知')),'未知单位未进入标签');
+    const inputs=[...document.querySelectorAll('.metric-options input[data-metric^="ba~"]')];
+    check(inputs.length===2,'D 的两个复选框缺失');
+    for(const i of inputs){
+      const title=i.closest('label').title;
+      check(title.includes('示例方法丁'),'悬停提示缺方法：'+title);
+      check(title.includes('合成示例机构 B'),'悬停提示缺机构：'+title);
+    }
+  `, 'catalog-label-b');
+});
