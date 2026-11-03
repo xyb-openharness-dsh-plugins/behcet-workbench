@@ -13,8 +13,9 @@ test('资料目录登记原件、本机模拟抽取需授权、候选逐条采�
   const root = resolve('prototypes/v0.2');
   for (const name of ['demo-data.js', 'metric-model.js']) await copyFile(join(root, name), join(dir, name));
   const html = await readFile(join(root, 'index.html'), 'utf8');
-  const probe = `<script>try{
+  const probe = `<script>(async()=>{try{
     const check=(v,m)=>{if(!v)throw Error(m)};
+    const waitFor=async (fn,msg)=>{const deadline=Date.now()+5000;while(Date.now()<deadline){if(fn())return;await new Promise(r=>setTimeout(r,20))}throw Error(msg)};
     const q=s=>{const el=document.querySelector(s);if(!el)throw Error('缺少元素 '+s);return el};
     const click=s=>q(s).click();
     go('资料目录与云解析');
@@ -27,8 +28,7 @@ test('资料目录登记原件、本机模拟抽取需授权、候选逐条采�
     check(state.files.length===1,'原件未登记');
     const f=state.files[0];
     check(q('main').textContent.includes('demo-note.txt'),'目录未列出原件');
-    // 直接写入内存文本：FileReader 是异步的，测试不等 IO；文件读取本身是浏览器原生行为
-    f.content='2026-09-01 复查记录：口腔溃疡好转\\n医生建议三个月后复诊';
+    await waitFor(()=>f.content.includes('口腔溃疡好转'),'文件读取未完成或内容不正确');
     click('[data-parse="'+f.id+'"]');
     click('[data-parse-run="'+f.id+'"]');
     check(q('#parse-err').textContent.includes('勾选'),'未授权也能抽取');
@@ -57,7 +57,7 @@ test('资料目录登记原件、本机模拟抽取需授权、候选逐条采�
     click('[data-parse-revoke]');
     check(state.candidates.length===0,'撤回未清空候选');
     window.__filesTest='PASS';
-  }catch(e){window.__filesTest='FAIL: '+e.message}</script>`;
+  }catch(e){window.__filesTest='FAIL: '+e.message}})()</script>`;
   const page = html.replace('</body>', probe + '</body>');
   assert.ok(page.includes('__filesTest="PASS"' ) || page.includes("__filesTest='PASS'"), '探针未注入');
   await writeFile(join(dir, 'index.html'), page);
