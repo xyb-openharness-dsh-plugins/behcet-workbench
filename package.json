@@ -31,13 +31,15 @@
     "smoke:activate": "node scripts/smoke-activate.mjs",
     "verify:desktop": "node scripts/verify-desktop-load.mjs",
     "test": "node --test test/*.test.mjs",
+    "test:path-walk": "node --test test/path-walk/*.test.mjs",
     "audit": "node scripts/check-conformance.mjs .",
     "release:check": "npm run check && npm run test && npm run audit",
     "pack:check": "npm pack --dry-run",
     "probe:artifact": "node scripts/serve-artifact.mjs",
     "probe:tabs": "python3 scripts/verify-tabs-on-artifact.py",
     "probe:page-view": "node scripts/probe-page-view.mjs",
-    "probe:primer": "node scripts/probe-disease-primer.mjs"
+    "probe:primer": "node scripts/probe-disease-primer.mjs",
+    "probe:paths": "node scripts/path-walk.mjs"
   },
   "dsh": {
     "bundle": {

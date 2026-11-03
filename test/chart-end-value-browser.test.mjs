@@ -77,3 +77,75 @@ window.BEIPAL_METRICS=[
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /data-end-value-same-day-test="PASS"/, r.stdout.match(/data-end-value-same-day-test="[^"]*"/)?.[0] || r.stderr);
 });
+
+test('一图秀末点标签贴底不重叠、四条也不越出绘图区', async t => {
+  const fx = await makePrototypeFixture(t, 'beipal-end-value-layout-');
+  const data = await readFile(fx.dataPath('demo-data.js'), 'utf8');
+  await fx.writeData('demo-data.js', data + `
+window.BEIPAL_METRICS=[
+  {id:'a',name:'贴底甲',group:'示例检验',unit:'u1',method:'示例方法甲',laboratory:'合成示例机构',source:'合成示例',points:[{date:'2026-01-01',value:30},{date:'2026-06-01',value:0}]},
+  {id:'b',name:'贴底乙',group:'示例检验',unit:'u2',method:'示例方法乙',laboratory:'合成示例机构',source:'合成示例',points:[{date:'2026-01-01',value:30},{date:'2026-06-01',value:2}]},
+  {id:'c',name:'贴底丙',group:'示例检验',unit:'u3',method:'示例方法丙',laboratory:'合成示例机构',source:'合成示例',points:[{date:'2026-01-01',value:30},{date:'2026-06-01',value:1}]},
+  {id:'d',name:'贴底丁',group:'示例检验',unit:'u4',method:'示例方法丁',laboratory:'合成示例机构',source:'合成示例',points:[{date:'2026-01-01',value:30},{date:'2026-06-01',value:3}]}
+];`);
+  const probe = `<script>try {
+    const check=(v,m)=>{if(!v)throw Error(m)};
+    go('病情一图秀','指标趋势');
+    const fourth=document.querySelector('input[data-metric="d~0"]');
+    check(fourth,'第 4 条指标复选框缺失');
+    if(!fourth.checked)fourth.click();
+    const panel=document.querySelector('#chart-panel');
+    const labels=[...panel.querySelectorAll('.chart-end-value')];
+    check(labels.length===4,'四条指标应各有一个末点标签，实为 '+labels.length);
+    check(new Set(labels.map(l=>l.dataset.series)).size===4,'末点标签序列重复');
+    const ys=labels.map(l=>+l.getAttribute('y')).sort((a,b)=>a-b);
+    check(ys[0]>=112,'标签越过绘图区上缘：'+ys[0]);
+    check(ys[ys.length-1]<=244,'标签越过绘图区下缘：'+ys[ys.length-1]);
+    for(let i=1;i<ys.length;i++)check(ys[i]-ys[i-1]>=16,'贴底标签重叠：'+ys[i-1]+'/'+ys[i]);
+    for(const l of labels){
+      check(+l.getAttribute('x')>=60&&+l.getAttribute('x')<=730,'标签横向越界');
+      check(/\\d/.test(l.textContent),'标签缺数值');
+    }
+    document.body.dataset.endValueLayoutTest='PASS';
+  } catch(e) { document.body.dataset.endValueLayoutTest='FAIL: '+e.message }</script>`;
+  await writeFile(fx.indexPath, fx.html.replace('</body>', probe + '</body>'));
+  const r = spawnSync(process.env.CHROMIUM || '/usr/bin/chromium',
+    ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', fx.url],
+    { encoding: 'utf8', timeout: 30000 });
+  if (r.error?.code === 'ENOENT') { t.skip('Chromium 不可用'); return; }
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /data-end-value-layout-test="PASS"/, r.stdout.match(/data-end-value-layout-test="[^"]*"/)?.[0] || r.stderr);
+});
+
+test('一图秀最新记录非数值时不为更早数值标末点', async t => {
+  const fx = await makePrototypeFixture(t, 'beipal-end-value-non-numeric-');
+  const data = await readFile(fx.dataPath('demo-data.js'), 'utf8');
+  await fx.writeData('demo-data.js', data + `
+window.BEIPAL_METRICS=[
+  {id:'a',name:'末条文字甲',group:'示例检验',unit:'mg/L',method:'示例方法甲',laboratory:'合成示例机构',source:'合成示例',points:[{date:'2026-01-01',value:2},{date:'2026-06-01',value:'<0.1'}]},
+  {id:'b',name:'末条数值乙',group:'示例检验',unit:'mm',method:'示例方法乙',laboratory:'合成示例机构',source:'合成示例',points:[{date:'2026-01-01',value:1},{date:'2026-05-01',value:5}]}
+];`);
+  const probe = `<script>try {
+    const check=(v,m)=>{if(!v)throw Error(m)};
+    go('病情一图秀','指标趋势');
+    const panel=document.querySelector('#chart-panel');
+    const labels=[...panel.querySelectorAll('.chart-end-value')];
+    check(labels.length===1,'最新记录非数值的指标不应标末值，标签数实为 '+labels.length);
+    check(labels[0].dataset.series==='b~0','唯一标签应属于末条为数值的 B：'+labels[0].dataset.series);
+    check(labels[0].textContent.includes('5 mm'),'B 的末值 5 mm 未显示');
+    check(!labels.some(l=>l.dataset.series==='a~0'),'A 的最新记录非数值，却仍标了更早数值');
+    check(!panel.textContent.includes('2 mg/L'),'把更早的 2 当成了 A 的末值');
+    const note=panel.querySelector('.chart-end-nonnumeric');
+    check(note,'缺少最新记录非数值的说明');
+    const noteA=note.querySelector('[data-series="a~0"]');
+    check(noteA&&noteA.textContent.includes('非数值')&&noteA.textContent.includes('未标末值'),'A 的非数值末条说明不完整：'+(note?note.textContent:''));
+    document.body.dataset.endValueNonNumericTest='PASS';
+  } catch(e) { document.body.dataset.endValueNonNumericTest='FAIL: '+e.message }</script>`;
+  await writeFile(fx.indexPath, fx.html.replace('</body>', probe + '</body>'));
+  const r = spawnSync(process.env.CHROMIUM || '/usr/bin/chromium',
+    ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', fx.url],
+    { encoding: 'utf8', timeout: 30000 });
+  if (r.error?.code === 'ENOENT') { t.skip('Chromium 不可用'); return; }
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /data-end-value-non-numeric-test="PASS"/, r.stdout.match(/data-end-value-non-numeric-test="[^"]*"/)?.[0] || r.stderr);
+});

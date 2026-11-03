@@ -10,8 +10,23 @@ window.BEIPAL_PATHWAY_MODEL = (function () {
   ];
   const NO_DATA = '无记录';
 
-  const isDay = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
-  const isMonth = v => /^\d{4}-\d{2}$/.test(String(v || ''));
+  // 日期先看形状，再用 UTC 回写校验；2026-02-30 这类会被 Date 归一化，
+  // 回写不一致即拒绝，和 metric-model 的 validDate 保持同一口径。
+  function isDay(v) {
+    const s = String(v || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    const d = new Date(s + 'T00:00:00Z');
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  }
+
+  // 月份只校验 01–12；2026-13、2026-00 都不能当成“仅月份”。
+  function isMonth(v) {
+    const s = String(v || '');
+    const match = /^(\d{4})-(\d{2})$/.exec(s);
+    if (!match) return false;
+    const month = Number(match[2]);
+    return month >= 1 && month <= 12;
+  }
 
   function precision(r) {
     const d = String((r && r.date) || '');
@@ -156,28 +171,36 @@ window.BEIPAL_PATHWAY_MODEL = (function () {
       const name = text(m.name, '指标名未记录');
       const metricRows = [];
       const labelled = groups.length > 1 || groups.some(g => !g.complete);
-      for (const g of groups) {
-        g.dated = datedPoints(g);
-        const inside = g.dated.filter(x => x.point.date >= range.start && (!range.end || x.point.date <= range.end));
+      const datedGroups = groups.map(g => ({ group: g, dated: datedPoints(g) }));
+      // 与 metric-model 一样，其他可比组的任何有效日期落在区间内（含两端）都算交错。
+      const allDated = datedGroups.flatMap(({ group, dated }) =>
+        dated.map(x => ({ date: x.point.date, group }))
+      );
+      const interrupted = (group, a, b) =>
+        allDated.some(x => x.group !== group && x.date >= a && x.date <= b);
+      for (const { group: g, dated } of datedGroups) {
+        const inside = dated.filter(x => x.point.date >= range.start && (!range.end || x.point.date <= range.end));
         if (!inside.length) continue;
         for (const x of inside) metricRows.push({ ...x, group: g });
         if (labelled) hasComparableGroup = true;
         const counts = new Map();
-        for (const x of g.dated) counts.set(x.point.date, (counts.get(x.point.date) || 0) + 1);
+        for (const x of dated) counts.set(x.point.date, (counts.get(x.point.date) || 0) + 1);
         const lastDate = inside[inside.length - 1].point.date;
         const lastAt = inside.filter(x => x.point.date === lastDate);
         const last = lastAt.length === 1 ? lastAt[0].point : null;
-        const before = g.dated.filter(x => x.point.date < range.start);
+        const before = dated.filter(x => x.point.date < range.start);
         const priorDate = before.length ? before[before.length - 1].point.date : null;
         const priorAt = priorDate ? before.filter(x => x.point.date === priorDate) : [];
         const prior = priorAt.length === 1 ? priorAt[0].point : null;
         const numeric = p => typeof p.value === 'number' && Number.isFinite(p.value);
-        // 同一可比组内，非数值、同日并列都不能被跨过去做趋势；跨组值不参与本组比较。
+        // 同一可比组内，非数值、同日并列都不能被跨过去做趋势；其他可比组在
+        // prior→last 之间（含端点）出现记录时，同样不能跨组比较。
         const between = prior && last
-          ? g.dated.filter(x => x.point.date >= prior.date && x.point.date <= last.date)
+          ? dated.filter(x => x.point.date >= prior.date && x.point.date <= last.date)
           : [];
         const pathStable = between.every(x => numeric(x.point) && counts.get(x.point.date) === 1);
-        const comparable = g.complete && prior && last && numeric(prior) && numeric(last) && pathStable;
+        const comparable = g.complete && prior && last && numeric(prior) && numeric(last)
+          && pathStable && !interrupted(g, prior.date, last.date);
         trend.push(name + (comparable
           ? ' 阶段前最近 ' + text(prior.value) + ' → 阶段内最后 ' + text(last.value)
           : ' 阶段内 ' + inside.length + ' 个点') + (labelled ? groupSuffix(g) : ''));
