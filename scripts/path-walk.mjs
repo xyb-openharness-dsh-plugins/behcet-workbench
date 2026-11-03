@@ -377,10 +377,47 @@ async function runS05(ctx) {
     );
     const hasSeparateCheck = addLabels.some((text) => /检查|化验|报告/.test(text) && text !== '用药前检查记录');
     must(hasSeparateCheck, `没有单独的「检查」记录入口，页面按钮：${addLabels.join(' / ')}`);
-    return '症状与检查各有一条记录';
+    await driver.click('[data-action="add-check"]');
+    await driver.waitFor("document.querySelector('#dialog').open === true", { label: '检查表单出现' });
+    const checkTitle = await driver.text('#dialog-title');
+    must(checkTitle === '手工补检查', `检查弹窗标题为「${checkTitle}」`);
+    await driver.fill('#entry-date', '2026-09-15');
+    await driver.fill('#entry-text', TEXTS.S05 + '：肠道检查');
+    await driver.fill('#entry-source', '合成检查抄录 · 走查');
+    await saveDialog(driver, '[data-action="save"]');
+    const symptom = await recordByText(driver, TEXTS.S05);
+    const exam = await recordByText(driver, TEXTS.S05 + '：肠道检查');
+    must(symptom && symptom.kind === '消化症状', `症状记录类型为 ${symptom && symptom.kind}`);
+    must(symptom.source === '', `空来源被伪造成「${symptom.source}」`);
+    must(exam && exam.kind === '消化道检查', `检查记录类型为 ${exam && exam.kind}`);
+    must(exam.source === '合成检查抄录 · 走查', `检查来源被改写为「${exam.source}」`);
+    return '症状与检查各有一条记录；空来源保持为空';
   });
   await ctx.check('product', '产物：症状与检查按时间并列', async () => {
-    throw new Error('「消化道」页只有单一文字记录列表，无法分别建症状与检查，也没有两项并列/不推断因果的呈现');
+    const rows = await driver.eval(
+      `(() => [...document.querySelectorAll('#digestive-page .digest-day')].map((row) => ({
+        date: row.dataset.digestDate,
+        precision: row.dataset.digestPrecision,
+        symptom: (row.querySelector('[data-digest-kind="消化症状"]') || {}).innerText || '',
+        exam: (row.querySelector('[data-digest-kind="消化道检查"]') || {}).innerText || '',
+      })))()`,
+    );
+    must(rows.length >= 2, `并列行数不足：${rows.length}`);
+    must(rows[0].date === '2026-11-01' && rows[0].precision === 'day', `症状行日期/精度不正确：${rows[0].date}/${rows[0].precision}`);
+    must(rows[1].date === '2026-09-15' && rows[1].precision === 'day', `检查行日期/精度不正确：${rows[1].date}/${rows[1].precision}`);
+    const symptomRow = rows[0], examRow = rows[1];
+    must(symptomRow.symptom.includes(TEXTS.S05), '症状原文未出现在 2026-11-01 的症状栏');
+    must(symptomRow.symptom.includes('来源：未填写'), '症状栏空来源未显示为未填写');
+    must(!symptomRow.exam.includes(TEXTS.S05), '症状原文混入 2026-11-01 的检查栏');
+    must(symptomRow.exam.includes('未记录'), '症状日期的检查栏未显示未记录');
+    must(examRow.exam.includes(TEXTS.S05 + '：肠道检查'), '检查原文未出现在 2026-09-15 的检查栏');
+    must(examRow.exam.includes('来源：合成检查抄录 · 走查'), '检查栏未单独显示来源');
+    must(!examRow.symptom.includes('肠道检查'), '检查原文混入 2026-09-15 的症状栏');
+    must(examRow.symptom.includes('未记录'), '检查日期的症状栏未显示未记录');
+    const board = await driver.eval("document.querySelector('#digestive-page')?.innerText || ''");
+    must(!board.includes('本人记录 · 本次演示'), '并列视图把空来源伪造成本人记录来源');
+    must(board.includes('不推断因果'), '并列视图未声明不推断因果');
+    return `症状/检查各 1 条，按日期 ${rows[0].date} → ${rows[1].date} 分栏并列；空来源显示未填写，检查来源单独显示，声明不推断因果`;
   });
   await ctx.check('ai', 'AI 默认通道', () => checkAiRequired(driver, '症状与检查分别生成候选'));
   await ctx.check('return', '回首页', () => returnHome(driver));
