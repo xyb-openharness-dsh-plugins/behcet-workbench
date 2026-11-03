@@ -7,4 +7,4 @@
 - `prompts/WORKBENCH-DEV-CHECKLIST-FULL.md`：185 条全量索引，带 file:line 与现有检查手段。
 - `prompts/PATIENT-WORKBENCH-IMPLEMENTATION-STANDARD.md`：白塞病实战补充，患者路径、两组合成档案、指标与动态卡、隐私三出口、解析与宿主、测试证据。
 
-来源：starter `1.10.0-rc.6`，提交 `5902104` 已推送 GitHub。这是下一轮执行依据；本仓当前状态不代表已通过 G2、临床审核或装机验收。
+来源：starter `1.10.0-rc.7`，提交 `2dc6ec5` 已推送 GitHub（rc.7 把检查点清单提升为 AGENTS.md 开工入口）。这是下一轮执行依据；本仓当前状态不代表已通过 G2、临床审核或装机验收。
