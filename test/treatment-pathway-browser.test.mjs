@@ -1,24 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
 import { runPage } from './helpers/cdp-probe.mjs';
 
 const execFileAsync = promisify(execFile);
-const root = resolve('prototypes/v0.2');
 
 async function fixture(t) {
-  const dir = await mkdtemp(join(tmpdir(), 'beipal-pathway-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) {
-    await copyFile(join(root, name), join(dir, name));
-  }
-  const html = await readFile(join(root, 'index.html'), 'utf8');
-  await writeFile(join(dir, 'index.html'), html);
-  return { dir, url: 'file://' + join(dir, 'index.html') };
+  return makePrototypeFixture(t, 'beipal-pathway-');
 }
 
 // 页面探针：等应用就绪后进入“治疗与用药 / 当前用药”，返回 PASS 或 FAIL 原因。
@@ -174,15 +166,14 @@ for (const [width, columns] of [[1280, 2], [900, 1], [720, 1], [390, 1]]) {
 
 // 用真实 printToPDF 验收：只断言 CSS 存在不够，必须确认收起状态的正文进入 PDF。
 test('printToPDF 实际展开五块正文并隐藏展开提示', { timeout: 90000 }, async t => {
-  const { dir } = await fixture(t);
-  const path = join(dir, 'index.html');
-  const html = await readFile(path, 'utf8');
-  await writeFile(path, html.replace('</body>', `<script>go('治疗与用药','当前用药');</script></body>`));
-  const pdf = join(dir, 'pathway.pdf');
+  const fx = await fixture(t);
+  const html = await fx.readIndex();
+  await fx.writeIndex(html.replace('</body>', `<script>go('治疗与用药','当前用药');</script></body>`));
+  const pdf = join(fx.dir, 'pathway.pdf');
   const chrome = process.env.CHROMIUM || '/usr/bin/chromium';
   await execFileAsync(chrome, [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--no-pdf-header-footer',
-    '--print-to-pdf=' + pdf, 'file://' + path
+    '--print-to-pdf=' + pdf, fx.url
   ], { timeout: 60000, maxBuffer: 4 * 1024 * 1024 });
   const py = [
     'import sys, unicodedata',

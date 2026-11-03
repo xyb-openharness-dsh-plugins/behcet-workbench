@@ -1,18 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, copyFile, mkdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
 
 test('疾病概要入口、四段数据与单层返回', async t => {
-  const dir=await mkdtemp(join(tmpdir(),'beipal-primer-'));
-  t.after(()=>rm(dir,{recursive:true,force:true}));
-  const page=join(dir,'prototypes/v0.2'), patterns=join(dir,'assets/patterns');
-  await mkdir(page,{recursive:true}); await mkdir(patterns,{recursive:true});
-  for(const name of ['demo-data.js','metric-model.js','pathway-model.js','primer-data.js']) await copyFile(resolve('prototypes/v0.2',name),join(page,name));
-  for(const name of ['disease-primer.js','disease-primer.css']) await copyFile(resolve('assets/patterns',name),join(patterns,name));
-  const html=await readFile(resolve('prototypes/v0.2/index.html'),'utf8');
+  const fx=await makePrototypeFixture(t,'beipal-primer-');
+  const html=fx.html;
   const probe=`<script>(async()=>{try{
     const check=(v,m)=>{if(!v)throw Error(m)};
     const wait=()=>new Promise(r=>setTimeout(r,120));
@@ -40,8 +33,8 @@ test('疾病概要入口、四段数据与单层返回', async t => {
     btn.click();await wait();panel.querySelector('[data-dp=back]').click();await wait();check(panel.hidden && document.activeElement===btn,'P5 返回');
     document.body.dataset.primerTest='PASS';
   }catch(e){document.body.dataset.primerTest='FAIL: '+e.message}})();</script>`;
-  await writeFile(join(page,'index.html'),html.replace('</body>',probe+'</body>'));
-  const run=spawnSync(process.env.CHROMIUM||'/usr/bin/chromium',['--headless','--no-sandbox','--disable-gpu','--virtual-time-budget=5000','--dump-dom','file://'+join(page,'index.html')],{encoding:'utf8',timeout:30000});
+  await fx.writeIndex(html.replace('</body>',probe+'</body>'));
+  const run=spawnSync(process.env.CHROMIUM||'/usr/bin/chromium',['--headless','--no-sandbox','--disable-gpu','--virtual-time-budget=5000','--dump-dom',fx.url],{encoding:'utf8',timeout:30000});
   if(run.error?.code==='ENOENT'){t.skip('Chromium 不可用；设置 CHROMIUM');return}
   assert.equal(run.status,0,run.stderr);
   assert.match(run.stdout,/data-primer-test="PASS"/,run.stdout.match(/data-primer-test="[^"]*"/)?.[0]||run.stderr);

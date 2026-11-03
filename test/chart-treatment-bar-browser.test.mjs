@@ -1,16 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
 
 test('一图秀治疗条来自治疗记录：有起止画条、只有开始画点、仍在进行画到右缘', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'beipal-treatment-bar-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
-  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const fx = await makePrototypeFixture(t, 'beipal-treatment-bar-');
+  const html = fx.html;
   const probe = `<script>try {
     const check=(v,m)=>{if(!v)throw Error(m)};
     go('病情一图秀','指标趋势');
@@ -34,9 +30,9 @@ test('一图秀治疗条来自治疗记录：有起止画条、只有开始画�
     check(!document.querySelector('#chart-panel svg').textContent.includes('仍在进行'),'关闭开关后治疗条仍显示');
     document.body.dataset.barTest='PASS';
   } catch(e) { document.body.dataset.barTest='FAIL: '+e.message }</script>`;
-  await writeFile(join(dir, 'index.html'), html.replace('</body>', probe + '</body>'));
+  await writeFile(fx.indexPath, html.replace('</body>', probe + '</body>'));
   const r = spawnSync(process.env.CHROMIUM || '/usr/bin/chromium',
-    ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', 'file://' + join(dir, 'index.html')],
+    ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', fx.url],
     { encoding: 'utf8', timeout: 30000 });
   if (r.error?.code === 'ENOENT') { t.skip('Chromium 不可用'); return; }
   assert.equal(r.status, 0, r.stderr);

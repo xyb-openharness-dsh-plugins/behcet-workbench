@@ -1,16 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
 
 test('治疗记录的开始/结束/仍在进行：校验、回看与更正历史', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'beipal-treatment-dates-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
-  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const fx = await makePrototypeFixture(t, 'beipal-treatment-dates-');
+  const html = fx.html;
   const probe = `<script>(async()=>{try{
     const check=(v,m)=>{if(!v)throw Error(m)};
     go('治疗与用药','当前用药');
@@ -51,9 +47,9 @@ test('治疗记录的开始/结束/仍在进行：校验、回看与更正历史
     check(ended.history[0].endDate==='2026-04-15','更正历史缺旧结束日期');
     document.body.dataset.datesTest='PASS';
   }catch(e){document.body.dataset.datesTest='FAIL: '+e.message}})();</script>`;
-  await writeFile(join(dir, 'index.html'), html.replace('</body>', probe + '</body>'));
+  await writeFile(fx.indexPath, html.replace('</body>', probe + '</body>'));
   const r = spawnSync(process.env.CHROMIUM || '/usr/bin/chromium',
-    ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', 'file://' + join(dir, 'index.html')],
+    ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', fx.url],
     { encoding: 'utf8', timeout: 30000 });
   if (r.error?.code === 'ENOENT') { t.skip('Chromium 不可用'); return; }
   assert.equal(r.status, 0, r.stderr);

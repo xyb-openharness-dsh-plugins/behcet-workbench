@@ -1,16 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
 
 test('治疗记录保留未知、精度、来源、更正与私密出口', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'beipal-treatment-'));
-  t.after(() => rm(dir, { recursive:true, force:true }));
-  const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js','metric-model.js','pathway-model.js']) await copyFile(join(root,name),join(dir,name));
-  const html = await readFile(join(root,'index.html'),'utf8');
+  const fx = await makePrototypeFixture(t, 'beipal-treatment-');
+  const html = fx.html;
   const probe = `<script>(async()=>{try{
     const check=(v,m)=>{if(!v)throw Error(m)};
     go('治疗与用药','当前用药');document.querySelector('[data-action=add]').click();
@@ -33,8 +29,8 @@ test('治疗记录保留未知、精度、来源、更正与私密出口', async
     go('复诊与准备','就诊准备与导出');const choice=document.querySelector('[data-select="'+r.id+'"]');choice.checked=true;choice.dispatchEvent(new Event('change',{bubbles:true}));check(document.querySelector('#export-preview').textContent.includes('原文剂量') && !document.querySelector('#export-preview').textContent.includes('合成处方'),'导出仅当前选择');
     document.body.dataset.treatmentTest='PASS';
   }catch(e){document.body.dataset.treatmentTest='FAIL: '+e.message}})();</script>`;
-  await writeFile(join(dir,'index.html'),html.replace('</body>',probe+'</body>'));
-  const run=spawnSync(process.env.CHROMIUM||'/usr/bin/chromium',['--headless','--no-sandbox','--disable-gpu','--dump-dom','file://'+join(dir,'index.html')],{encoding:'utf8',timeout:30000});
+  await writeFile(fx.indexPath,html.replace('</body>',probe+'</body>'));
+  const run=spawnSync(process.env.CHROMIUM||'/usr/bin/chromium',['--headless','--no-sandbox','--disable-gpu','--dump-dom',fx.url],{encoding:'utf8',timeout:30000});
   if(run.error?.code==='ENOENT'){t.skip('Chromium 不可用；设置 CHROMIUM');return}
   assert.equal(run.status,0,run.stderr);
   assert.match(run.stdout,/data-treatment-test="PASS"/,run.stdout.match(/data-treatment-test="[^"]*"/)?.[0]||run.stderr);

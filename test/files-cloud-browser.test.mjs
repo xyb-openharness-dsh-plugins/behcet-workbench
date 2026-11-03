@@ -1,18 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
+import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
 import { runPage } from './helpers/cdp-probe.mjs';
 
 // 用 CDP 轮询探针结果：--dump-dom 会在页面 load 前后取快照，与脚本执行存在竞态，
 // 并发跑测试时会偶发「快照截在脚本中间」，无法作为断言依据。
 test('资料目录登记原件、本机模拟抽取需授权、候选逐条采纳才入库、撤回清空', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'beipal-files-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
-  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const fx = await makePrototypeFixture(t, 'beipal-files-');
+  const html = fx.html;
   const probe = `<script>(async()=>{try{
     const check=(v,m)=>{if(!v)throw Error(m)};
     const waitFor=async (fn,msg)=>{const deadline=Date.now()+5000;while(Date.now()<deadline){if(fn())return;await new Promise(r=>setTimeout(r,20))}throw Error(msg)};
@@ -60,7 +56,7 @@ test('资料目录登记原件、本机模拟抽取需授权、候选逐条采�
   }catch(e){window.__filesTest='FAIL: '+e.message}})()</script>`;
   const page = html.replace('</body>', probe + '</body>');
   assert.ok(page.includes('__filesTest="PASS"' ) || page.includes("__filesTest='PASS'"), '探针未注入');
-  await writeFile(join(dir, 'index.html'), page);
-  const result = await runPage('file://' + join(dir, 'index.html'), 'window.__filesTest || ""');
+  await writeFile(fx.indexPath, page);
+  const result = await runPage(fx.url, 'window.__filesTest || ""');
   assert.equal(result, 'PASS');
 });

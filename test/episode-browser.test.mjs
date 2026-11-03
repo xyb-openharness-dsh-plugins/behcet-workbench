@@ -1,17 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
 
 test('发作记录可新增未知结束、更正回看并遵守私密出口', async t => {
   const browser = process.env.CHROMIUM || '/usr/bin/chromium';
-  const dir = await mkdtemp(join(tmpdir(), 'beipal-episode-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
-  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const fx = await makePrototypeFixture(t, 'beipal-episode-');
+  const html = fx.html;
   const probe = `<script>
   (async () => { try {
     const check=(v,m)=>{if(!v)throw Error(m)};
@@ -82,8 +78,8 @@ test('发作记录可新增未知结束、更正回看并遵守私密出口', as
     document.body.dataset.episodeTest='PASS';
   } catch(e) { document.body.dataset.episodeTest='FAIL: '+e.message; } })();
   </script>`;
-  await writeFile(join(dir, 'index.html'), html.replace('</body>', probe + '</body>'));
-  const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', 'file://' + join(dir, 'index.html')], { encoding:'utf8', timeout:30000 });
+  await writeFile(fx.indexPath, html.replace('</body>', probe + '</body>'));
+  const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', fx.url], { encoding:'utf8', timeout:30000 });
   if (run.error?.code === 'ENOENT') { t.skip('Chromium 不可用；设置 CHROMIUM 指向浏览器'); return; }
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stdout, /data-episode-test="PASS"/, run.stdout.match(/data-episode-test="[^"]*"/)?.[0] || run.stderr);

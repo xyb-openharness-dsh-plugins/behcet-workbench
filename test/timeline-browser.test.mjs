@@ -1,16 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
 
 test('跨科时间线按选择并列同日记录并分别回源', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'beipal-timeline-'));
-  t.after(() => rm(dir, {recursive:true, force:true}));
-  const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
-  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const fx = await makePrototypeFixture(t, 'beipal-timeline-');
+  const html = fx.html;
   const probe = `<script>try {
     const check=(v,m)=>{if(!v)throw Error(m)};
     const select=(id,on)=>{let el=document.querySelector('[data-timeline-select="'+id+'"]');el.checked=on;el.dispatchEvent(new Event('change',{bubbles:true}))};
@@ -51,8 +47,8 @@ test('跨科时间线按选择并列同日记录并分别回源', async t => {
     document.querySelector('#dialog').close();
     document.body.dataset.timelineTest='PASS';
   } catch(e) { document.body.dataset.timelineTest='FAIL: '+e.message; }</script>`;
-  await writeFile(join(dir, 'index.html'), html.replace('</body>', probe + '</body>'));
-  const run = spawnSync(process.env.CHROMIUM || '/usr/bin/chromium', ['--headless','--no-sandbox','--disable-gpu','--dump-dom','file://' + join(dir, 'index.html')], {encoding:'utf8',timeout:30000});
+  await writeFile(fx.indexPath, html.replace('</body>', probe + '</body>'));
+  const run = spawnSync(process.env.CHROMIUM || '/usr/bin/chromium', ['--headless','--no-sandbox','--disable-gpu','--dump-dom',fx.url], {encoding:'utf8',timeout:30000});
   if (run.error?.code === 'ENOENT') { t.skip('Chromium 不可用'); return; }
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stdout, /data-timeline-test="PASS"/, run.stdout.match(/data-timeline-test="[^"]*"/)?.[0] || run.stderr);

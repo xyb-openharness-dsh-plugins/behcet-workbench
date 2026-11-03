@@ -17,6 +17,26 @@ window.BEIPAL_DEMO_RECORDS = [
   { id: 4, kind: '资料库', date: '2026-10-18', department: '口腔科', text: '口腔科示例记录：口腔不适', source: '口腔科合成记录', original: { title: '口腔科合成原件', text: '合成原件：口腔科记录口腔不适。' }, private: false, history: [] },
   { id: 5, kind: '资料库', date: '2026-10-18', department: '眼科', text: '眼科示例记录：眼部不适', source: '眼科合成记录', original: { title: '眼科合成原件', text: '合成原件：眼科记录眼部不适。' }, private: false, history: [] }
 ];
+// Synthetic metric catalog only: category names, item labels and expected units.
+// No reference ranges, no thresholds, no grading and no clinical advice.
+window.BEIPAL_METRIC_CATALOG = {
+  version: 1,
+  source: '合成示例目录 · 未经临床审核',
+  categoryOrder: ['demo-lab', 'demo-measure', 'demo-empty'],
+  categories: [
+    { id: 'demo-lab', name: '示例检验' },
+    { id: 'demo-measure', name: '示例测量' },
+    { id: 'demo-empty', name: '示例空类别' }
+  ],
+  items: [
+    { metricId: 'a', displayName: '示例指标 A', aliases: ['示例指标A'], categoryId: 'demo-lab', displayOrder: 10, expectedUnits: ['mg/L'], note: '仅按报告原单位记录；不同单位、方法、机构不合并、不换算。' },
+    { metricId: 'b', displayName: '示例指标 B', aliases: ['示例指标B'], categoryId: 'demo-lab', displayOrder: 20, expectedUnits: ['×10⁹/L'], note: '仅按报告原单位记录；不同单位、方法、机构不合并、不换算。' },
+    { metricId: 'ba', displayName: '示例指标 D', aliases: ['示例指标D'], categoryId: 'demo-lab', displayOrder: 30, expectedUnits: ['mg/L'], note: '合成示例；同一项目不同单位也会分开显示。' },
+    { metricId: 'c', displayName: '示例指标 C', aliases: ['示例指标C'], categoryId: 'demo-measure', displayOrder: 40, expectedUnits: ['mm'], note: '单点记录只画点，不连线。' },
+    { metricId: 'bb', displayName: '示例指标 E', aliases: ['示例指标E'], categoryId: 'demo-measure', displayOrder: 50, expectedUnits: ['mm'], note: '同一天多条记录不合并、不取平均。' },
+    { metricId: 'z', displayName: '示例指标 Z', aliases: ['示例指标Z'], categoryId: 'demo-empty', displayOrder: 60, expectedUnits: ['u'], note: '合成空项目，仅用于检查目录空卡与空类别。' }
+  ]
+};
 // Comparable groups are explicit: unit and method belong to each series.
 window.BEIPAL_METRICS = [
   {id:'a', name:'示例指标 A', group:'示例检验', unit:'mg/L', method:'示例方法甲', laboratory:'合成示例机构', source:'合成示例 · 无原件', color:'#216f60', points:[{date:'2026-01-15',value:4},{date:'2026-06-15',value:8},{date:'2026-09-15',value:6},{date:'2026-10-15',value:7}]},
