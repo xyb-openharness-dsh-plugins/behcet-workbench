@@ -10,7 +10,7 @@ test('发作开始日期支持日/月/未知精度，未知与月份不误排、
   const dir = await mkdtemp(join(tmpdir(), 'beipal-date-precision-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js']) await copyFile(join(root, name), join(dir, name));
+  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
   const html = await readFile(join(root, 'index.html'), 'utf8');
   const probe = `<script>
   (async () => { try {

@@ -9,7 +9,7 @@ test('复诊准备区分资料和问题，导出失败保留选择并可重试',
   const dir = await mkdtemp(join(tmpdir(), 'beipal-visit-'));
   t.after(() => rm(dir, {recursive:true, force:true}));
   const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js','metric-model.js']) await copyFile(join(root,name),join(dir,name));
+  for (const name of ['demo-data.js','metric-model.js','pathway-model.js']) await copyFile(join(root,name),join(dir,name));
   const html = await readFile(join(root,'index.html'),'utf8');
   const probe = `<script>try {
     const check=(v,m)=>{if(!v)throw Error(m)};

@@ -9,7 +9,7 @@ test('治疗记录的开始/结束/仍在进行：校验、回看与更正历史
   const dir = await mkdtemp(join(tmpdir(), 'beipal-treatment-dates-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js']) await copyFile(join(root, name), join(dir, name));
+  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
   const html = await readFile(join(root, 'index.html'), 'utf8');
   const probe = `<script>(async()=>{try{
     const check=(v,m)=>{if(!v)throw Error(m)};

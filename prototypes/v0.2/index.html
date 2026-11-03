@@ -28,12 +28,69 @@
 .guide-note{margin:12px 0 0;font-size:.78em;line-height:1.6;color:var(--muted)}
 .hero .actions button[data-primer-open]{background:#fff}
 @media(prefers-reduced-motion:reduce){.mcard-inner{transition:none}}
+/* 治疗阶段折叠卡（M2）：原生 details 默认收起；打印由 beforeprint 展开。 */
+.pathway{margin:18px 0 22px;min-width:0}
+.pathway .section{margin:0 0 8px}
+.phase-fold{background:#fff;border:1px solid var(--line);border-radius:14px;margin:10px 0;min-width:0;overflow:hidden}
+.phase-fold>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:12px 16px;cursor:pointer;list-style:none;min-width:0;line-height:1.5}
+.phase-fold>summary::-webkit-details-marker{display:none}
+.phase-fold>summary::after{content:"▸";margin-left:auto;color:var(--green);font-weight:700}
+.phase-fold[open]>summary::after{content:"▾"}
+.phase-fold>summary:focus-visible{outline:3px solid #246b5b;outline-offset:-3px}
+.ph-dot{color:var(--green)}
+.ph-name{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.ph-date,.ph-text{min-width:0;overflow-wrap:anywhere}
+.ph-text{color:var(--muted)}
+.ph-hint{color:var(--green);font-size:.85em;white-space:nowrap}
+.phase-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px;border-top:1px solid var(--line)}
+.pd-block{min-width:0;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px}
+.pd-block h3{margin:0 0 6px;font-size:1rem;display:flex;gap:8px;align-items:baseline}
+.pd-num{display:inline-flex;width:1.6em;height:1.6em;border-radius:50%;background:var(--soft);color:var(--green);align-items:center;justify-content:center;font-size:.75em;flex:none}
+.pd-summary{margin:0 0 8px;font-size:.9em}
+.pd-items{margin:0;display:grid;gap:6px}
+.pd-items>div{display:grid;grid-template-columns:minmax(5.5em,auto) minmax(0,1fr);gap:8px;border-top:1px dashed var(--line);padding-top:6px}
+.pd-items>div:first-child{border-top:0;padding-top:0}
+.pd-items dt{color:var(--muted);font-size:.82em}
+.pd-items dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.pathway-table-wrap{overflow-x:auto;margin:14px 0 8px}
+.pathway-table{width:100%;border-collapse:collapse;min-width:560px;font-size:.88em}
+.pathway-table th,.pathway-table td{border:1px solid var(--line);padding:8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.pathway-table th{background:var(--soft)}
+.pathway-note{margin:8px 0 0;font-size:.82em;color:var(--muted)}
+@media(max-width:900px){.phase-detail{grid-template-columns:minmax(0,1fr)}.pd-items>div{grid-template-columns:minmax(0,1fr)}}
+@media print{summary::after,.ph-hint{display:none}.phase-fold{break-inside:avoid}}
+
+/* 小贝宝：参考家族工作台的留白与柔和层次，保留绿色识别色。 */
+:root{--brand:#356f60;--ink:#34423e;--muted:#596c62;--line:#e2e9e3;--paper:#faf9f7;--green:#356f60;--soft:#edf6f0;--orange:#a8410a}
+body{font:16px/1.68 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+body.big{font-size:19px}
+button{border-radius:10px;transition:background .16s,border-color .16s,box-shadow .16s,transform .16s}
+button:hover{background:#f7fbf8;border-color:#b8d2c4}
+button.primary:hover{background:#8d3508;border-color:#8d3508;color:#fff}
+.top{background:rgba(255,255,255,.9);border-color:var(--line)}
+.brand{font-weight:600;letter-spacing:.04em}
+.version,.tag{background:#f1f4f1;color:#60736a}
+nav{background:#fff;padding:22px 14px}
+nav button{font-size:13.5px;font-weight:400;border-radius:11px}
+nav button[aria-current=page]{background:#eaf5ee;color:#245f50;font-weight:600}
+main{padding-top:28px}
+h1{font-weight:600;letter-spacing:-.02em;line-height:1.35}
+h2,h3{font-weight:600}
+.eyebrow{font-weight:600;letter-spacing:.1em}
+.primer-home{background:#e3f0ed;border-color:#e3f0ed;color:#164d44;font-weight:600}
+.hero{background:linear-gradient(135deg,#eef8f1 0%,#fffbf6 100%);border-color:#e0eee3;box-shadow:0 8px 28px rgba(52,78,61,.04)}
+.card{border-color:var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(55,73,60,.03),0 10px 28px rgba(55,73,60,.045)}
+.mface{border-color:var(--line);box-shadow:0 8px 26px rgba(55,73,60,.045)}
+.mface.back,.pin{background:#f1f8f3}
+@media(max-width:640px){main{padding-top:16px}.hero{padding:20px}}
+@media(prefers-reduced-motion:reduce){button{transition:none}}
+
 </style><link rel="stylesheet" href="../../assets/patterns/disease-primer.css"><style>.dp-panel{inset:0;border-radius:0}.dp-back span{display:inline}.dp-close{padding:0 12px}.dp-close::after{content:'关闭';margin-left:4px}</style></head><body><a class="skip" href="#main">跳到主要内容</a><header class="top"><button class="brand" data-view="看板">✿ 小贝宝 BeiPal</button><span class="version">原型 v0.2</span><span class="status" title="合成示例 · 仅本页临时演示 · 未连接宿主">合成示例 · 仅本页临时演示 · 未连接宿主</span><button class="dp-trigger" type="button" data-primer-open aria-label="疾病概要：定义、医学资料规范和指南情况、目前治疗全景概要、发展趋势" title="疾病概要">?</button><button id="large">大字</button><button id="pane-toggle" aria-expanded="false">AI 对话演示</button><button id="pane-close" aria-label="收起 AI 对话演示" hidden>×</button></header><div class="layout"><div class="business"><nav id="nav" aria-label="工作台导航"></nav><main id="main" tabindex="-1"></main></div><div id="splitter" class="splitter" role="separator" aria-label="调整 AI 演示面板宽度" aria-orientation="vertical" aria-valuemin="25" aria-valuemax="45" aria-valuenow="35" tabindex="0" hidden></div><aside id="pane" class="pane" aria-label="右侧宿主模拟" hidden><div class="eyebrow">右侧面板 · 状态稿</div><h2>原生 AI 对话位置</h2><div class="notice">宿主模拟 / 非真实 DSH 会话。没有连接、发送或回复。</div><div class="panelbox"><p>这里预留给宿主提供的原生会话。工作台本身不会复制聊天界面。</p><p class="muted">讨论草稿仅在下方预览，不会自动发送；私密记录不进入草稿。</p><label class="field">待复制草稿<textarea id="draft" placeholder="选择“和 AI 讨论”生成预览" readonly></textarea></label><button id="copy">复制草稿</button><p id="copy-status" class="muted" role="status"></p></div></aside></div><dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title"></h2><button id="close-dialog" aria-label="关闭">×</button></div><div class="dialog-body" id="dialog-body"></div><div class="dialog-foot" id="dialog-foot"></div></dialog><div class="toast" id="toast" role="status" hidden></div>
-<script src="primer-data.js"></script><script src="../../assets/patterns/disease-primer.js"></script><script src="demo-data.js"></script><script src="metric-model.js"></script><script>
+<script src="primer-data.js"></script><script src="../../assets/patterns/disease-primer.js"></script><script src="demo-data.js"></script><script src="metric-model.js"></script><script src="pathway-model.js"></script><script>
 const pages=['看板','发作与病程','器官与专科','病情整理','病情一图秀','治疗与用药','复诊与准备','长期与生活'];
 const subs={'发作与病程':['病程与诊断过程','发作记录','症状记录','发作回顾','部位与愈合'],'器官与专科':['眼','血管','神经','消化道','皮肤·关节·口腔'],'病情整理':['资料库','整理草稿 / 核对','病情档案','指标检测','病情汇总'],'病情一图秀':['指标趋势','治疗与事件节点'],'治疗与用药':['当前用药','变更与更正','副作用与感受','用药前检查记录'],'复诊与准备':['问题清单','就诊准备与导出','什么情况要马上就医'],'长期与生活':['心理与家庭','生育·性健康与用药','工作·费用·异地就医']};
 /* 数据不可用时显示错误状态，示例数据仍只来自 demo-data.js。 */
-const DEMO_OK=Array.isArray(window.BEIPAL_DEMO_RECORDS)&&Array.isArray(window.BEIPAL_METRICS)&&Array.isArray(window.BEIPAL_EVENTS)&&typeof window.BEIPAL_METRIC_MODEL?.build==='function';
+const DEMO_OK=Array.isArray(window.BEIPAL_DEMO_RECORDS)&&Array.isArray(window.BEIPAL_METRICS)&&Array.isArray(window.BEIPAL_EVENTS)&&typeof window.BEIPAL_METRIC_MODEL?.build==='function'&&typeof window.BEIPAL_PATHWAY_MODEL?.build==='function';
 const demoRecords=DEMO_OK?window.BEIPAL_DEMO_RECORDS:[];
 const demoMetrics=DEMO_OK?window.BEIPAL_METRICS:[];
 const demoEvents=DEMO_OK?window.BEIPAL_EVENTS:[];
@@ -52,8 +109,23 @@ function treatmentForm(r={}){let p=r.datePrecision||datePrecision(r);return `<p>
 function readTreatment(){let drug=$('#t-drug').value.trim(),dose=$('#t-dose').value.trim(),text=$('#t-text').value.trim(),precision=$('#t-precision').value,date=precision==='day'?$('#t-day').value:precision==='month'?$('#t-month').value:'',errors=[];let endRaw=$('#t-end')?$('#t-end').value:'',ongoing=$('#t-ongoing')?$('#t-ongoing').checked:false,end=ongoing?'':(isDayDate(endRaw)?endRaw:'');document.querySelectorAll('#dialog-body [aria-invalid]').forEach(el=>{el.removeAttribute('aria-invalid');el.removeAttribute('aria-describedby')});if(!drug&&!text)errors.push(['#t-drug','请填写药名或治疗记录原文']);if(precision==='day'&&!isDayDate(date))errors.push(['#t-day','请填写有效日期（1900–2100），或选择时间未知']);if(precision==='month'&&!isMonthDate(date))errors.push(['#t-month','请填写有效月份（1900–2100），或选择时间未知']);if(endRaw&&!ongoing&&!isDayDate(endRaw))errors.push(['#t-end','结束日期需为 1900–2100 之间的日期，或清空']);
 if(precision==='day'&&end&&date&&day(end)<day(date))errors.push(['#t-end','结束日期不能早于开始日期']);$('#treatment-errors').textContent=errors.map(e=>e[1]).join('；');if(errors.length){errors.forEach(([id])=>{$(id).setAttribute('aria-invalid','true');$(id).setAttribute('aria-describedby','treatment-errors')});$(errors[0][0]).focus();return null}return {drug,dose,text,date,datePrecision:precision,endDate:end,ongoing,source:$('#t-source').value.trim()||'来源未知',private:$('#t-private').checked}}
 function pageHeader(title,desc){return `<div class="eyebrow">我的资料 · 合成示例</div><h1>${title}</h1><p class="muted">${desc}</p><div class="actions"><button data-action="discuss">和 AI 讨论</button><button data-view="看板">回到看板</button></div>`}
-function dashboard(){return `<div class="hero"><div class="eyebrow">BEIPAL · 你的记录，由你做主</div><h1>把零散的日子，慢慢整理起来。</h1><p>记下自己的感受，回看资料，为下一次见面做好准备。</p><span class="tag">合成示例数据</span> <span class="tag">原型 · 刷新后重置</span><div class="actions"><button data-action="discuss">和 AI 讨论</button><button data-primer-open data-primer-entry="hero" aria-haspopup="dialog" aria-label="疾病概要：白塞病是什么？定义、医学资料与指南情况、治疗全景、发展趋势">疾病概要：白塞病是什么？</button></div><p class="guide-note">这个病是什么、指南里列了哪些治疗类别、这些年有什么变化，都在疾病概要里。指南与来源：国家卫生健康委《86 个罕见病病种诊疗指南（2025 年版）》第 9 章（原件已取得）· NHS 患者页 · EULAR 2018 / 2025 更新（全文未取得）。本项目患者访谈 0 次、临床审核 0 次。</p></div><div class="section"><h2>从今天想做的事开始</h2></div><div class="grid">${[['今天要记什么','记录发作','发作与病程','发作记录'],['时间线上看变化','跨科时间线','病情一图秀','治疗与事件节点'],['安全提示','求助信息','复诊与准备','什么情况要马上就医'],['家人帮我记','以代记者身份记录','',''], ['资料整理','血管资料','器官与专科','血管'],['今天要记什么','消化症状','器官与专科','消化道'],['用药','记录治疗','治疗与用药','当前用药'],['下次复诊','记录医嘱','治疗与用药','当前用药'],['今天要记什么','生活影响','长期与生活','工作·费用·异地就医'],['最近检查','整理报告','病情整理','整理草稿 / 核对'],['下次复诊','准备材料','复诊与准备','就诊准备与导出'],['只给我自己看','私密问题','复诊与准备','问题清单'],['用药','用药前检查记录','治疗与用药','用药前检查记录']].map(([a,b,v,s])=>`<div class="card"><small>${a}</small><h3>${b}</h3><button class="link" ${v?`data-view="${v}" data-sub="${s}"`:'data-action="privacy"'}>查看 →</button></div>`).join('')}<div class="card"><small>这个病是什么</small><h3>疾病概要与指南来源</h3><p class="muted">定义 · 医学资料与指南 · 治疗全景 · 趋势</p><button class="link" data-primer-open aria-label="打开疾病概要：定义、医学资料与指南情况、治疗全景、发展趋势">打开介绍 →</button></div><div class="card private"><h3>只给我自己看</h3><p>私密记录默认不进入摘要、导出和 AI 草稿。</p><button class="link" data-action="privacy">私密标记与授权 →</button></div></div><div class="section"><h2>最近的记录</h2><button data-view="发作与病程" data-sub="发作记录">查看记录</button></div><div class="card">${state.records.filter(r=>!r.private).map(r=>rec(r)).join('')}</div>`}
-function recordPage(){let items=state.records.filter(r=>r.kind===state.sub);return `<div class="card"><div class="section" style="margin:0 0 12px"><h2>${esc(state.sub)}</h2><button data-action="add">手工补一条</button></div><p class="muted">内容由本人填写；未知可以留空，不作医学判断。仅保存在本页内存，刷新后重置。</p>${items.length?items.map(r=>rec(r,true)).join(''):'<div class="empty">暂时没有示例记录。可从“⋯ 更多”手工补一条。</div>'}</div>`}
+function dashboard(){return `<div class="hero"><div class="eyebrow">BEIPAL · 你的记录，由你做主</div><h1>把零散的日子，慢慢整理起来。</h1><p>白塞病是一种慢性、反复发作的炎症性疾病，可能影响口腔、皮肤、眼睛和其他部位；每个人的表现不同。</p><p>记下自己的感受，回看资料，为下一次见面做好准备。</p><span class="tag">合成示例数据</span> <span class="tag">原型 · 刷新后重置</span><div class="actions"><button class="primary" data-view="发作与病程" data-sub="发作记录">记录这次发作 →</button><button data-action="discuss">和 AI 讨论</button><button class="primer-home" data-primer-open data-primer-entry="hero" aria-haspopup="dialog" aria-label="疾病概要：白塞病是什么？定义、医学资料与指南情况、治疗全景、发展趋势">疾病概要：白塞病是什么？</button></div><p class="guide-note">这个病是什么、指南里列了哪些治疗类别、这些年有什么变化，都在疾病概要里。指南与来源：国家卫生健康委《86 个罕见病病种诊疗指南（2025 年版）》第 9 章（原件已取得）· NHS 患者页 · EULAR 2018 / 2025 更新（全文未取得）。本项目患者访谈 0 次、临床审核 0 次。</p></div><div class="section"><h2>从今天想做的事开始</h2></div><div class="grid">${[['今天要记什么','记录发作','发作与病程','发作记录'],['时间线上看变化','跨科时间线','病情一图秀','治疗与事件节点'],['安全提示','求助信息','复诊与准备','什么情况要马上就医'],['家人帮我记','以代记者身份记录','',''], ['资料整理','血管资料','器官与专科','血管'],['今天要记什么','消化症状','器官与专科','消化道'],['用药','记录治疗','治疗与用药','当前用药'],['下次复诊','记录医嘱','治疗与用药','当前用药'],['今天要记什么','生活影响','长期与生活','工作·费用·异地就医'],['最近检查','整理报告','病情整理','整理草稿 / 核对'],['下次复诊','准备材料','复诊与准备','就诊准备与导出'],['只给我自己看','私密问题','复诊与准备','问题清单'],['用药','用药前检查记录','治疗与用药','用药前检查记录']].map(([a,b,v,s])=>`<div class="card"><small>${a}</small><h3>${b}</h3><button class="link" ${v?`data-view="${v}" data-sub="${s}"`:'data-action="privacy"'}>查看 →</button></div>`).join('')}<div class="card"><small>这个病是什么</small><h3>疾病概要与指南来源</h3><p class="muted">定义 · 医学资料与指南 · 治疗全景 · 趋势</p><button class="link" data-primer-open aria-label="打开疾病概要：定义、医学资料与指南情况、治疗全景、发展趋势">打开介绍 →</button></div><div class="card private"><h3>只给我自己看</h3><p>私密记录默认不进入摘要、导出和 AI 草稿。</p><button class="link" data-action="privacy">私密标记与授权 →</button></div></div><div class="section"><h2>最近的记录</h2><button data-view="发作与病程" data-sub="发作记录">查看记录</button></div><div class="card">${state.records.filter(r=>!r.private).map(r=>rec(r)).join('')}</div>`}
+function pathwayCard(s,index){
+  const blocks=window.BEIPAL_PATHWAY_MODEL.BLOCKS;
+  const sid='phase-'+s.recordId+'-'+index;
+  const body=blocks.map(([id,label],i)=>{
+    const b=s.detail[id]||{summary:'无记录；该块不可用',items:[['说明','该块不可用；本页不补写、不推断。']]};
+    const titleId=sid+'-'+id;
+    return `<section class="pd-block" data-block="${id}" aria-labelledby="${titleId}"><h3 id="${titleId}"><span class="pd-num" aria-hidden="true">${i+1}</span>${esc(label)}</h3><p class="pd-summary">${esc(b.summary)}</p><dl class="pd-items">${b.items.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></section>`;
+  }).join('');
+  return `<details class="phase-fold" data-phase-id="${esc(s.recordId)}" data-private="${s.private?'true':'false'}"><summary><span class="ph-dot" aria-hidden="true">●</span> <span class="ph-name">${esc(s.phase)}</span><span class="ph-sep"> · </span><span class="ph-date">${esc(s.d)}</span><span class="ph-sep"> · </span><span class="ph-text">${esc(s.text)}</span><span class="ph-sep"> · </span><span class="ph-hint">展开细节</span></summary><div class="phase-detail">${body}</div></details>`;
+}
+function pathwaySection(){
+  const stages=window.BEIPAL_PATHWAY_MODEL.build(state.records,demoMetrics);
+  const rows=stages.map(s=>`<tr><td>${esc(s.phase)}<br><small>${esc(s.d)}</small></td><td>${esc(s.plan)}</td><td>${esc(s.actual)}</td></tr>`).join('');
+  return `<div class="pathway" aria-labelledby="pathway-title"><div class="section"><h2 id="pathway-title">治疗阶段折叠卡</h2><span class="tag">合成示例</span></div><p class="muted">按治疗记录的开始日期分段，只用于回看本人抄录。以下均为合成示例，不是真实病历，也不构成医学建议。</p><p class="pathway-note">默认收起；点开一段看五块细节。打印时自动展开全部阶段，打印后恢复原状。</p>${stages.length?stages.map(pathwayCard).join(''):'<div class="empty">暂无可折叠的治疗阶段记录。</div>'}<div class="pathway-table-wrap"><table class="pathway-table"><caption>计划 vs 实际（按记录重述）</caption><thead><tr><th scope="col">阶段</th><th scope="col">计划（按记录重述）</th><th scope="col">实际（按记录重述）</th></tr></thead><tbody>${rows||'<tr><td colspan="3">无记录</td></tr>'}</tbody></table></div><p class="pathway-note">对照仅并排抄录，不核对差异、不判断是否达到计划。阶段划分只按记录开始日期先后，不代表治疗线、阶段顺序或疗效；日期未知的阶段排在最后，不参与按日排序，也不归入指标。</p><p class="pathway-note">口径：每块都有概要；空白写「无记录」+说明，不补写、不推断。影像与副作用只抄原文，不判读、不归因；效果只保留本人引号内原话，不评疗效。私密阶段只显示「记录存在 + 已过滤」，不显示数值或原文。</p></div>`;
+}
+function recordPage(){let items=state.records.filter(r=>r.kind===state.sub);return `<div class="card"><div class="section" style="margin:0 0 12px"><h2>${esc(state.sub)}</h2><button data-action="add">手工补一条</button></div><p class="muted">内容由本人填写；未知可以留空，不作医学判断。仅保存在本页内存，刷新后重置。</p>${state.sub==='当前用药'?pathwaySection():''}<div class="section" style="margin:18px 0 6px"><h3>原始记录（可更正）</h3></div>${items.length?items.map(r=>rec(r,true)).join(''):'<div class="empty">暂时没有示例记录。可从“⋯ 更多”手工补一条。</div>'}</div>`}
 function timeline(){return `<div class="card"><h2>跨科时间线</h2><p>选择记录后按日期并列展示；具体到日的记录按日倒序，仅知月份和日期未知的记录单独分组、不参与按日排序；不同来源保留各自原文，不判断因果。私密记录默认不选。本演示仅在本页内存中运行，刷新后重置。</p><fieldset><legend>选择要显示的记录</legend>${state.records.map(r=>`<label class="row" style="display:block"><input type="checkbox" data-timeline-select="${r.id}" ${state.timelineSelected.has(r.id)?'checked':''}> ${r.private?'<span class="tag private-tag">私密 · 逐条选择</span> ':''}${esc(dateText(r))} · ${esc(r.department||'科别未知')} · ${esc(r.text)}</label>`).join('')}</fieldset></div>`}
 function timelineResults(){const chosen=state.records.filter(r=>state.timelineSelected.has(r.id));const article=r=>`<article class="row"><strong>${esc(r.department||'科别未知')}</strong> ${r.private?'<span class="tag private-tag">私密</span>':''}${r.history.length?'<span class="tag">当前记录已更正</span>':''}<p>${esc(r.text)}</p><p><small>来源：${esc(r.source||'来源未知')}</small></p><button data-timeline-source="${r.id}" aria-label="回看来源：${esc(r.department||'科别未知')} · ${esc(r.text)} · ${esc(dateText(r))} · 记录 ${esc(r.id)}">回看来源</button> ${r.original?'':'<small>无原件</small>'}</article>`;const dayRecs=chosen.filter(r=>datePrecision(r)==='day'),monthRecs=chosen.filter(r=>datePrecision(r)==='month'),unknownRecs=chosen.filter(r=>!dayRecs.includes(r)&&!monthRecs.includes(r));const dayDates=[...new Set(dayRecs.map(r=>r.date))].sort((a,b)=>b.localeCompare(a));const monthDates=[...new Set(monthRecs.map(r=>r.date))].sort((a,b)=>b.localeCompare(a));let body='';if(dayDates.length)body+=dayDates.map(d=>`<section><h3>${esc(d)}</h3><div class="grid">${dayRecs.filter(r=>r.date===d).map(article).join('')}</div></section>`).join('');if(monthDates.length)body+=`<section class="precision-note"><h3>仅知月份（不与具体日期混排）</h3>${monthDates.map(m=>`<div><h4>${esc(m)}（仅月份）</h4><div class="grid">${monthRecs.filter(r=>r.date===m).map(article).join('')}</div></div>`).join('')}<p class="muted"><small>只知月份时无法确定本月内先后，因此不按天排序，也不与具体日期并列。</small></p></section>`;if(unknownRecs.length)body+=`<section class="precision-note"><h3>日期未知（不参与排序）</h3><div class="grid">${unknownRecs.map(article).join('')}</div><p class="muted"><small>日期未知或超出 ${DATE_MIN_YEAR}–${DATE_MAX_YEAR} 范围的记录保持未知，不用推测日期补齐，也不参与时间排序。</small></p></section>`;return `<div class="card" id="timeline-results"><h2>所选记录</h2>${chosen.length?body:'<div class="empty">尚未选择记录，请勾选要查看的资料。</div>'}</div>`}
 const DATE_MIN_YEAR=1900,DATE_MAX_YEAR=2100;
@@ -223,4 +295,25 @@ document.addEventListener('click',async e=>{
     state.records.forEach(r=>{if(r.fileId===id){r.fileId=null;r.original=null}})
     $('#dialog').close();render();toast('已移除原件；相关记录保留为「无原件」');return}
 })
+</script>
+<script>
+/* 打印时展开全部治疗阶段。Chrome 打印中闭合 details 的内容不参与排版，
+   @media print 单独改 display 无效，所以必须在 beforeprint 打开；打印后恢复原状。 */
+(function printExpandFoldouts(){
+  let prior=null;
+  window.addEventListener('beforeprint',()=>{
+    const folds=[...document.querySelectorAll('details.phase-fold')];
+    if(prior===null)prior=folds.map(d=>({id:String(d.dataset.phaseId||''),open:d.open}));
+    folds.forEach(d=>{d.open=true});
+  });
+  window.addEventListener('afterprint',()=>{
+    if(prior===null)return;
+    const saved=new Map(prior.map(x=>[x.id,x.open]));
+    document.querySelectorAll('details.phase-fold').forEach(d=>{
+      const id=String(d.dataset.phaseId||'');
+      d.open=saved.has(id)?saved.get(id):false;
+    });
+    prior=null;
+  });
+})();
 </script></body></html>

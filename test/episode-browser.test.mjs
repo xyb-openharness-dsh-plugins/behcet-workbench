@@ -10,7 +10,7 @@ test('发作记录可新增未知结束、更正回看并遵守私密出口', as
   const dir = await mkdtemp(join(tmpdir(), 'beipal-episode-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js']) await copyFile(join(root, name), join(dir, name));
+  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
   const html = await readFile(join(root, 'index.html'), 'utf8');
   const probe = `<script>
   (async () => { try {

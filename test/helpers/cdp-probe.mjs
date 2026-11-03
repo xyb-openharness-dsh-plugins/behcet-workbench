@@ -2,7 +2,7 @@
 // Node 22+ 自带全局 WebSocket，不引入依赖。
 import { spawn } from 'node:child_process';
 
-export async function runPage(fileUrl, expression, { timeoutMs = 20000, interval = 40 } = {}) {
+export async function runPage(fileUrl, expression, { timeoutMs = 20000, interval = 40, width = 0, height = 900 } = {}) {
   const chrome = process.env.CHROMIUM || '/usr/bin/chromium';
   const child = spawn(chrome, [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
@@ -47,6 +47,7 @@ export async function runPage(fileUrl, expression, { timeoutMs = 20000, interval
     const { targetId } = await send('Target.createTarget', { url: fileUrl });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     await send('Runtime.enable', {}, sessionId);
+    if (width) await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, sessionId);
 
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {

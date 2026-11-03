@@ -11,7 +11,7 @@ test('资料目录登记原件、本机模拟抽取需授权、候选逐条采�
   const dir = await mkdtemp(join(tmpdir(), 'beipal-files-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js']) await copyFile(join(root, name), join(dir, name));
+  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
   const html = await readFile(join(root, 'index.html'), 'utf8');
   const probe = `<script>(async()=>{try{
     const check=(v,m)=>{if(!v)throw Error(m)};

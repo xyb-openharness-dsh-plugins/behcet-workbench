@@ -10,6 +10,7 @@ test('空指标数组不影响其他记录，缺失数据仍显示错误', async
   t.after(() => rm(dir, { recursive:true, force:true }));
   const root = resolve('prototypes/v0.2');
   await copyFile(join(root, 'metric-model.js'), join(dir, 'metric-model.js'));
+  await copyFile(join(root, 'pathway-model.js'), join(dir, 'pathway-model.js'));
   const data = await readFile(join(root, 'demo-data.js'), 'utf8');
   const html = await readFile(join(root, 'index.html'), 'utf8');
   const runProbe = async (suffix, probe) => {
@@ -43,6 +44,7 @@ test('浏览器显示空指标、极值图和逐点来源', async t => {
   t.after(() => rm(dir, { recursive:true, force:true }));
   const root = resolve('prototypes/v0.2');
   await copyFile(join(root, 'metric-model.js'), join(dir, 'metric-model.js'));
+  await copyFile(join(root, 'pathway-model.js'), join(dir, 'pathway-model.js'));
   const data = await readFile(join(root, 'demo-data.js'), 'utf8');
   await writeFile(join(dir, 'demo-data.js'), data + `\nwindow.BEIPAL_METRICS=[{id:'empty',name:'空指标',group:'测试',unit:'u',method:'m',laboratory:'l',points:[]},{id:'extreme',name:'极值',group:'测试',unit:'u',method:'m',laboratory:'l',source:'指标来源',color:'#123456',points:[{date:'2026-01-01',value:-Number.MAX_VALUE,source:'点来源'},{date:'2026-02-01',value:Number.MAX_VALUE}]}];`);
   const html = await readFile(join(root, 'index.html'), 'utf8');

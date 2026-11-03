@@ -10,7 +10,7 @@ test('疾病概要入口、四段数据与单层返回', async t => {
   t.after(()=>rm(dir,{recursive:true,force:true}));
   const page=join(dir,'prototypes/v0.2'), patterns=join(dir,'assets/patterns');
   await mkdir(page,{recursive:true}); await mkdir(patterns,{recursive:true});
-  for(const name of ['demo-data.js','metric-model.js','primer-data.js']) await copyFile(resolve('prototypes/v0.2',name),join(page,name));
+  for(const name of ['demo-data.js','metric-model.js','pathway-model.js','primer-data.js']) await copyFile(resolve('prototypes/v0.2',name),join(page,name));
   for(const name of ['disease-primer.js','disease-primer.css']) await copyFile(resolve('assets/patterns',name),join(patterns,name));
   const html=await readFile(resolve('prototypes/v0.2/index.html'),'utf8');
   const probe=`<script>(async()=>{try{

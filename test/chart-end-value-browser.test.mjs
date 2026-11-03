@@ -9,7 +9,7 @@ test('一图秀末点数值只标末点、带单位，且纵向避让不叠字',
   const dir = await mkdtemp(join(tmpdir(), 'beipal-end-value-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js']) await copyFile(join(root, name), join(dir, name));
+  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
   const html = await readFile(join(root, 'index.html'), 'utf8');
   const probe = `<script>try {
     const check=(v,m)=>{if(!v)throw Error(m)};

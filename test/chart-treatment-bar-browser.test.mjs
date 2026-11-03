@@ -9,7 +9,7 @@ test('一图秀治疗条来自治疗记录：有起止画条、只有开始画�
   const dir = await mkdtemp(join(tmpdir(), 'beipal-treatment-bar-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const root = resolve('prototypes/v0.2');
-  for (const name of ['demo-data.js', 'metric-model.js']) await copyFile(join(root, name), join(dir, name));
+  for (const name of ['demo-data.js', 'metric-model.js', 'pathway-model.js']) await copyFile(join(root, name), join(dir, name));
   const html = await readFile(join(root, 'index.html'), 'utf8');
   const probe = `<script>try {
     const check=(v,m)=>{if(!v)throw Error(m)};
