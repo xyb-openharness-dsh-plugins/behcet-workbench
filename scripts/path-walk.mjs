@@ -500,24 +500,87 @@ async function runS08(ctx) {
 
 async function runS09(ctx) {
   const driver = ctx.driver;
-  ctx.note('看板入口按钮渲染为「私密标记与授权 →」，文档写「私密标记」；入口可点，但文案不是逐字一致（IP3）。');
-  await ctx.check('manual', '手工步骤：本人选择私密属性', async () => {
-    const controls = await driver.eval(`(() => {
+  const privateText = '下次复诊想问的问题（示例）';
+  await ctx.check('manual', '手工步骤：本人逐条选择私密属性', async () => {
+    const panel = await driver.eval(`(() => {
       const dialog = document.querySelector('#dialog');
-      const inputs = [...dialog.querySelectorAll('input:not([type="hidden"]), select, textarea, [role="switch"]')];
-      return inputs.map((el) => el.id || el.name || el.tagName);
+      return {
+        toggles: dialog.querySelectorAll('[data-record-private]').length,
+        includes: dialog.querySelectorAll('[data-privacy-include]').length,
+        body: dialog.querySelector('#dialog-body')?.innerText.replace(/\\s+/g, ' ').trim() || '',
+      };
     })()`);
-    must(controls.length > 0, '入口只打开信息弹窗，没有可操作的私密标记控件');
-    return `发现私密控件：${controls.join('、')}`;
+    must(panel.toggles > 0, '弹窗没有逐条私密开关');
+    must(panel.includes > 0, '弹窗没有逐条「本次纳入」控件');
+    must(panel.body.includes('不宣称加密'), '弹窗没有说明不宣称加密/真实权限');
+    must(panel.body.includes('AI 草稿始终排除私密'), '弹窗没有说明 AI 始终排除私密');
+    must(await driver.isChecked('[data-record-private="3"]'), '示例私密记录未显示为已私密');
+    must(!(await driver.isChecked('[data-privacy-include="3"]')), '私密记录默认被纳入摘要/导出');
+    const state = await driver.state();
+    must(!state.selected.includes(3), `初始选择集包含了私密记录：${state.selected.join(',')}`);
+    return `逐条开关 ${panel.toggles} 个、纳入控件 ${panel.includes} 个；私密默认未纳入`;
   });
-  await ctx.check('product', '产物：三出口默认排除 + 显式纳入', async () => {
-    const body = await dialogText(driver);
-    must(body.includes('私密记录默认不进入'), '弹窗没有说明默认排除');
+  await ctx.check('product', '产物：私密记录默认不进摘要/导出', async () => {
     await driver.click('#dialog-foot [data-action="cancel"]');
-    await driver.waitFor("document.querySelector('#dialog').open === false", { label: '关闭授权弹窗' });
-    throw new Error('「私密标记与授权」是只读说明弹窗：没有逐条标记入口，也没有显式纳入摘要/导出/AI 草稿的机制');
+    await driver.waitFor("document.querySelector('#dialog').open === false", { label: '关闭逐条私密标记' });
+    await driver.clickText('复诊与准备', { selector: 'button', scope: '#nav' });
+    await driver.waitFor("state.view === '复诊与准备'", { label: '打开复诊与准备' });
+    await driver.clickText('就诊准备与导出', { selector: '[role="tab"]', scope: '#main' });
+    await driver.waitFor("state.sub === '就诊准备与导出'", { label: '打开摘要/导出' });
+    const preview = await driver.eval("document.querySelector('#export-preview')?.innerText || ''");
+    must(!preview.includes(privateText), '未显式纳入时摘要/导出预览包含私密记录');
+    must(!preview.includes('【私密】'), '未显式纳入时摘要/导出预览出现【私密】标记');
+    const state = await driver.state();
+    must(!state.selected.includes(3), `未显式纳入时私密记录进入选择集：${state.selected.join(',')}`);
+    await driver.click('.brand[data-view="看板"]');
+    await driver.waitFor("state.view === '看板'", { label: '回到看板' });
+    await driver.click('[data-action="privacy"]');
+    await driver.waitFor("document.querySelector('#dialog').open === true", { label: '重新打开逐条私密标记' });
+    return '未勾选「本次纳入」时，摘要/导出预览不含私密原文，也没有【私密】标记';
   });
-  ctx.push('ai', '文档红线', 'N/A', '入口仅打开只读说明弹窗；没有生成或发送 AI 的入口，私密默认排除仅为文字声明，未实际走记录流程');
+  await ctx.check('manual', '手工步骤：逐条显式纳入私密记录', async () => {
+    await driver.setChecked('[data-privacy-include="3"]', true);
+    await driver.waitFor('state.selected.has(3)', { label: '显式纳入私密记录' });
+    const body = await dialogText(driver);
+    must(body.includes('私密已显式纳入 1'), `显式纳入计数未更新：${body}`);
+    must(await driver.isChecked('[data-record-private="3"]'), '显式纳入不应取消私密属性');
+    return '勾选「本次纳入」后私密记录进入选择集，私密属性保持不变';
+  });
+  await ctx.check('product', '产物：摘要/导出可显式纳入私密，AI 始终排除', async () => {
+    await driver.click('#dialog-foot [data-action="privacy-visit"]');
+    await driver.waitFor(
+      "document.querySelector('#dialog').open === false && state.view === '复诊与准备' && state.sub === '就诊准备与导出'",
+      { label: '去就诊准备逐条核对' },
+    );
+    const preview = await driver.eval("document.querySelector('#export-preview')?.innerText || ''");
+    must(preview.includes(privateText), '显式纳入后摘要预览仍不含该私密记录');
+    must(preview.includes('【私密】'), '显式纳入后摘要预览没有标记【私密】');
+    await driver.clickText('和 AI 讨论', { scope: '#main' });
+    await driver.waitFor("document.querySelector('#pane').hidden === false", { label: '打开 AI 草稿面板' });
+    const draft = await driver.eval("document.querySelector('#draft').value");
+    must(!draft.includes(privateText), 'AI 草稿包含了已显式纳入的私密记录');
+    must((await driver.state()).selected.includes(3), '生成 AI 草稿不应改变摘要/导出选择');
+    await driver.click('#pane-close');
+    await driver.waitFor("document.querySelector('#pane').hidden === true", { label: '关闭草稿面板' });
+    return '摘要含【私密】与原文；AI 草稿仍排除，选择集未变';
+  });
+  await ctx.check('product', '产物：标私密移出已有选择并清草稿', async () => {
+    await driver.click('.brand[data-view="看板"]');
+    await driver.waitFor("state.view === '看板'", { label: '回到看板' });
+    await driver.click('[data-action="privacy"]');
+    await driver.waitFor("document.querySelector('#dialog').open === true", { label: '再次打开私密标记' });
+    await driver.setChecked('[data-record-private="1"]', true);
+    await driver.waitFor("state.records.find((r) => r.id === 1)?.private === true", { label: '记录标为私密' });
+    const state = await driver.state();
+    must(!state.selected.includes(1), '标私密后仍留在摘要/导出选择集');
+    must(!state.timelineSelected.includes(1), '标私密后仍留在时间线选择集');
+    const draft = await driver.eval("document.querySelector('#draft').value");
+    must(draft === '', '标私密后未清空 AI 草稿');
+    const body = await dialogText(driver);
+    must(body.includes('私密 2'), `私密计数未更新：${body}`);
+    return '公开记录 1 标私密后移出选择集与时间线，AI 草稿清空';
+  });
+  await ctx.push('ai', 'AI 默认通道', 'PASS', '真实生成草稿时验证私密记录被排除；原型没有发送通道，未发送任何内容');
   await ctx.check('return', '回首页', () => returnHome(driver));
 }
 
