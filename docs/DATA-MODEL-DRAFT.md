@@ -1,12 +1,14 @@
 # 数据模型与迁移合同（草案）
 
 > 文档：`docs/DATA-MODEL-DRAFT.md`  
-> 版本：`v0.1.0-draft.7`  
+> 版本：`v0.1.0-draft.8`
 > 日期：2026-11-03  
 > 状态：**只读分析后的原创草案；未冻结；待 G3 签认**；0 患者访谈、0 临床审核；G2 只确认原型范围，不能继承为 G3。本版只做合同文本修订，**未建库、未跑迁移、未做宿主验证、未写业务代码**。  
-> 依据：2026-11-03 用户 G2 确认、`docs/SPEC.md`、`docs/SCENARIOS.md`、`docs/UI-DESIGN.md`、`docs/INTERACTION-DESIGN.md`、`docs/04-DATA.md`、`docs/14-HTML-AND-DATA-CONTRACT.md`、2026-11-03 独立审查 R-01～R-14（见 §0.1）、draft.3 复核 S-01～S-10（见 §0.2）、T-01～T-12（见 §0.3）、本轮安全审查 U-01～U-10（见 §0.4）与本轮五问复核 W-01～W-05（见 §0.5），以及 `prototypes/v0.2/` 的实际实现。  
+> 依据：2026-11-03 用户 G2 确认、`docs/SPEC.md`、`docs/SCENARIOS.md`、`docs/UI-DESIGN.md`、`docs/INTERACTION-DESIGN.md`、`docs/04-DATA.md`、`docs/14-HTML-AND-DATA-CONTRACT.md`、2026-11-03 独立审查 R-01～R-14（见 §0.1）、draft.3 复核 S-01～S-10（见 §0.2）、T-01～T-12（见 §0.3）、本轮安全审查 U-01～U-10（见 §0.4）、本轮五问复核 W-01～W-05（见 §0.5）、draft.8 六项复核 X-01～X-06（见 §0.6），以及 `prototypes/v0.2/` 的实际实现。
 > 边界：本文件**不创建生产数据库、不建表、不写迁移脚本、不修改其他文件**。G3 签认前不得据此建库；G3 之后也只能先建测试库并跑完本文件第 11 节的可验证约束。**本版最优先的修订是向 `docs/SPEC.md` 对齐**：原件不复制、不缓存，登记只是出处关联；移除/撤回不静默删手工来源；代记者看不到私密元数据；AI 本版禁止接收私密或隐私未知内容，未来例外仍属未决。与 SPEC 冲突时以 SPEC 为准，本文件回改，不用“数据模型更完整”覆盖已确认规格。  
-> 本版复核要点：① Q-27/Q-28/Q-29/Q-30/Q-31 **全部明确标为 G3 阻塞**；② 清除 §10.4 残留的 `UPDATE import_candidate` 伪 SQL，改为逐条 INSERT `import_run`/`import_candidate` 的伪代码，并明确“任何人不得从旧版本复制执行”；③ `record.correct` **完全不得改变隐私**，隐私只能走 `record.setPrivacy`；④ 统一 `privacy_epoch`（进入 `private` 才 +1）并新增 `privacy_state_seq`（任何隐私状态变化 +1），用后者使 `unknown` 往返后的旧 release 自动失效；⑤ 非本人连受保护历史的元数据、修订号、计数和空位都不可见；⑥ 明确 `unknown` 原件的唯一解锁路径；⑦ `command_receipt` 主键 `(subject_id, actor_id, request_id)`；⑧ 迁移 `unknown` 不预置 ever/epoch；⑨ 传播写入原件新状态且**不降级**已有的 `private`；⑩ 删除不可复现的批量断言结果表，只保留可重跑骨架；V-33 改为未验证。**本轮新增：出站（导出/AI/产物）必须同时校验“选中的那一版修订”与“当前记录”，不能只看其一；恢复历史只能本人且不得洗白；跨 subject 引用全部校验并把 Q-30 列为 G3 阻塞；缺失候选来源失败关闭；代理采纳候选强制 `unknown` 并校验全部写入的身份/授权范围；缓存键必须含 `subject_id`；迁移伪代码不含可执行 SQL。**本轮五问复核（W-01～W-05）：来源链悬空/跨主体/不一致一律失败关闭；`import_run`/`import_candidate` 统一 `subject_id`/`document_id` 与复合引用；迁移无法判定采纳关系时默认 `unknown`（候选不可采纳），可显式选择整批拒绝，并列为 Q-31/G3 阻塞；`record.restoreRevision` 在事务内重读并前置版本校验；新挂受保护来源必须写入保护状态；`data_version` 与 artifact 隔离在同一事务一致。新增 V-43～V-48，全部未执行。所有未执行项一律标“未验证”。**
+> 前几轮已写入的复核要点（draft.6/7，保留）：① Q-27/Q-28/Q-29/Q-30/Q-31 **全部明确标为 G3 阻塞**；② 清除 §10.4 残留的 `UPDATE import_candidate` 伪 SQL，改为逐条 INSERT `import_run`/`import_candidate` 的伪代码，并明确“任何人不得从旧版本复制执行”；③ `record.correct` **完全不得改变隐私**，隐私只能走 `record.setPrivacy`；④ 统一 `privacy_epoch`（进入 `private` 才 +1）并新增 `privacy_state_seq`（任何隐私状态变化 +1），用后者使 `unknown` 往返后的旧 release 自动失效；⑤ 非本人连受保护历史的元数据、修订号、计数和空位都不可见；⑥ 明确 `unknown` 原件的唯一解锁路径；⑦ `command_receipt` 主键 `(subject_id, actor_id, request_id)`；⑧ 迁移 `unknown` 不预置 ever/epoch；⑨ 传播写入原件新状态且**不降级**已有的 `private`；⑩ 删除不可复现的批量断言结果表，只保留可重跑骨架；V-33 改为未验证。**本轮新增：出站（导出/AI/产物）必须同时校验“选中的那一版修订”与“当前记录”，不能只看其一；恢复历史只能本人且不得洗白；跨 subject 引用全部校验并把 Q-30 列为 G3 阻塞；缺失候选来源失败关闭；代理采纳候选强制 `unknown` 并校验全部写入的身份/授权范围；缓存键必须含 `subject_id`；迁移伪代码不含可执行 SQL。**本轮五问复核（W-01～W-05）：来源链悬空/跨主体/不一致一律失败关闭；`import_run`/`import_candidate` 统一 `subject_id`/`document_id` 与复合引用；迁移无法判定采纳关系时默认 `unknown`（候选不可采纳），可显式选择整批拒绝，并列为 Q-31/G3 阻塞；`record.restoreRevision` 在事务内重读并前置版本校验；新挂受保护来源必须写入保护状态；`data_version` 与 artifact 隔离在同一事务一致。新增 V-43～V-48，全部未执行。所有未执行项一律标“未验证”。**
+
+> **draft.8 本轮复核要点（X-01～X-06）**：① 历史编号固定为“老→新 1..N、当前 N+1”，迁移与读取都要自检当前内容，不允许把当前内容再当历史、也不允许把最新版标成第 1 版；② `link_state` 只有 `unverified/verified/missing/removed` 四态，`active` 不存在，四态对“可新挂/保护”的语义分开写清；③ 来源解析固定为 `no_file/resolved/unresolved` 三态，悬空/跨主体/不一致一律 `unresolved → unknown`，手工无来源不得混同为悬空；④ 云解析 run 无 consent 失败关闭（运行时不建 run、不上传、不建候选；迁移整批拒绝），不伪造 consent 或成功状态；⑤ 作者无法确定时 `author_state='unknown'`、两列作者字段为 NULL，不默认记成本人；⑥ V-33 按上述五类重写，新增 V-49～V-53，全部**未执行/未验证**。
 
 ---
 
@@ -19,7 +21,7 @@
 3. **来源与候选层**：`source_document` 只保存原件登记（不复制内容），`import_run`/`import_candidate` 保存解析过程与候选；候选不是事实，逐条采纳才生成 `record`。
 4. **读模型与产物层**：看板、时间线、一图秀、治疗阶段、复诊预览都从同一组 `record_revision` 派生；导出是冻结的 `artifact`，不是当前事实的副本。
 
-据此形成的 26 条核心决定：
+据此形成的 31 条核心决定：
 
 | 编号 | 决定 | 理由 |
 |---|---|---|
@@ -49,6 +51,11 @@
 | D-24 | **跨 subject 引用全部校验**：记录/修订/候选/原件/授权/回执/产物/审计之间的每一条跨表引用都必须满足 subject 一致；SQLite FK 不表达 subject，写入时必须显式校验，迁移后必须跑不变量查询。实现与查询未落地前，Q-30 是 **G3 阻塞** | 仅靠 FK 可把 A 的候选挂到 B 的记录、把 B 的原件挂到 A 的修订，形成跨人泄露/污染，且单条 FK 检查看不出来 |
 | D-25 | **新挂受保护来源必须写入保护状态**：`record.create`、`record.attachSource`、`candidate.adopt` 在写入带 `source_document_id` 的新修订前先解析来源；来源为 `private` → 修订 `private`；`unknown`/不可解析/跨 subject/`privacy_ever_private=1` 且无有效 release → 修订 `unknown`，`privacy_origin='inherited_document'`、`validation_state='needs_review'`；请求写 `not_private` 一律 `privacy_locked`，不得先写公开再靠读时过滤 | INV-06 要求“关联受保护原件时记录不得为 `not_private`”，只靠 `source_chain` 派生会让存储状态与不变量矛盾；新挂时写入保护，链判定只作防御/历史兜底 |
 | D-26 | **版本与产物隔离同事务**：每批事实/隐私/来源/授权/产物状态变化只递增一次 `subject.data_version`，并在同一事务把所有受影响 artifact 置 `quarantined`/`stale` 且写 `status_data_version=新 data_version`；`artifact.build` 的 `source_data_version` 是构建前快照、`status_data_version` 是提交后版本；下载每次重判，不能只看 `status` 或文件路径 | 只递增版本不隔离产物会让旧产物继续可下载；只隔离产物不递增版本会让读模型/缓存继续显示旧状态；两者必须同事务一致 |
+| D-27 | **历史编号固定为“老→新 1..N，当前 N+1”**：`record_revision.revision_no` 从 1 连续递增；历史列表只含 1..N（老→新），当前内容 = `N+1 = MAX(revision_no)`，不得把当前内容再复制成一条历史；非本人视图只按可见集重排显示序号，不得暗示存在隐藏修订 | 原型 `history[]` 按 push 顺序保存“上一版”，当前内容在记录自身；旧迁移把当前写成 1、历史写成 2..N+1，会把“最新”标成“第 1 版”。读取时自检当前字段必须等于 N+1 修订，失配按 `needs_review` 失败关闭，不能用历史最后一项冒充当前 |
+| D-28 | **`link_state` 只有 `unverified/verified/missing/removed`，没有 `active`**；它只表示“最近一次会话核对结果”，不是隐私状态，也不改变 `privacy_state`/`privacy_epoch`/`privacy_state_seq`。新挂只允许 `unverified/verified`；`missing`/`removed` 不可新挂（`document_missing`/`document_removed`），已有关联保留并按隐私状态判定保护 | 把不存在的 `active` 写成挂接前提会让迁移/新挂路径直接失败；把 `verified` 当“可打开”、把 `removed` 当“隐私归零”都会制造假能力/假公开。`missing/removed` 且隐私已知 `not_private`、`ever=0` 时不因链接状态本身变成受保护；隐私未知或曾私密未 release 时仍按 `unknown` 保护 |
+| D-29 | **来源解析只返回 `no_file` / `resolved` / `unresolved` 三态**：该记录当前与历史修订都无 document/candidate 指针**且 `source_kind='manual'`**（新写入须显式声明；迁移中该记录所有修订的 `fileId` 键不存在或为 null 且 `original`/来源无原件痕迹）→ `no_file`；指针存在且可解析同 subject → `resolved`；指针存在但行缺失/跨 subject/候选-run-doc 不一致/互指不成立，或无指针但保留“曾有原件”痕迹（`source_kind='document'`）→ `unresolved` → 必须按 `unknown` 保护 | “没有指针”和“指针悬空”是两件事：前者是手工无来源，不能强制 unknown 或标 needs_review；后者是丢失/污染，必须 unknown + `source_locked`。只把 NULL 当“无来源”会让删指针洗白悬空链；把悬空当手工会让受保护正文变公开，而原型手工记录与“移除原件”都写 `fileId:null`，必须靠 `original`/来源文本区分 |
+| D-30 | **云解析无 consent 失败关闭**：`import.start` 在创建 run、上传字节、创建候选之前校验 `cloud_parse` consent（self、未撤回、document/subject 匹配）；缺失返回 `consent_required`，不建 run。迁移中 `method='cloud'` 且无法证明 consent 的 run 整批 `ROLLBACK`/`consent_unresolved`，不得伪造 consent 行或状态 | “先建 run 再补同意”会留下已发送/已解析的无同意记录；“迁移时补一个 consent”等于伪造患者同意。失败关闭比事后删除更可审计 |
+| D-31 | **作者无法确定不得伪造**：`record.author_state ∈ {known, unknown}`；`unknown` 时 `author_actor_id`/`on_behalf_grant_id` 均为 NULL，界面显示“作者未知”，不得默认记为本人、`system` 或任何具体 actor；只有 payload 明确作者或代理+有效 grant 才写 `known` | 旧数据没有作者字段；迁移把所有记录写成 `ctx.subject_actor_id` 等于把代记/他人内容冒充本人亲笔，也会误导 `own_entries` 读取范围。`system` 只是迁移执行者，不是作者 |
 
 ### 0.1 本次独立审查的处理（R-01～R-14）
 
@@ -136,6 +143,19 @@
 | W-04 | 新挂受保护来源时只靠读时 `source_chain` 过滤，与 INV-06“记录不得为 not_private”矛盾 | 新增 §4.7：create/attach/adopt 写入带来源的新修订前先解析；来源 private→private、unknown/悬空/跨 subject/ever-private 未 release→unknown；请求 not_private→`privacy_locked`；`record.correct` 若换来源会抬高保护则拒绝，改走 self-only `record.attachSource`；attachSource 只升不降，降低仍只能 `setPrivacy` | §2 INV-06、§4.5、§4.7、§5.1、§9.4、V-46 |
 | W-05 | `data_version` 与产物隔离不一致 | 每批变化只递增一次 `subject.data_version`，同一事务把受影响 artifact 置 `quarantined`/`stale` 并写 `status_data_version=新版本`；`artifact.build` 写 `source_data_version`（构建前）/`status_data_version`（提交后）；下载仍逐条双 scope 重判，不能只看 `status`/路径；任一步失败整体回滚 | §4.6、§7.3、§9.2、§9.4、§10.3、V-47 |
 
+### 0.6 本轮六项复核的处理（X-01～X-06）
+
+本轮只修订合同文本，六项逐条处置；新增 D-27～D-31、INV-30～INV-33、V-49～V-53，**全部未执行/未验证**，不声称任何实现、迁移或验收已完成。
+
+| 编号 | 问题 | 本版处理 | 落点 |
+|---|---|---|---|
+| X-01 | 历史编号方向写反：迁移把当前内容写成 `revision_no=1`、历史写成 2..N+1，与“老→新 1..N、当前 N+1”冲突 | 统一编号口径：`history[]` 按数组顺序（老→新）映射 1..N，当前内容映射 `N+1`；新增写入/读取/迁移三处自检（当前字段 = N+1 修订、编号连续无重复、当前不重复进历史）；非本人可见集只重排显示序号，不用规范编号 | D-27、INV-30、§5.1、§10.4、V-33/V-49 |
+| X-02 | `link_state` 枚举没有 `active`，但 §4.7/§9.4 把 `link_state='active'` 当挂接前提；四态对挂接与保护的语义分散 | 删除所有 `active`；明确 `unverified/verified` 可新挂、`missing/removed` 不可新挂（`document_missing`/`document_removed`）；`link_state` 只表示最近会话核对结果，绝不改隐私、不因 `removed` 自动公开已知 `not_private+ever=0` 的记录，隐私未知/曾私密未 release 仍按 `unknown` | D-28、INV-31、§4.1、§4.5、§4.7、§6.1、§9.2、§9.4、V-50 |
+| X-03 | 来源解析只有“可解析/失败”两种失败码，没有 `no_file/resolved/unresolved` 三态；悬空可被当成“无来源”，手工无来源又可能被强制 unknown | 新增唯一分类 `resolve_source()`：无任何指针且 `source_kind='manual'` → `no_file`（迁移 `fileId` 缺失/null 且 `original`/来源无原件痕迹；新写入须显式声明）；无指针但保留“曾有原件”痕迹 → `unresolved`；指针存在且同 subject 可解析 → `resolved`；悬空/跨主体/候选-run-doc 不一致/互指不成立 → `unresolved`，必须 `unknown` + `source_locked`；`source_document_id IS NULL` 本身不等于手工 | D-29、INV-28、§4.1、§4.5、§4.7、§10.4、V-33/V-51 |
+| X-04 | 云解析 consent 只写“必须有”，没有失败关闭顺序；迁移对旧 run 的 consent 没有规则 | `import.start` 在建 run/上传/建候选前校验 consent，缺失 `consent_required` 且零副作用；`method='cloud'` 时 `import_run.consent_id` NOT NULL（CHECK）；迁移无法证明 consent 的 cloud run 整批 `ROLLBACK`/`consent_unresolved`，不伪造 consent 或成功状态 | D-30、INV-32、§6.2、§9.2、§9.4、§10.4、V-52 |
+| X-05 | 迁移把每条旧记录的作者都写成 `ctx.subject_actor_id`，等于伪造本人亲笔 | 新增 `record.author_state`；`unknown` 时 `author_actor_id`/`on_behalf_grant_id` 均为 NULL、UI 显示“作者未知”；只有 payload 明确作者或 proxy+有效 grant 才 `known`；`system` 只作迁移执行者，不作作者 | D-31、INV-08/INV-33、§3.2、§6.2、§9.2、§9.4、§10.4、V-53 |
+| X-06 | V-33 只覆盖隐私初始化，未覆盖编号、三态、作者、consent；正文仍残留 `active` 与反向编号 | 重写 V-33 为五类断言；新增 V-49～V-53；§13 验收范围改 V-01～V-53；§14/§15 如实记录未执行 | §11、§13、§14、§15 |
+
 **当前状态：不存在生产数据库、不存在真实数据目录、未执行任何迁移。** 本文件是合同草案，不是实现证据。
 
 ---
@@ -172,7 +192,7 @@
 - **INV-05 私密优先**：私密或隐私未知的记录，默认不进入导出、摘要、AI 上下文；任何授权都不能让私密对非本人可见，也不能让代记者看到其存在性。
 - **INV-06 私密原件锁定**：记录**新挂**或传播时关联私密/隐私未知/不可解析的原件，当前修订必须写入至少同等保护（`private`/`unknown`），不得以 `not_private` 落库；写入规则见 §4.7，`source_chain` 只作历史/防御兜底。原件转私密必须传播到记录（单事务）；取消原件私密**不自动公开记录**：当前状态锁虽解除，`privacy_ever_private` 粘性锁仍在，必须由本人按 `(record, document, 当前 privacy_epoch, 当前 privacy_state_seq)` 逐条解除后再单独改记录隐私；原件状态每次实际变化都递增 `privacy_state_seq`，`unknown` 往返使按旧 seq 签发的 release 失效。
 - **INV-07 主体不混**：`record.subject_id` 创建后不可改；代记者不是另一个患者，不能用“切换视角”改写主体。
-- **INV-08 作者不伪造**：代记记录保留 `author_actor_id` 与 `on_behalf_grant_id`；撤回授权后只停止新读写，不回写成“本人亲笔”。
+- **INV-08 作者不伪造**：代记记录保留 `author_actor_id` 与 `on_behalf_grant_id`；撤回授权后只停止新读写，不回写成“本人亲笔”。作者无法从数据中确定时，`record.author_state='unknown'`、`author_actor_id=NULL`、`on_behalf_grant_id=NULL`，界面显示“作者未知”；不得默认填本人、`system` 或任何具体 actor，`system` 只是迁移执行者，不能成为作者（细则见 INV-33）。
 - **INV-09 原件不复制**：登记原件只存元数据，不复制、不缓存原件内容；`source_document_id` 只是出处关联，不是可取回的文件引用，重开需会话文件句柄；记录正文是用户抄录/确认的文本；记录不内嵌第二份“original”，数据根内也不出现原件副本或持久解析全文。
 - **INV-10 路径不越界**：工作台管理的文件路径必须是相对路径，解析后的真实路径必须位于用户选定根目录内；拒绝 `..`、绝对路径、盘符和越界符号链接。原件不在根内，因此不存其路径，不做“外部绝对路径”例外。
 - **INV-11 导出不回头**：`artifact` 一旦生成即冻结；源记录修订后，旧产物只标记“需重新生成”，不更新其内容。
@@ -192,8 +212,12 @@
 - **INV-25 跨 subject 一致**：§9.7 列出的每一条跨表引用在写入时必须满足 subject 一致；FK 通过不等于 subject 通过；迁移后不变量查询必须为 0 行。该校验未实现前，Q-30 是 G3 阻塞。
 - **INV-26 身份来自会话**：所有写命令的 `actor_id` 必须从已认证会话/宿主上下文解析，请求体中的 `actor_id`/`subject_id` 只作对照；`demo_unverified` 不得写入生产 subject，`local_profile` 不得代理，proxy 必须 `host_authenticated` 且有覆盖该命令 kind+日期的有效 grant。
 - **INV-27 缓存按 subject 隔离**：任何读模型/预览缓存键必须含 `subject_id`、`viewer_actor_id`、`data_version`、`read_model_version`（及授权 scope 版本）；缺任一键不得复用；授权/隐私变化必须递增 `data_version`。
-- **INV-28 来源链可解析**：`source_document → import_run → import_candidate → record` 的每一环都必须可解析、同 subject，且 `candidate.document_id = import_run.document_id`、`record.origin_candidate_id` 与 `candidate.adopted_record_id` 互指；任一缺失/悬空/跨 subject/不一致，按 `source_locked=true` 受保护，候选不可采纳、记录不可 `releaseSourceLink` 或降为 `not_private`；写入返回 `source_unresolved`/`cross_subject_reference`，不得把悬空当“无来源”或回退到 `not_private`。
+- **INV-28 来源链可解析**：`source_document → import_run → import_candidate → record` 的每一环都必须可解析、同 subject，且 `candidate.document_id = import_run.document_id`、`record.origin_candidate_id` 与 `candidate.adopted_record_id` 互指；任一缺失/悬空/跨 subject/不一致，按 `source_locked=true` 受保护，候选不可采纳、记录不可 `releaseSourceLink` 或降为 `not_private`；写入返回 `source_unresolved`/`cross_subject_reference`，不得把悬空当“无来源”或回退到 `not_private`。来源解析必须落到 `no_file/resolved/unresolved` 三态：只有完全没有 document/candidate 指针且 `source_kind='manual'`（新写入显式声明；迁移只在该记录所有修订（含历史）的 `fileId` 键缺失或为 null 且 `original`/来源无原件痕迹时映射 manual）才是 `no_file`；任何指针存在但行缺失、跨 subject、候选/run/document 不一致或互指不成立都是 `unresolved`，必须按 `unknown` 保护并 `needs_review`；无指针但 `original` 非空或来源含“原件：/原件已移除”的同样按 `unresolved` 保护（`source_kind='document'`），不得洗成手工；`source_document_id IS NULL` 本身不证明手工无来源。
 - **INV-29 版本与产物一致**：每批事实/隐私/来源/授权/产物状态变化只在同一事务递增一次 `subject.data_version`；受影响 artifact 同时置 `quarantined`/`stale` 并写 `status_data_version=新版本`；不允许版本已变而 artifact 仍 `ready`，也不允许只隔离产物不递增版本；下载每次重判，旧 `status` 与路径不构成放行证据。
+- **INV-30 历史编号与当前自检**：`revision_no` 从 1 连续递增、不跳号不重复；历史视图只含 1..N（老→新），当前内容恒为 `N+1 = MAX(revision_no)` 且不再重复成一条历史；任何写入、读取、迁移都必须自检“渲染的当前字段 = 第 N+1 版修订”，失配按 `needs_review` 失败关闭，不得回退到历史最后一项；非本人视图只对可见集重排显示序号，不得暗示隐藏修订。
+- **INV-31 `link_state` 不是隐私**：`link_state` 只能是 `unverified/verified/missing/removed`，没有 `active`；它只表示最近一次会话核对结果，不得改变 `privacy_state`/`privacy_epoch`/`privacy_state_seq`。新挂只允许 `unverified/verified`；`missing`/`removed` 不可新挂且不得自动复活；`verified` 不等于可跨会话打开，`removed` 不等于隐私归零。
+- **INV-32 云解析无 consent 无 run**：`method='cloud'` 的 `import.start` 必须在创建 run、上传字节、创建候选之前通过 `cloud_parse` consent 校验（self、未撤回、document/subject 匹配）；缺失即 `consent_required` 且零副作用（无 run、无上传、无候选、无 `tmp/` 正文）。迁移无法证明 consent 的 cloud run 整批 `ROLLBACK`/`consent_unresolved`，不得补造 consent 行或改写状态。
+- **INV-33 作者未知不伪造**：`record.author_state` 只有 `known/unknown`；`known` 时 `author_actor_id` 必须指向同 subject 的有效 actor，proxy 作者必须同时有覆盖该记录的 `on_behalf_grant_id`；`unknown` 时两列必须为 NULL。迁移/导入没有作者证据时写 `unknown`，不得默认 `subject_actor_id`、不得用 `system` 冒充作者；`unknown` 不得被当成“本人亲笔”，也不得被代记者当作可读自己条目的依据。
 
 ---
 
@@ -222,6 +246,7 @@
 - 撤回后：新写入/读取立即拒绝；历史记录保留 `author_actor_id` 与原 `on_behalf_grant_id`；展示为“代记（授权已撤回）”，不回写成本人亲笔。`subject` 仍是数据主体，记录归属不因撤权改变。
 - 未知日期的代记写入：`grant_scope.allow_unknown_date` 默认 `false`。scope 有界时，日期未知的记录无法证明落在授权期内，必须拒绝；scope 不限时间也不能推定放行，仍需显式打开 `allow_unknown_date` 并记录理由。这个边界必须在 UI 上说清楚。
 - 每条代记记录必须能回指授权；`on_behalf_grant_id` 为空却 `author.kind='proxy'` 是非法状态。
+- **作者状态（`author_state`）**：`record` 必须记录作者是否可判定。self 本人录入 → `known` + `author_actor_id=subject.self_actor_id`；proxy 代记 → `known` + `author_actor_id=proxy` + 覆盖该记录的 `on_behalf_grant_id`；迁移/旧数据没有可证明的作者证据 → `unknown`，`author_actor_id`/`on_behalf_grant_id` 均为 NULL，界面显示“作者未知”，**不得默认写成本人**。`author_state='unknown'` 的记录仍属于该 subject，但不计入“本人亲笔”；代理的 `own_entries` 可见性也不能据此把未知作者当作自己写的条目。
 
 ### 3.3 出站同意
 
@@ -302,6 +327,35 @@ candidate_source_ok(record_id) =
             d.subject_id = record.subject_id
   )
 
+# 来源三态：唯一分类。no_file 表示“从未指向任何原件/候选，且本人明确声明手工”；
+# “所有来源指针”指当前与历史修订的 source_document_id、record.origin_candidate_id
+# 及其候选的 import_id/document_id；只看当前修订会漏掉历史链。
+# 新写入走 no_file 必须显式 source_kind='manual'；迁移只在“无任何指针且无原件痕迹”时用；
+# 无指针但保留“曾有原件”痕迹的（original 非空，或 source 以“原件：/原件已移除”开头）
+# 必须落 unresolved + source_kind='document'，不得因 fileId 为 null/键缺失就洗成手工来源。
+resolve_source(record_id) =
+  IF 所有来源指针均为 NULL/缺失
+     AND 当前修订 source_kind='manual'
+     AND 没有任何修订（含历史）source_kind='document'        -> 'no_file'
+  IF 所有来源指针均为 NULL/缺失（不满足上一分支）           -> 'unresolved'
+  IF ∃ 指针无法解析：document 行缺失、subject 不同、
+     候选行缺失、import_run 缺失、candidate.document_id != run.document_id、
+     任一修订 source_kind='document' 却无 document 指针、
+     record.origin_candidate_id 与 candidate.adopted_record_id 不互指
+                                                          -> 'unresolved'
+  -> 'resolved'
+
+source_floor(record_id, d) =
+  resolve_source(record_id) = 'no_file'                   -> 'not_private'
+  resolve_source(record_id) = 'unresolved'                -> 'unknown'
+  d IS NULL 且 resolve_source <> 'no_file'（调用方漏传 document）-> 'unknown'
+  d 引用了不可解析的 document_id / 跨 subject              -> 'unknown'
+  d.privacy_state='private'                               -> 'private'
+  d.privacy_state='unknown'                               -> 'unknown'
+  d.privacy_ever_private=1 AND NOT release_active(record_id,d) -> 'unknown'
+  d.privacy_state='not_private'                           -> 'not_private'
+# link_state 不进入本函数：missing/removed 只限制“可新挂”，不把已知 not_private+ever=0 改成受保护
+
 source_chain(record_id) =
   { 当前修订的 source_document_id（若有） }
   ∪ { 该 record 所有历史修订的 source_document_id（若有） }
@@ -321,7 +375,8 @@ release_active(record_id, d) =
         AND r.released_by_actor_id = subject.self_actor_id
 
 source_locked(record_id) =
-  NOT candidate_source_ok(record_id)
+  resolve_source(record_id) = 'unresolved'
+  OR NOT candidate_source_ok(record_id)
   OR ∃ d ∈ source_chain(record_id):
     d 不存在（链上引用了不可解析的 document_id）
     OR d.subject_id != record.subject_id
@@ -371,12 +426,14 @@ output_allowed(purpose, record_id, revision_no, viewer) =
 - **artifact 同意按条且每次重判**：`output_allowed('artifact.download', ...)` 对每个 `included_private=1` 条目分别求值，`private_export` 必须匹配该条 `(record_id, revision_no)`；一条同意不得覆盖产物中的多个受保护条目，也不得跨下载复用。构建时同理：缺任一条同意即整批失败。
 - **改公开的判定**：`record.setPrivacy(not_private)` 只看 `source_locked(record_id)`，不看当前修订自身状态（因为当前状态正是要改的对象）。当前链干净时，`private → not_private` 允许；链上有当前私密/未知原件或未解除 sticky，返回 `privacy_locked`。**`record.correct` 完全不得变更隐私**：它不读、不写 `privacy_state`/`privacy_origin`，也不因 `source_locked=false` 获得改隐私的能力；请求若携带隐私字段，或合并结果与当前隐私不同，一律返回 `privacy_changed`，要求改用 `record.setPrivacy`。若更正同时更换 `source_document_id` 且新来源会按 §4.7 抬高保护，`record.correct` 必须返回 `privacy_locked`，改由本人 `record.attachSource` 处理，不得借内容更正把公开记录挂到受保护来源。`record.restoreRevision` 同理只恢复内容、不改变当前隐私；目标保护等级高于当前时按 §5.1 的“不洗白”规则返回 `privacy_locked`。
 - **候选派生**：候选在创建时按 §6.2 派生三态，不从记录“继承”一个可能被改过的当前值；`record` 从候选继承，采纳不得降低。候选没有“逐条 release”路径，因为 release 是 record 级；曾私密原件产生的候选只能是 `unknown`，采纳后再按 record 级解除。候选/run/document 任一悬空、跨 subject 或 document 不一致时，按 `candidate_source_ok=false` 处理，候选 `unknown`+`needs_review` 且不可采纳。
-- **原件锁定**：`source_document` 当前为 `private/unknown`，或 `link_state='removed'` 且当前状态不可判定时，链上记录按受保护；已知 `not_private` 的原件移除只清关联投影，不改变记录自身隐私。`removed` 不是“隐私归零”。
+- **来源三态（`no_file/resolved/unresolved`）**：`resolve_source()` 是写入、读模型与迁移共用的唯一分类。`no_file` 只在完全没有 document/candidate 指针**且当前修订显式 `source_kind='manual'`** 时成立（迁移中表现为该记录所有修订的 `fileId` 键缺失或显式 null 且无原件痕迹），它是“手工录入/无原件”，**不强制 `unknown`、不标 `needs_review`**，`source_floor='not_private'`，记录自身隐私与代理下限仍照常生效；`source_text` 必须保留。`resolved` 表示指针完整且同 subject，但仍需看原件隐私与 `link_state`（见下条）。`unresolved` 表示指针存在却解析不完整（行缺失、跨 subject、候选/run/document 不一致、互指不成立），或**指针已丢但仍有原件痕迹**（`source_kind='document'` 且无指针），一律按 `unknown` 保护、`source_locked=true`、`needs_review`，禁止采纳、release、改公开，返回 `source_unresolved`/`cross_subject_reference`。**不得只凭 `source_document_id IS NULL` 判 `no_file`**：删指针不能把悬空链洗成手工来源；反之，从未登记文件的手工记录也不能被当成 `unresolved`。
+- **`link_state` 四态（`unverified/verified/missing/removed`）**：只表示最近一次会话核对结果，不是隐私状态、不是“现在可达”的承诺，**没有 `active`**。新挂来源只允许 `unverified/verified`；`missing` 返回 `document_missing`、`removed` 返回 `document_removed`，不得自动复活或复用已移除登记。`link_state` 不改变 `privacy_state`/`epoch`/`seq`：`missing/removed` 且隐私已知 `not_private`、`ever=0` 时不因链接状态本身变成受保护（`removed` 只把对外投影置 NULL）；隐私未知或曾私密未 release 时仍按 `unknown`。`verified` 也不能解除任何保护。
+- **原件锁定**：`source_document` 当前为 `private/unknown`，或来源解析 `unresolved`，或 `link_state='removed'` 且当前状态不可判定时，链上记录按受保护；已知 `not_private` 且 `ever=0` 的原件移除只清关联投影，不改变记录自身隐私。`removed` 不是“隐私归零”。
 - **取消私密不自动公开（sticky）**：`privacy_ever_private` 只在原件进入 `private` 时置 1（含首次登记/迁移即 `private`），之后即使改回 `not_private` 也不清零；`privacy_epoch` 的初值是 0，**每次进入 `private`（含首次注册/迁移即私密）严格 +1**；已是 `private` 时重复提交不递增；改回 `not_private`/`unknown` 不回退。链上记录仍按受保护，直到本人对该 `(record, document, 当前 epoch, 当前 state_seq)` 显式 `record.releaseSourceLink`。`unknown → not_private` 不算“取消私密”，`privacy_ever_private` 不变；若从未 private（ever=0），只需当前状态锁解除即可，不需要 release；若曾 private（ever=1），仍需按当前 epoch 与 seq 逐条 release。release 只清该条的 sticky 锁，不改记录隐私、不批量、不回溯隐藏历史；释放后用户仍需单独把记录改为 `not_private`。
 - **`privacy_state_seq` 使 `unknown` 往返失效**：`source_document.privacy_state_seq` 初值 0，**任何一次实际 `privacy_state` 变化都 +1**（`not_private→unknown`、`unknown→not_private`、`private→unknown` 等；同值重复提交不增）。`source_link_release` 必须记录签发时的 `document_state_seq`，`release_active` 要求它与当前值相等。这样 `private(epoch=1) → not_private → release(seq=2) → unknown(seq=3) → not_private(seq=4)` 后，旧 release（seq=2）自动失效，必须重新逐条 release；不会出现“经过一次 unknown 就恢复旧授权”的旁路。`privacy_epoch` 仍只表示“第几次进入 private”，不承担状态序列职责；迁移时 `private → seq=1`、`not_private/unknown → seq=0`，不预置 ever/epoch。
 - **`unknown` 原件的解锁路径**：唯一合法路径是本人显式调用 `document.setPrivacy(document_id, 'not_private')`，并在 UI 确认“已核对原件确非私密”；该操作只改 `source_document.privacy_state` 并递增 `privacy_state_seq`，不清 `privacy_ever_private`、不回退 `privacy_epoch`，也不自动改任何记录/候选的隐私。`ever=0` 时当前 `unknown` 锁定随该操作解除；`ever=1` 时还需按当前 epoch 与 seq 逐条 `record.releaseSourceLink`，再逐条 `record.setPrivacy(not_private)`。缺失的 document 行不能靠“移除”或改记录隐私绕过；必须先恢复登记（同一 subject）或保持受保护。
 - **epoch/seq 失效**：原件再次进入 `private` 时 `privacy_epoch += 1`；任何状态变化都使 `privacy_state_seq += 1`，旧 release 对旧 `(epoch, seq)` 仍留在审计历史中，但对当前值 **不再生效**；再次改回 `not_private` 后需要新的逐条 release。这样“曾经私密”不会被一次 release 永久洗白，也不会被 `unknown` 往返洗白。
-- **失败关闭**：缺字段、未知枚举、链解析不完整（document 行缺失）、查询异常，一律返回 `protected`；不得用 `false` 兜底。链上引用了不存在的 `document_id`、候选/run 缺失、`candidate.document_id != run.document_id`、或 `record.origin_candidate_id` 与 `candidate.adopted_record_id` 不互指时，按 `unknown` 处理，且不能通过 release 绕过（release 要求 document 行存在、当前 `not_private`，且 `document_state_seq` 匹配）。候选/run/document 任一跨 subject 时按受保护处理，写入返回 `cross_subject_reference`。
+- **失败关闭**：缺字段、未知枚举、链解析不完整（document 行缺失）、查询异常，一律返回 `protected`；不得用 `false` 兜底。链上引用了不存在的 `document_id`、候选/run 缺失、`candidate.document_id != run.document_id`、或 `record.origin_candidate_id` 与 `candidate.adopted_record_id` 不互指时，`resolve_source='unresolved'`，按 `unknown` 处理，且不能通过 release 绕过（release 要求 document 行存在、当前 `not_private`，且 `document_state_seq` 匹配）。候选/run/document 任一跨 subject 时按受保护处理，写入返回 `cross_subject_reference`。
 - **`protected()` 是派生判定，不是隐私状态本身**：它可以让一条 `privacy_state='not_private'` 的当前记录仍按受保护处理（例如来源链上原件私密，或候选链悬空）。读模型/导出/AI 按 `protected(..., 'record')` 过滤；记录自己的隐私标签仍由本人 `record.setPrivacy` 决定。但**新挂来源时不得只依赖派生**：`record.create`/`record.attachSource`/`candidate.adopt` 必须按 §4.7 把保护写进新修订，`protected()` 只作历史/损坏/并发兜底，不得为了“让过滤一致”而偷偷改写记录隐私或历史修订。
 - 该函数是**合同级伪代码**，尚未实现、未测试；链解析（含候选/run/document 三层复合引用）的查询计划、索引与性能**尚未设计**。V-43/V-44 未执行前不能声称“来源链已隔离”。
 
@@ -418,6 +475,9 @@ output_allowed(purpose, record_id, revision_no, viewer) =
 | 修订缺 `privacy_state` 或为 NULL | 拒绝写入；读取时按 `unknown` → 受保护 |
 | `privacy_state` 值不在枚举内（旧库/损坏） | 不猜；按受保护，标 `needs_review`，写审计 |
 | 记录来源链上任一环为 private/unknown、缺失/悬空、跨 subject、候选/run/document 不一致、曾为 private 且该 `(record, document, 当前 epoch, 当前 state_seq)` 无有效 release，或已移除且状态不可判定 | 按受保护锁定；不得显示为公开。已知 `not_private` 的原件移除只清关联投影，不改变记录自身隐私。要改公开，先逐条 `releaseSourceLink`，再单独改记录隐私；链 unresolved 时 release 一律 `privacy_locked` |
+| 来源解析为 `no_file`（该记录当前与历史修订都无 document/candidate 指针**且 `source_kind='manual'`**；迁移仅该记录所有修订的 `fileId` 键缺失或为 null 且 `original`/来源无原件痕迹时映射 manual，新写入须显式声明） | 不是 `unresolved`：不因“没有文件”标 `needs_review` 或强制 `unknown`；`source_floor='not_private'`，记录自身隐私/代理下限仍生效；保留 `source_text`，显示“手工录入/无原件”。`source_document_id IS NULL` 本身不证明手工 |
+| 来源解析为 `unresolved`（指针存在但行缺失/跨 subject/候选-run-doc 不一致/互指不成立，或指针已丢但 `original`/来源显示曾有原件） | 按 `unknown` 受保护、`source_locked=true`、`needs_review`；禁止采纳/`releaseSourceLink`/`setPrivacy(not_private)`；返回 `source_unresolved`/`cross_subject_reference`；不得写成“无来源”或 `not_private` |
+| `link_state='missing'` 或 `'removed'` | 只表示核对失败/已移除，不是隐私状态；不可新挂（`document_missing`/`document_removed`）、不得自动复活；隐私已知 `not_private` 且 `ever=0` 时不因链接状态本身变成受保护，隐私未知/曾私密未 release 仍按 `unknown`；`removed` 只把对外投影置 NULL，不删行/不改历史 |
 | 历史修订自身 `not_private`，但当前记录或来源链受保护 | 历史正文按 `protected(rev,'revision')` 显示；不因当前记录/来源链回溯隐藏。只有该历史修订自身 `private/unknown` 才默认只回元数据（仅本人） |
 | 导出/AI/artifact 选中项的修订自身公开，但当前记录或来源链受保护，或反之 | 按 `output_protected(record_id, revision_no)` 视为受保护：AI 一律排除；导出/artifact 只允许本人逐条 `private_export`，并记 `included_private=1`；不得只用 current record 或只用 selected revision 单边判定 |
 | artifact 构建后其条目对应的修订/记录/来源变为受保护 | 同一事务置 `quarantined` 且 `status_data_version=新 data_version`；所有下载返回 `artifact_quarantined`；文件保留但不再可访问，删除按保留策略单独确认。不得因“构建时已同意”继续下载；不得只改版本号不隔离产物 |
@@ -430,7 +490,6 @@ output_allowed(purpose, record_id, revision_no, viewer) =
 | 迁移时隐私字段无法映射 | 落 `unknown` 并 `needs_review`；不得默认 `not_private` |
 | 候选的 `import_id`/`document_id` 缺失、`import_run` 缺失或与候选 document/subject 不一致、候选/run/document 跨 subject，或 `adopted_record_id`/`origin_candidate_id` 不互指 | 候选置 `unknown`+`needs_review`；**禁止采纳**并返回 `source_unresolved`/`cross_subject_reference`；已有记录链上出现同类悬空时按 `source_locked=true` 受保护，不得 release；不得因文本完整生成无源事实；仅本人可显式转 `source_kind='manual'`（`source_document_id=NULL`） |
 | 代理采纳候选（即使候选为 `not_private`） | 初始修订以 `unknown` 为下限，按 §4.7 `attach_state` 取候选来源与候选状态的较强者（候选 `private` 仍为 `private`），`privacy_origin='proxy_default'`；必须有覆盖 kind/日期的有效 grant；来源不可解析时直接 `source_unresolved`；不得沿用候选状态写 `not_private` |
-
 | 已有记录的 `origin_candidate_id` 悬空，或候选/run/document 任一不可解析/跨 subject/不一致 | 记录按 `protected_record` 受保护、`validation_state='needs_review'`；不返回正文/元数据给非本人；禁止 `releaseSourceLink` 与 `setPrivacy(not_private)`；需数据修复或本人显式转 manual（仅当不再依赖该候选） |
 | 新挂/新建议题关联 `private`/`unknown`/`ever_private=1` 未 release 来源 | 新修订必须按 §4.7 写 `private`/`unknown`；请求写 `not_private` → `privacy_locked`；不得先写公开再依赖读时过滤；`record.correct` 换到此类来源同样拒绝 |
 | 事实/隐私/来源/授权变化已递增 `data_version`，但受影响 artifact 未标 `quarantined`/`stale` 或 `status_data_version` 未同步 | 事务失败回滚；不得提交“版本已变、产物仍 ready”；下载仍按逐条双 scope 重判并拒绝 |
@@ -470,41 +529,46 @@ output_allowed(purpose, record_id, revision_no, viewer) =
 
 **触发**：`record.create`、`record.attachSource`、`candidate.adopt` 以及任何在新修订中写入/更换 `source_document_id` 的迁移修复，都必须先解析来源，再把保护写进新修订。`record.correct` 只能挂不会抬高保护的来源；`record.restoreRevision` 只复制目标来源，不另挂来源。
 
-**来源解析**：先解析 `source_document`（存在、同 subject、`link_state='active'`；`removed` 不可新挂，修复除外），再解析候选链（若记录/候选有 `origin_candidate_id`/`import_id`）：候选、`import_run`、`source_document` 必须都存在且同 subject，`candidate.document_id = run.document_id`，`candidate.adopted_record_id` 与 `record.origin_candidate_id` 互指。任一失败：
-- 新建议题：返回 `source_unresolved`/`cross_subject_reference`，不得落库；只有本人显式改挂 `source_kind='manual'` 且 `source_document_id=NULL` 才可另走无来源路径；
-- 候选采纳：候选置 `unknown`+`needs_review`，不可采纳；
-- 已有记录：按 §4.1 `source_locked=true` 受保护，不得 release 或降为 `not_private`。
+**来源解析（三态，唯一分类，X-03）**：调用 §4.1 `resolve_source()`，本节不另定义第二套判定。
 
-**来源下限与目标状态**：
+- `no_file`：完全没有 document/candidate 指针。运行时要走这条路径，必须显式 `source_kind='manual'`、`source_document_id=NULL`，保留用户填写的 `source_text`；迁移中只有该记录**所有修订（含历史）**的 `fileId` 键不存在**或为 null**、且 `original` 为空、`source` 不含“原件：/原件已移除”时才能落此态，并写 `source_kind='manual'`；任一历史修订保留原件痕迹的必须落 `unresolved`。`no_file` **不是** `unresolved`：不强制 `unknown`、不标 `needs_review`，`source_floor='not_private'`；记录自身 `unknown/private` 与代理下限仍生效。`source_document_id IS NULL` 单独不足以证明手工。
+- `resolved`：document 行存在、同 subject，且若有候选链则候选/run/document 全部存在、同 subject、`candidate.document_id = run.document_id`、`adopted_record_id` 与 `origin_candidate_id` 互指。`resolved` 只证明引用完整；能否新挂还看 `link_state`，保护下限还看原件隐私与 sticky。
+- `unresolved`：任何指针存在却解析不完整——document 行缺失（悬空）、跨 subject、候选/run 缺失、run 与候选 document 不一致、互指只写一侧；**或指针已丢但保留原件痕迹**（`fileId` null/键缺失而 `original` 非空或 `source` 含“原件：/原件已移除”，`source_kind='document'`）。新建议题返回 `source_unresolved`/`cross_subject_reference`，不得落库；候选置 `unknown`+`needs_review`、不可采纳；已有记录 `source_locked=true` 按 `unknown` 受保护，不得 release 或降为 `not_private`。**不得把悬空/跨 subject 当成“没有来源”改走 manual，也不得用 NULL 指针洗白；反之也不得把原本手工、从未有原件的记录标成 unresolved。**
+
+**`source_kind` 的最小语义**：至少区分 `manual`（本人明确声明无原件）与 `document`（来自/曾关联原件）。`manual` 不得携带 `source_document_id`（DB CHECK），`document` 而无指针一律按 `unresolved` 读取；两者都不是隐私状态，不能用来绕过 `source_locked` 或 `link_state` 限制。迁移按 `original`/`source` 的原件痕迹写入，不得把痕迹当结构外键，也不得丢弃 `source_text`。
+
+**挂接资格与保护（`link_state` 四态，X-02）**：
+
+| `link_state` | 含义 | 可新挂 | 保护下限 |
+|---|---|---|---|
+| `unverified` | 已登记、本次会话尚未重新核对（默认） | 允许 | 按 `privacy_state`/`privacy_ever_private`，不看链接态 |
+| `verified` | 最近一次会话核对成功，已更新 `last_verified_at` | 允许 | 同上；`verified` 不解除任何锁定、不代表跨会话可打开 |
+| `missing` | 最近一次核对失败（找不到/大小或哈希不符），登记行保留 | 拒绝：`document_missing` | 隐私可判定则按当前状态；不可判定→`unknown` |
+| `removed` | 用户显式移除登记，`removed_at/by` 有值，原文件不删 | 拒绝：`document_removed`；不得自动复活 | 已知 `not_private` 且 `ever=0` 不因移除本身受保护（只把对外投影置 NULL）；`unknown` 或 `ever=1` 未 release → `unknown` |
+
+`link_state` 不改变 `privacy_state`/`privacy_epoch`/`privacy_state_seq`，也不进入 `source_floor`；任何 `active` 值都是非法枚举，按失败关闭处理，不得猜成 `verified`。
+
+**来源下限与目标状态**：`source_floor(record_id, d)` 与 `attach_state(current, d)` 的唯一实现见 §4.1；本节只约束调用方式：
 
 ```text
-source_floor(d) =
-  d IS NULL（明确手工、无来源）                               -> 'not_private'
-  d 引用了不可解析的 document_id / 跨 subject
-    / link_state='removed' 且状态不可判定                    -> 'unknown'
-  d.privacy_state='private'                                  -> 'private'
-  d.privacy_state='unknown'                                  -> 'unknown'
-  d.privacy_ever_private=1 AND NOT release_active(record,d)  -> 'unknown'
-  d.privacy_state='not_private'                              -> 'not_private'
-
-attach_state(current, d) = strongest(current, source_floor(d))
+attach_state(current, d) = strongest(current, source_floor(record_id, d))
 # strongest: private > unknown > not_private；只升不降
 ```
 
-`unknown` 或链不可解析时 `validation_state='needs_review'`；`private`/`not_private` 不因本规则自动标待核。
+`unknown` 或链不可解析时 `validation_state='needs_review'`；`private`/`not_private` 不因本规则自动标待核。新记录（`record.create`）尚无 `record_id` 时，`resolve_source` 按请求传入的来源指针判定，`release_active` 一律 false（新记录没有历史 release），其余按 document 自身状态计算。
 
 **写入规则**：
 
-- `record.create`：初始修订按 `attach_state('not_private', d)` 写入；若请求显式写 `not_private` 而目标是 `private`/`unknown`，返回 `privacy_locked`，不得先写公开再靠读时过滤。
+- `record.create`：初始修订按 `attach_state('not_private', d)` 写入；若请求显式写 `not_private` 而目标是 `private`/`unknown`，返回 `privacy_locked`，不得先写公开再靠读时过滤。无 document 指针且无候选指针时，必须显式 `source_kind='manual'` 才可走 `no_file`；否则 `source_kind_required`，不得把“没填来源”默认成手工。
 - `candidate.adopt`：初始修订按 `attach_state(candidate.privacy_state, d)`；代理再以 `unknown` 为下限（候选 `private` 仍为 `private`），`privacy_origin='proxy_default'`；同时写 `record.origin_candidate_id=candidate_id` 与 `candidate.adopted_record_id=record_id`，两项互指。
-- `record.attachSource`：**仅 self**；新修订保留正文/日期/类型，只更新 `source_document_id`/`source_text` 与按上式计算出的保护；提高保护时 `change_kind='privacy'`，否则 `change_kind='correction'`；`privacy_origin='inherited_document'`；只能提高或保持，不能降低；请求携带 `privacy_state`/`not_private` 选择 → `privacy_changed`；必须带 `expected_data_version`/`expected_current_revision_no` 并在事务内重读。
+- `record.attachSource`：**仅 self**；document 必须存在、同 subject、`link_state ∈ {unverified,verified}`（`missing`→`document_missing`、`removed`→`document_removed`）；新修订保留正文/日期/类型，只更新 `source_document_id`/`source_text` 与按上式计算出的保护；提高保护时 `change_kind='privacy'`，否则 `change_kind='correction'`；`privacy_origin='inherited_document'`；只能提高或保持，不能降低；请求携带 `privacy_state`/`not_private` 选择 → `privacy_changed`；必须带 `expected_data_version`/`expected_current_revision_no` 并在事务内重读。
 - `record.correct`：若新来源使 `attach_state(current, d)` 高于当前，返回 `privacy_locked`，要求先由本人 `record.attachSource`；来源干净且不抬高时可随内容更正写入，但仍不得改隐私。
 - `record.restoreRevision`：复制目标来源；若目标来源按 `attach_state` 会抬高保护，返回 `privacy_locked`；不得借恢复挂新来源。
 - `document.setPrivacy` 传播导致的保护提升按 §4.6；它是对已有链的传播，不是“新挂”。
 
 **为什么不是只靠 `source_chain`**：链派生能挡住读，但存储里仍是 `not_private`，会与 INV-06 冲突，并让后续 release/setPrivacy/导出选择在“看起来公开”的状态上做判断。新挂写入保护后，`source_chain` 只处理历史遗留、损坏、并发窗口和未重新写入的旧修订，不是正常写入路径的唯一防线。
 
-**未实现**：`record.attachSource` 命令、`attach_state`/`source_floor` 函数、迁移修复与 V-46 均未实现；本版只定义合同，不声称 UI 或服务端已按此工作。
+**未实现**：`record.attachSource` 命令、`attach_state`/`source_floor`/`resolve_source` 函数、`link_state` 校验、迁移修复与 V-46/V-50/V-51 均未实现；本版只定义合同，不声称 UI 或服务端已按此工作。
 
 ## 5. 事实、修订与日期
 
@@ -513,7 +577,7 @@ attach_state(current, d) = strongest(current, source_floor(d))
 `record` 只放稳定身份：
 
 - `record_id`：随机稳定 ID（UUIDv7/ULID），创建后不复用；
-- `subject_id`、`kind`、`author_actor_id`、`on_behalf_grant_id`、`origin_candidate_id`、`legacy_ref`、`created_at`、`lifecycle_state`。
+- `subject_id`、`kind`、`author_state`、`author_actor_id`、`on_behalf_grant_id`、`origin_candidate_id`、`legacy_ref`、`created_at`、`lifecycle_state`。
 
 `record_revision` 放完整版本：
 
@@ -524,6 +588,15 @@ attach_state(current, d) = strongest(current, source_floor(d))
 - `changed_fields_json` 只用于展示“这次改了什么”（记录**实际应用**的字段），不作为回放依据；
 - `change_kind`：`initial`、`correction`、`privacy`、`import_adopt`、`migration`、`legacy_import`、`restore`；
 - 当前版本 = `MAX(revision_no)`；不另设可变的 `current_revision_no` 缓存，避免指针与历史不一致。
+
+**历史编号与当前自检（X-01）**
+
+- **规范编号**：`revision_no` 从 1 连续递增；历史 = **1..N（老→新）**，当前内容 = **N+1 = `MAX(revision_no)`**，全记录恰好 N+1 条，不跳号、不重复。`current_revision_no` 不缓存。无历史时 N=0、当前即第 1 版。
+- **历史列表**：本人视图的“变更历史”只列 1..N，按编号升序（老在上或新在上由 UI 决定，但编号方向不变）；当前内容单独显示为“当前版本（第 N+1 版）”，**不得把当前内容再追加成一条历史**。原型 `history[]` 的 push 顺序就是老→新；不得按日期重排，除非 payload 明确声明顺序不同。
+- **写入自检**：追加后必须在同一事务断言 `new.revision_no = 当前 MAX + 1`、总数 = 上一总数 + 1、无重复，且新修订的内容字段与规范化后的提交逐字段相等；失配返回 `revision_self_check_failed` 并回滚，不留下“内容已存、编号错位”的修订。
+- **读取自检**：渲染当前内容前，必须确认它来自 `revision_no = MAX` 的那一版，且该版字段与记录当前展示字段一致；失配不显示为正常当前值，按 `needs_review` 失败关闭并提示“当前版本校验失败”，**不得回退去显示历史最后一项**。
+- **迁移自检**：`history[i]`（i 从 0 起，老→新）→ `revision_no=i+1`；当前内容 → `revision_no=len(history)+1`；不得把当前写成 1、历史写成 2..N+1。迁移后断言编号连续、当前 = MAX、当前字段等于 payload 当前字段。
+- **非本人视图**：规范编号不返回；只对可见的 `not_private` 修订按可见集重排显示序号 1..M，响应与“本来只有 M 条”不可区分；不得用规范 `revision_no` 暴露空洞（T-05）。
 
 更正规则：
 
@@ -611,7 +684,16 @@ attach_state(current, d) = strongest(current, source_floor(d))
 `source_document`：
 
 - `document_id`、`subject_id`、`display_name`（原文件名，仅显示）、`byte_size`、`registered_at`、`last_verified_at`、`privacy_state`（同三态，默认 `unknown`）、`privacy_ever_private`（0/1，仅在变为 `private` 时置 1，之后不清零）、`privacy_epoch`（进入 `private` 的次数，初值 0）、`privacy_state_seq`（任何实际隐私状态变化 +1，初值 0；`unknown` 往返也递增）、`link_state`（`unverified/verified/missing/removed`）、`removed_at`、`removed_by_actor_id`；`mime` 与可选 `sha256` 只用于识别，不是原件内容。SPEC 要求“名称、大小、登记时间、私密标记”，这些字段是其超集，仍不复制、不缓存内容。`privacy_ever_private` 是“曾经私密”的粘性标记，用于兑现“取消私密不自动公开记录”；它不是第二个当前隐私状态，读取当前状态仍只看 `privacy_state`。
-- `link_state` **只表示“最近一次会话内核对的结果”**，不是“原件现在可达”的承诺：`verified` 仅意味着上次核对成功，关闭/刷新后仍可能失效；读取界面必须显示核对时间（`last_verified_at`），不得把 `verified` 渲染成“已连接”或“可打开”。
+- `link_state` **只表示“最近一次会话内核对的结果”**，不是“原件现在可达”的承诺，也**不是隐私状态**：`verified` 仅意味着上次核对成功，关闭/刷新后仍可能失效；读取界面必须显示核对时间（`last_verified_at`），不得把 `verified` 渲染成“已连接”或“可打开”。四态含义、可否新挂与保护影响如下（**没有 `active`**）：
+
+| `link_state` | 含义 | 可新挂 | 对保护的影响 | 界面/投影 |
+|---|---|---|---|---|
+| `unverified` | 已登记，本次会话尚未重新选择核对（默认） | 允许 | 不改变隐私；保护只看 `privacy_state`/`ever`/`epoch`/`seq` | “尚未核对” |
+| `verified` | 最近一次会话核对成功，`last_verified_at` 已更新 | 允许 | 不解除任何锁定，也不代表跨会话可打开 | “上次核对：<时间>” |
+| `missing` | 最近一次核对失败（文件找不到、大小/哈希不符），登记行保留 | 拒绝：`document_missing` | 隐私可判定则按当前状态；不可判定→`unknown` | “原件未找到” |
+| `removed` | 用户显式移除登记（`removed_at/by`），原文件不删、行不物理删 | 拒绝：`document_removed`，不得自动复活 | 已知 `not_private` 且 `ever=0` 不因移除本身受保护；`unknown`/曾私密未 release 仍按 `unknown` | “原件已移除/无原件”，对外来源投影 NULL |
+
+- 读取/写入只接受上述四个值；任何 `active` 值都是非法枚举，按 §4.1 失败关闭，不得猜成 `verified`。`missing`/`removed` 不阻止已有关联的读模型按隐私状态解释，但**不得**作为新挂来源、也不得因“链接失效”自动把记录改成 `not_private` 或 `private`。
 - `sha256` 可为 NULL：仅在用户显式同意时于内存读一次计算，用于再次选择文件时核对；**不缓存内容**，不计算也不阻塞登记。若用户拒绝读取，保持 NULL，重新打开时只核对名称/大小并在界面标明“未校验哈希”。
 - 不存 `relative_path`、绝对路径、书签或可持久化的文件句柄。关闭/刷新后，工作台**无法自行重新打开原件**；重新打开只能由用户再次选择文件，并核对其名称/大小（有 `sha256` 时核对哈希）。这不是缺陷，是“不接管文件”的代价；界面必须如实写“原件在原位置，重新打开需你再次选择”。
 - **重开只靠会话文件句柄**：用户在同一会话内重新选择文件后，运行时可在内存中保留一个 `FileSystemFileHandle`（或等价句柄）用于本次预览/再次读取；该句柄**不写库、不写 localStorage/IndexedDB、不进导出**，页面刷新或关闭即失效。句柄存在不等于隐私状态可信，读取前仍按 §4.1 判定。
@@ -641,7 +723,7 @@ attach_state(current, d) = strongest(current, source_floor(d))
 
 这些字段是**显式列**，不是 `details_json` 里的可选键。`import_candidate.document_id` 是创建候选时冻结的来源快照：即使以后 `import_run.document_id` 被修复/迁移改变，也必须先通过迁移校验并同步候选，否则按 `source_unresolved` 失败关闭，不得静默取 run 的值继续。
 
-- `import_run`：`import_id`、`subject_id`、`document_id`、`method`（`local_mock/local_ocr/cloud`）、`service_name`、`consent_id`、`status`、`parser_version`、`started_at`、`finished_at`、`error_code`。云解析 run 必须绑定 `consent_event`；没有 consent 不得开始。
+- `import_run`：`import_id`、`subject_id`、`document_id`、`method`（`local_mock/local_ocr/cloud`）、`service_name`、`consent_id`、`status`、`parser_version`、`started_at`、`finished_at`、`error_code`。云解析 run 必须绑定 `consent_event`，且**失败关闭顺序固定**：`import.start` 先校验 `cloud_parse` consent（类型匹配、self 签发、未撤回、document/subject 与本次一致），通过后才允许创建 run、上传字节、创建候选；缺失或无效立即 `consent_required`，**零副作用**（无 run 行、无上传、无候选、无 `tmp/` 正文）。不得“先建 run 再等同意”，也不得在 run 失败后保留半条记录。`method='cloud'` 时 `import_run.consent_id` 必须非空（DB CHECK），`local_mock/local_ocr` 可为 NULL。
 - **不另存整份解析全文**：解析结果只以候选行存在（候选本身即“可确认的文本”，`proposed_text` 按候选生命周期持久化）；除候选外不另存整份解析文本/OCR 全文，`manifests/import/<id>.json` 只存 run 元数据、文件元信息、计数与状态，**不存正文、不存候选文本、不存原件路径**。若某解析器必须落中间产物，只能写会话级 `tmp/`（§8.1），退出即清，且不得被备份/导出/日志采集。
 - `import_candidate`：`candidate_id`、`subject_id`、`import_id`、`document_id`、`ordinal`、`proposed_kind`、`proposed_date/precision/raw`、`proposed_text`、`details_json`、`state`（`pending/adopted/discarded/withdrawn`）、`privacy_state`、`privacy_origin`、`validation_state`、`adoption_state`（`resolved/unknown`）、`adopted_record_id`、`decided_at`、`content_purged_at`。**运行时候选创建即 `adoption_state='resolved'`、`state='pending'`、`adopted_record_id=NULL`（明确“尚未采纳”，不是关系不明）；只有迁移无法判定旧采纳关系时才写 `unknown`。**
 - **候选隐私在创建时派生，不是“跟着记录当前值”**：
@@ -654,6 +736,7 @@ attach_state(current, d) = strongest(current, source_floor(d))
   - 只有本人可以显式选择“转为手工记录”：创建 `source_kind='manual'`、`source_document_id=NULL` 的新记录，并在界面写明“不再关联原件/解析 run”；不得由代理静默转换，也不得把原候选直接改成 `not_private` 绕过。
 - 原件隐私变化时，`pending` 候选按 §4.6 传播：转 `private/unknown` 时取“原状态与新状态的较强者”，转回 `not_private` 时**不自动解除**，保持原状态。候选自己的 `privacy_state` 不因采纳而被“洗白”。
 - 采纳：候选 `adoption_state` 必须为 `resolved`；若为 `unknown`（迁移未判定），返回 `adoption_unresolved`，先由本人/迁移报告人工映射，不得按文本猜。在单个事务中创建 `record` + 初始 `record_revision`（`change_kind='import_adopt'`），写 `record.origin_candidate_id=candidate_id`，把候选置 `adopted` 并写 `adopted_record_id=record_id`（两列互指必须同事务校验）；同一 `request_id` 重放返回同一记录。初始修订按 §4.7 `attach_state(candidate.privacy_state, d)`，且**不得低于**候选与来源：候选 `private/unknown` → 记录至少同态；候选 `not_private` 但原件的当前状态/粘性使其受保护时，强制写 `unknown` + `validation_state='needs_review'`，不得写 `not_private`。**只要调用者是代理，初始修订以 `unknown` 为下限（候选 `private` 仍为 `private`），`privacy_origin='proxy_default'`；必须有有效 grant 覆盖 `kind` 与日期（未知日期需 `allow_unknown_date`）；候选/run/document 任一无法解析、跨 subject 或 document 不一致时直接 `source_unresolved`/`cross_subject_reference`，代理不得采纳。** 候选文本只是来源，不是第二份事实。
+- **采纳后的作者状态（X-05）**：`candidate.adopt` 生成的 `record` 必须显式写作者：self 调用 → `author_state='known'`、`author_actor_id=subject.self_actor_id`；proxy 调用 → `known` + proxy actor + 覆盖该记录的 `on_behalf_grant_id`；迁移/旧库导入且 payload 没有作者证据 → `author_state='unknown'`、`author_actor_id=NULL`、`on_behalf_grant_id=NULL`，不得默认填成本人或 `system`。候选本身不存作者，不能拿“候选由谁导入”推断记录作者。
 - 丢弃：`state='discarded'`，清空候选正文与 `details_json`，保留 tombstone 供审计；不得在页面、缓存、日志留正文。不影响已采纳记录。
 - **撤回解析 run**（`import.withdraw`）：停止该 run、把 `pending` 候选置 `withdrawn` 并清正文、删除会话 `tmp/` 下该 run 的任何中间产物；`manifests` 本来就只有元数据，改为记录 `withdrawn_at` 与计数。**已采纳记录及其 `source_document_id`、手工 `source_text` 一律保留**，不按“移除原件”处理，也不改历史。审计只记 run/候选的 ID、状态、时间与计数。撤回后若用户还要删来源，必须另走“移除原件”并再次确认。
 - 云解析的留存/删除：只记录“本地已知”的事实；服务方侧是否删除未核实，界面和审计都不得写“已从服务器删除”。产品侧不缓存原始文件；整份解析文本默认不另存（候选 `proposed_text` 除外），撤回时清会话临时产物。
@@ -801,11 +884,11 @@ actor 1──* command_receipt
 | `grant_scope` | `scope_id` | `grant_id`、`record_kind`、`period_from`、`period_to`、`allow_unknown_date` | 时间范围可为空（不限）；同一 grant 内重复 scope 由应用拒绝；不用含可空列的复合主键 |
 | `grant_read_entry` | `(grant_id, record_id)` | — | 仅 `read_mode='explicit'` 使用；受保护记录不进投影，勾选也不可见 |
 | `consent_event` | `consent_id` | `subject_id`、`actor_id`、`type`、`target_type/id`、`scope_hash`、`granted_at`、`revoked_at`、`text_version` | 出站动作必须引用；不可覆盖历史；`ai_context` 不得包含受保护内容 |
-| `source_document` | `document_id` | `subject_id`、`display_name`、`mime`、`byte_size`、`sha256?`、`privacy_state`、`privacy_origin`、`privacy_ever_private`、`privacy_epoch`、`privacy_state_seq`、`validation_state`、`link_state`、`registered_at`、`last_verified_at`、`removed_at/by` | **无路径列、无可持久化句柄列**；原件不复制；`privacy_ever_private` 只置位不清零（sticky）；`privacy_epoch` 初值 0，每次**进入** `private` 严格 +1（注册即私密从 0→1，不是“从 1 开始”）；`privacy_state_seq` 初值 0，任何实际状态变化 +1（同值不增），`unknown` 往返也递增；`unknown` 不预置 ever/epoch；`link_state` 只表示最近会话核对；`removed` 不物理删行、不改历史；缺失/非法旧标记必须落 `unknown` + `needs_review`，不得默认 `not_private`；`UNIQUE(document_id, subject_id)` 供 `import_run`/`import_candidate` 复合引用 |
+| `source_document` | `document_id` | `subject_id`、`display_name`、`mime`、`byte_size`、`sha256?`、`privacy_state`、`privacy_origin`、`privacy_ever_private`、`privacy_epoch`、`privacy_state_seq`、`validation_state`、`link_state`、`registered_at`、`last_verified_at`、`removed_at/by` | **无路径列、无可持久化句柄列**；原件不复制；`privacy_ever_private` 只置位不清零（sticky）；`privacy_epoch` 初值 0，每次**进入** `private` 严格 +1（注册即私密从 0→1，不是“从 1 开始”）；`privacy_state_seq` 初值 0，任何实际状态变化 +1（同值不增），`unknown` 往返也递增；`unknown` 不预置 ever/epoch；`link_state ∈ {unverified,verified,missing,removed}`（无 `active`），只表示最近会话核对、不是隐私状态、不改变 `privacy_state`/`epoch`/`seq`；新挂只允许 `unverified/verified`，`missing/removed` 不物理删行、不改历史、不自动复活；缺失/非法旧标记必须落 `unknown` + `needs_review`，不得默认 `not_private`；`UNIQUE(document_id, subject_id)` 供 `import_run`/`import_candidate` 复合引用 |
 | `source_link_release` | `release_id` | `subject_id`、`record_id`、`document_id`、`privacy_epoch`、`document_state_seq`、`released_by_actor_id`、`released_at`、`request_id` | `UNIQUE(record_id, document_id, privacy_epoch, document_state_seq)`；只增不改；只由 self 通过 `record.releaseSourceLink` 写入；只清该条 sticky，不改记录隐私；document 当前必须 `not_private` 且 `document_state_seq = source_document.privacy_state_seq`；`unknown` 原件不得直接 release，须先本人 `document.setPrivacy(not_private)`；旧 epoch 或旧 state_seq 的 release 保留但失效，`unknown` 往返后必须重新 release |
-| `import_run` | `import_id` | `subject_id`、`document_id`、`method`、`consent_id`、`status`、`parser_version` | 云解析必须有 consent；撤回不动已采纳记录；`UNIQUE(import_id, subject_id)`；`(document_id, subject_id)` → `source_document`（复合外键）；`subject_id`/`document_id` 均 NOT NULL |
+| `import_run` | `import_id` | `subject_id`、`document_id`、`method`、`consent_id`、`status`、`parser_version` | 云解析必须有 consent；`method='cloud'` 时 `consent_id` NOT NULL（CHECK），无 consent 不建 run、不上传、不建候选；撤回不动已采纳记录；`UNIQUE(import_id, subject_id)`；`(document_id, subject_id)` → `source_document`（复合外键）；`subject_id`/`document_id` 均 NOT NULL |
 | `import_candidate` | `candidate_id` | `subject_id`、`import_id`、`document_id`、`proposed_*`、`state`、`privacy_state`、`privacy_origin`、`validation_state`、`adoption_state`、`adopted_record_id`、`content_purged_at` | `pending` 不进事实读模型；隐私按 §6.2 派生，不从记录当前值继承；采纳不得降低；撤回只清正文；`UNIQUE(candidate_id, subject_id)`；`(import_id, subject_id)` → `import_run`、`(document_id, subject_id)` → `source_document`（均复合外键）；`candidate.subject_id = run.subject_id`、`candidate.document_id = run.document_id`；`adopted_record_id` 必须与 `record.origin_candidate_id` 互指；运行时创建即 `adoption_state='resolved'`（`state='pending'`、`adopted_record_id=NULL`）；`adoption_state='unknown'` 时 `state` 只能 `pending` 且 `adopted_record_id` 必须 NULL，人工映射前不可采纳；`adoption_state='resolved'` 才可按 state 采纳/丢弃 |
-| `record` | `record_id` | `subject_id`、`kind`、`author_actor_id`、`on_behalf_grant_id`、`origin_candidate_id`、`legacy_ref`、`lifecycle_state` | subject 不可改；proxy 必须有 grant；proxy 不得写 `not_private`；`UNIQUE(record_id, subject_id)`；`origin_candidate_id` 与候选 `adopted_record_id` 必须互指且同 subject；悬空/不一致按 §4.1 受保护 |
+| `record` | `record_id` | `subject_id`、`kind`、`author_state`、`author_actor_id`、`on_behalf_grant_id`、`origin_candidate_id`、`legacy_ref`、`lifecycle_state` | subject 不可改；`author_state ∈ {known,unknown}`；`known` 时 `author_actor_id` 必须同 subject、proxy 作者必须有覆盖该记录的 `on_behalf_grant_id`，`unknown` 时两列均为 NULL；不得默认写本人/`system`；proxy 必须有 grant；proxy 不得写 `not_private`；`UNIQUE(record_id, subject_id)`；`origin_candidate_id` 与候选 `adopted_record_id` 必须互指且同 subject；悬空/不一致按 §4.1 受保护 |
 | `record_revision` | `revision_id` | `record_id`、`revision_no`、`base_revision_no`、`merged_from_revision_no`、`restored_from_revision_id`、`occurred_*`、`end_*`、`review_*`、`report_*`、`body_system`、`text`、`source_*`、`privacy_*`、`metric_*`、`details_json`、`validation_state`、`change_kind`、`created_at/by` | `(record_id, revision_no)` 唯一；只增不改；隐私无默认值；源指针不随移除改写；`restored_from_revision_id` 只在 `change_kind='restore'` 时非空，且必须指向同一 `record_id` |
 | `record_kind` | `kind` | `label`、`detail_schema_version`、`status` | 新 kind 先注册 |
 | `metric_category` | `category_id` | `name`、`display_order`、`version` | 组顺序单一源 |
@@ -823,7 +906,7 @@ actor 1──* command_receipt
 
 - 其余全部表（`workspace`、`subject`、`actor`、`access_grant`、`grant_scope`、`grant_read_entry`、`consent_event`、`source_document`、`source_link_release`、`import_run`、`import_candidate`、`record`、`artifact`、`artifact_item`、`audit_event`、`command_receipt`、`schema_migration`、`ui_preference`）的 DDL；
 - 全部索引与唯一约束（除示例中的 `UNIQUE`）、部分索引、排序规则；
-- `record` 的 `kind`/`subject`/`author` 外键与 `lifecycle_state` 检查、`source_document` 的 `link_state` 检查、`consent_event` 的 `type` 检查；
+- `record` 的 `kind`/`subject`/`author` 外键、`author_state` 与 `author_actor_id`/`on_behalf_grant_id` 的一致性、`lifecycle_state` 检查、`source_document` 的 `link_state` 四态检查、`source_kind` 与 `source_document_id` 的一致性（`manual` 不得有指针）、`consent_event` 的 `type` 检查；
 - 触发器只示例“修订只增”，其余不变式（如“当前修订必须是 `MAX(revision_no)`”的跨行一致性）尚无触发器；
 - 建库器需设置的 PRAGMA（`foreign_keys=ON` 是**每连接**执行，不属于建表语句）；
 - 随包 JSON Schema（`details_json` 的字段合同）、应用层交叉校验（如代理授权、隐私传播、幂等载荷）和迁移脚本。
@@ -994,20 +1077,20 @@ END;
 
 | 命令 | 允许调用者 | 关键校验 | 失败码 |
 |---|---|---|---|
-| `record.create` | self；proxy（需 grant 覆盖 kind+日期；未知日期需 `allow_unknown_date`）；demo 仅 demo subject | subject/kind/author；代记 grant 覆盖 kind+日期；至少一个内容字段；隐私非空且不是默认值；**初始隐私按 §4.7 `attach_state('not_private', d)` 写入；显式写 `not_private` 而来源受保护 → `privacy_locked`；代记新建以 `unknown` 为下限，不得选择或写入 `not_private`**；来源缺失/跨 subject/候选链不一致 → `source_unresolved`/`cross_subject_reference`；`author_actor_id`/`on_behalf_grant_id` 必须同 subject | `not_authenticated`、`not_authorized`、`grant_scope_missing`、`invalid_date`、`invalid_kind`、`privacy_invalid`、`privacy_locked`、`source_unresolved`、`cross_subject_reference`、`demo_violation` |
+| `record.create` | self；proxy（需 grant 覆盖 kind+日期；未知日期需 `allow_unknown_date`）；demo 仅 demo subject | subject/kind/author_state；代记 grant 覆盖 kind+日期；至少一个内容字段；隐私非空且不是默认值；**初始隐私按 §4.7 `attach_state('not_private', d)` 写入；显式写 `not_private` 而来源受保护 → `privacy_locked`；代记新建以 `unknown` 为下限，不得选择或写入 `not_private`**；来源缺失/跨 subject/候选链不一致 → `source_unresolved`/`cross_subject_reference`；作者字段按 `author_state` 一致性校验：`known` 时 `author_actor_id` 同 subject、proxy 作者必须有覆盖 grant，`unknown` 时两列均 NULL，不得默认本人；无 document/候选指针时必须显式 `source_kind='manual'`，否则 `source_kind_required` | `not_authenticated`、`not_authorized`、`grant_scope_missing`、`invalid_date`、`invalid_kind`、`privacy_invalid`、`privacy_locked`、`source_unresolved`、`cross_subject_reference`、`source_kind_required`、`demo_violation` |
 | `record.correct` | self；proxy（需 grant 覆盖 kind+日期且记录当前可见）；demo 仅 demo subject | `BEGIN IMMEDIATE` 内重读当前修订；`base_revision_no` = 当前修订号（或可合并的祖先）；仅允许本人/有效代记；**只接受内容字段，不得携带 `privacy_state`/`privacy_origin`；携带即 `privacy_changed`**；当前修订隐私与基修订不同也 `privacy_changed`；变更字段非空；按 §5.1 做三路合并；**不写隐私、不因 `source_locked=false` 获得写隐私能力**；更换来源时按 §4.7 重算，若抬高保护返回 `privacy_locked`；来源缺失/跨 subject/候选链不一致返回 `source_unresolved`/`cross_subject_reference`；代理操作受保护记录一律 `privacy_locked` | `not_authenticated`、`not_authorized`、`grant_scope_missing`、`stale_revision`、`stale_data_version`、`revision_conflict`、`privacy_changed`、`privacy_locked`、`source_unresolved`、`cross_subject_reference`、`no_change`、`demo_violation` |
 | `record.setPrivacy` | **仅 self** | **只有 subject self；这是唯一可降低/由用户选择记录隐私的命令，§4.7 `record.attachSource` 只能提高且不能代替它**；`expected_data_version` 匹配；改 `not_private` 前只重查 `source_locked(record_id)`（来源链当前状态 + 候选/run/document 可解析 + `privacy_ever_private` 未解除的当前 `(epoch, state_seq)` sticky）；链上有受保护/不可判定/跨 subject/悬空环节则拒绝；已有 release 只清 sticky，不等于记录已公开；不可用应用级“系统”身份绕过；代记/`system`/demo 无此命令；`record.correct`/`restoreRevision` 不得代行 | `not_authorized`、`not_authenticated`、`stale_data_version`、`privacy_locked`、`source_unresolved`、`cross_subject_reference`、`already_set` |
 | `record.releaseSourceLink` | **仅 self** | record 属于当前 subject；document 在该 record 的 `source_chain`；document 当前 `not_private`、`privacy_ever_private=1`、`privacy_epoch>=1`；写入 `document_state_seq` 必须等于 document 当前 `privacy_state_seq`；同 `(record, document, 当前 epoch, 当前 state_seq)` 尚无有效 release；`expected_data_version` 匹配；**`candidate_source_ok(record_id)` 必须为真且 document 同 subject，否则 `source_unresolved`/`cross_subject_reference`**。只插入 release、写审计、`data_version+1`；**不改记录隐私、不改 document、不批量**。若链上还有其他锁定源/悬空环节，返回 `source_locked=true` | `not_authorized`、`record_not_found`、`document_not_linked`、`privacy_locked`（document 当前 private/unknown、seq 不匹配或链 unresolved）、`source_unresolved`、`cross_subject_reference`、`not_locked`（从未 private，无需解除）、`already_released`、`stale_data_version` |
-| `record.attachSource` | **仅 self** | `expected_data_version` 与 `expected_current_revision_no` 匹配；事务内重读 record/当前修订/document；document 必须存在、同 subject、`link_state='active'`；按 §4.7 `source_floor`/`attach_state` 计算新保护，**只能提高或保持，不得降低**；请求携带 `privacy_state`/`not_private` 选择 → `privacy_changed`；新修订保留正文/日期/类型，写 `source_document_id`/`source_text` 与保护；提高时 `change_kind='privacy'`、`privacy_origin='inherited_document'`，否则 `correction`；候选链悬空/跨 subject/不一致 → `source_unresolved`/`cross_subject_reference`；不删除、不改写历史 | `not_authorized`、`stale_data_version`、`stale_revision`、`privacy_changed`、`source_unresolved`、`cross_subject_reference`、`document_not_found`、`document_removed`、`no_change` |
+| `record.attachSource` | **仅 self** | `expected_data_version` 与 `expected_current_revision_no` 匹配；事务内重读 record/当前修订/document；document 必须存在、同 subject、`link_state ∈ ('unverified','verified')`；`missing`→`document_missing`、`removed`→`document_removed`，不得自动复活；按 §4.7 `source_floor`/`attach_state` 计算新保护，**只能提高或保持，不得降低**；请求携带 `privacy_state`/`not_private` 选择 → `privacy_changed`；新修订保留正文/日期/类型，写 `source_document_id`/`source_text` 与保护；提高时 `change_kind='privacy'`、`privacy_origin='inherited_document'`，否则 `correction`；候选链悬空/跨 subject/不一致 → `source_unresolved`/`cross_subject_reference`；不删除、不改写历史 | `not_authorized`、`stale_data_version`、`stale_revision`、`privacy_changed`、`source_unresolved`、`cross_subject_reference`、`document_not_found`、`document_missing`、`document_removed`、`no_change` |
 | `document.register` | **仅 self** | 用户显式选择；文件句柄仅在本次会话可用；只登记元数据、不复制；写入 `registered_at` 与首次核对 `last_verified_at`；用户确认展示名与隐私。登记即 `private`：`privacy_ever_private=1`、`privacy_epoch` 从 0 递增到 1、`privacy_state_seq=1`；登记为 `not_private/unknown`：`privacy_ever_private=0`、`privacy_epoch=0`、`privacy_state_seq=0`，不得预置 sticky | `not_authorized`、`document_missing`、`document_unreadable`、`source_handle_unavailable`、`duplicate_document` |
 | `document.setPrivacy` | **仅 self** | `expected_data_version` 匹配；置 `private` 时同时置 `privacy_ever_private=1`，且原状态不是 `private` 时 `privacy_epoch += 1`（已是 private 不重复递增；初值 0，首次私密从 0→1）；改回 `not_private`/`unknown` **不清零 ever、不回退 epoch**；**任何实际状态变化 `privacy_state_seq += 1`，同值重复提交不增**；旧 epoch/旧 seq 的 release 保留但不再生效；**`unknown → not_private` 是解除 `unknown` 当前锁定的唯一路径**，必须由本人显式确认“原件确非私密”；ever=0 时不需要 release，ever=1 时仍需按当前 `(epoch, state_seq)` 逐条 release；按 §4.6 来源链（当前/历史修订、采纳候选 run）在同一事务内处理：**转 `private/unknown` 时只对当前 `not_private` 记录追加隐私修订（新修订状态必须等于 document 新状态），已受保护记录不改写、不降级；候选取原状态与新状态较强者**，转 `not_private` 时**不追加、不自动解除记录锁定**；随后更新 `data_version`、移除选择并把含受影响记录的产物标 `quarantined`；回执只写计数 | `not_authorized`、`stale_data_version`、`propagation_failed` |
 | `document.remove` | **仅 self** | 只移除登记/链接（`link_state='removed'`），不删原件、不删已采纳记录与历史；不改 `privacy_state`、不清 `privacy_ever_private`、不回退 `privacy_epoch`/`privacy_state_seq`；`source_locked` 仍按原状态计算。移除后若原件当前 `not_private` 且曾 private，仍可按 `record.releaseSourceLink` 逐条解除；当前 `private/unknown` 时 release 被拒，须先显式改 document 状态 | `not_authorized`、`document_not_found` |
-| `import.start` | **仅 self** | 原件已登记、未 removed，且本次会话已由用户重新选择并提供**会话文件句柄**（无句柄即不可解析，不存在 `present` 这种持久状态）；云解析另有 `cloud_parse` consent；只由 self 触发，proxy 不得代触发解析 | `not_authorized`、`consent_required`、`document_missing`、`document_removed`、`source_handle_unavailable` |
+| `import.start` | **仅 self** | 原件已登记、未 removed，且本次会话已由用户重新选择并提供**会话文件句柄**（无句柄即不可解析，不存在 `present` 这种持久状态）；**云解析先校验 `cloud_parse` consent（self、未撤回、type 匹配、document/subject 一致），通过后才允许建 run/上传/建候选；缺失即 `consent_required` 且零副作用，不得先建 run 再补同意**；只由 self 触发，proxy 不得代触发解析 | `not_authorized`、`consent_required`、`document_missing`、`document_removed`、`source_handle_unavailable` |
 | `import.withdraw` | **仅 self** | 撤回分析：清候选正文与会话 `tmp/` 中间产物；`manifests` 只记元数据与 `withdrawn_at`；**已采纳记录与来源指针保留**；同 `request_id` 重放返回首次结果 | `not_authorized`、`import_not_found`、`already_withdrawn`（新请求；重放不算） |
-| `candidate.adopt` | self；proxy（仅来源可解析且 grant 覆盖时，强制 `unknown` 下限）；demo 仅 demo subject | candidate `pending` 且 `adoption_state='resolved'`（`unknown` 返回 `adoption_unresolved`，人工映射前不得采纳）；candidate/run/document 的 `subject_id` 必须与会话 subject 一致、`candidate.document_id = run.document_id` 且来源链完整可解析，否则 `source_unresolved`/`cross_subject_reference`（见 §6.2）；候选受保护时仅 self；按 §4.7 `attach_state(candidate.privacy_state, d)` 写初始修订，不得降低/洗白；同时置 `candidate.state='adopted'`、写 `record.origin_candidate_id` 与 `candidate.adopted_record_id` 并校验互指；候选 `not_private` 但原件当前状态或粘性使来源链受保护时，强制 `unknown` + `validation_state='needs_review'`；**代理采纳以 `unknown` 为下限（候选 `private` 仍为 `private`）+ `privacy_origin='proxy_default'`，并要求有效 grant 覆盖 kind+日期（未知日期需 `allow_unknown_date`）**；目标 kind 合法；来源指针写当前 revision | `not_authenticated`、`not_authorized`、`grant_scope_missing`、`candidate_not_pending`、`adoption_unresolved`、`source_unresolved`、`cross_subject_reference`、`privacy_locked`、`invalid_kind`、`demo_violation` |
+| `candidate.adopt` | self；proxy（仅来源可解析且 grant 覆盖时，强制 `unknown` 下限）；demo 仅 demo subject | candidate `pending` 且 `adoption_state='resolved'`（`unknown` 返回 `adoption_unresolved`，人工映射前不得采纳）；candidate/run/document 的 `subject_id` 必须与会话 subject 一致、`candidate.document_id = run.document_id` 且来源链完整可解析，否则 `source_unresolved`/`cross_subject_reference`（见 §6.2）；候选受保护时仅 self；按 §4.7 `attach_state(candidate.privacy_state, d)` 写初始修订，不得降低/洗白；同时置 `candidate.state='adopted'`、写 `record.origin_candidate_id` 与 `candidate.adopted_record_id` 并校验互指；候选 `not_private` 但原件当前状态或粘性使来源链受保护时，强制 `unknown` + `validation_state='needs_review'`；**代理采纳以 `unknown` 为下限（候选 `private` 仍为 `private`）+ `privacy_origin='proxy_default'`，并要求有效 grant 覆盖 kind+日期（未知日期需 `allow_unknown_date`）**；目标 kind 合法；record 作者按 §3.2/§6.2：self→`known`+self、proxy→`known`+proxy+`on_behalf_grant_id`、迁移/无证据→`unknown`（两列 NULL），不得默认本人；新修订号 = 当前 `MAX+1` 并做 §5.1 编号/内容自检；来源指针写当前 revision | `not_authenticated`、`not_authorized`、`grant_scope_missing`、`candidate_not_pending`、`adoption_unresolved`、`source_unresolved`、`cross_subject_reference`、`privacy_locked`、`invalid_kind`、`demo_violation` |
 | `candidate.discard` | **仅 self** | `pending`；候选受保护时仅 self；清空正文 | `not_authorized`、`candidate_not_pending` |
 | `grant.create/revoke` | **仅 self** | 只有 self actor；grantee 是 proxy；不得授予私密；不得改变记录隐私；grant 必须记录 scope（kind/日期范围）与有效期 | `not_authorized`、`invalid_grantee`、`privacy_escalation` |
-| `record.restoreRevision` | **仅 self** | `BEGIN IMMEDIATE` 内重读 record/current/target 与 `data_version`；`expected_data_version`/`expected_current_revision_no` 任一不匹配 → `stale_data_version`/`stale_revision`；目标修订属于同 record 且同 subject；以**新修订**写入（`change_kind='restore'`，`restored_from_revision_id`=目标）；不删历史；**只恢复内容，不读取/写入请求里的隐私字段；新修订隐私取事务内当前记录隐私，不得由恢复改变**；请求携带 `privacy_state`/`privacy_origin` 一律 `privacy_changed`；目标修订保护等级高于当前记录，或按 §4.7 目标来源会抬高保护 → `privacy_locked`；复制目标 `source_document_id`/`source_text`，不得清空来源；代理一律 `not_authorized` 且拒绝不泄露目标存在；不因恢复改变 `privacy_ever_private`/`privacy_epoch`；同事务递增 `data_version` 并把受影响 artifact 标 `stale`/`status_data_version` | `not_authorized`、`revision_not_found`、`privacy_changed`、`privacy_locked`、`stale_revision`、`stale_data_version` |
+| `record.restoreRevision` | **仅 self** | `BEGIN IMMEDIATE` 内重读 record/current/target 与 `data_version`；`expected_data_version`/`expected_current_revision_no` 任一不匹配 → `stale_data_version`/`stale_revision`；目标修订属于同 record 且同 subject；以**新修订**写入（`change_kind='restore'`，`restored_from_revision_id`=目标，`revision_no`=事务内当前 `MAX+1`）；不删历史；**只恢复内容，不读取/写入请求里的隐私字段；新修订隐私取事务内当前记录隐私，不得由恢复改变**；请求携带 `privacy_state`/`privacy_origin` 一律 `privacy_changed`；目标修订保护等级高于当前记录，或按 §4.7 目标来源会抬高保护 → `privacy_locked`；复制目标 `source_document_id`/`source_text`，不得清空来源；代理一律 `not_authorized` 且拒绝不泄露目标存在；不因恢复改变 `privacy_ever_private`/`privacy_epoch`；同事务递增 `data_version` 并把受影响 artifact 标 `stale`/`status_data_version` | `not_authorized`、`revision_not_found`、`privacy_changed`、`privacy_locked`、`stale_revision`、`stale_data_version` |
 | `artifact.build` | self；proxy（仅选择集全部为可见 `not_private` 时） | 选择集非空；每条调用 `output_protected(record_id, revision_no)`（选中修订 + current record 双 scope）；**每条受保护项各自必须有匹配 `(record_id, revision_no)` 的 `private_export`，缺一条即整批 `consent_required`，一条同意不得覆盖多个条目**；proxy 不能签署 `private_export`，含受保护条目的构建只能 self；`artifact_item.consent_id` 记该条目的同意；`artifact_item.checked_data_version` 与 `artifact.status_data_version` 写当前 `data_version`；写临时文件成功；回执只记产物 ID 与计数，不记受保护记录 ID | `not_authorized`、`empty_selection`、`consent_required`、`privacy_locked`、`stale_data_version`、`write_failed` |
 | `artifact.download` | self；proxy（仅 `contains_private=0` 且逐条可见时） | 每次下载重新调用 `output_protected` 逐条校验并重算 `contains_private`；`status='quarantined'` 一律拒绝；**`status_data_version`/`checked_data_version` 落后或与当前链不一致时同样失败关闭，不得以旧状态放行**；**每个 `included_private=1` 条目各需一条新的、匹配该条 `(record_id, revision_no)` 的 `private_export`，一条同意不得覆盖多条**；proxy 不得下载含私密条目或需私密同意的产物；不返回“有 N 个产物”的计数 | `not_authorized`、`artifact_quarantined`、`artifact_stale`、`consent_required`、`privacy_locked`、`artifact_not_found` |
 
@@ -1142,9 +1225,9 @@ END;
 | `reviewDate` | `review_date/precision/raw` | 医嘱专用；缺失即未知 |
 | `reportDate`/`reportDatePrecision` | `report_date/precision/raw` | 检查/检验专用；缺失即未知 |
 | `private` 布尔 | `privacy_state` | `true→private`、`false→not_private`、缺失→`unknown` |
-| `history[]` | `record_revision` | 对象按已知字段映射；未知键放 `details_json.legacy` 并标 `needs_review`，单条超 8 KiB 拒绝迁移转人工；字符串不解析成结构，存为 `legacy_import` 修订、隐私 `unknown`、正文原样保留 |
+| `history[]` | `record_revision` | 对象按已知字段映射；未知键放 `details_json.legacy` 并标 `needs_review`，单条超 8 KiB 拒绝迁移转人工；字符串不解析成结构，存为 `legacy_import` 修订、隐私 `unknown`、正文原样保留。**顺序按数组原序（老→新）：`history[i]` → `revision_no=i+1`；当前内容 → `revision_no=len(history)+1`。不得把当前写成 1、历史写成 2..N+1，也不得按日期重排。** |
 | `source` | `source_text` + `source_kind` | 不把“原件：文件名”当结构化外键；有 `fileId` 才建 link。**手工来源必须保留**：迁移不得因“无法解析成文件”而丢弃或覆盖 `source` 文本；无法识别时原样进 `source_text` 并标 `needs_review` |
-| `fileId` | `source_document_id` | 必须存在且属于同一 subject；否则置空并标“原件缺失” |
+| `fileId` | `source_document_id` | **该记录所有修订（含历史）均无可用指针且无原件痕迹（`fileId` 键缺失或为 null，`original` 为空，`source` 不以“原件：/原件已移除”开头，且无候选互指）→ `no_file`**：`source_document_id=NULL`、`source_kind='manual'`、保留 `source_text`，不强制 `unknown`、不标 `needs_review`；**`fileId` 有值但目标行不存在/跨 subject，或 `fileId` 为 null/键缺失但 `original` 非空或 `source` 显示“原件：/原件已移除” → `unresolved`**：置空且记录至少 `unknown` + `needs_review`，`source_kind='document'`，不得伪造 `source_document`，不得洗成手工；两类必须靠原件证据区分，不能只看 `fileId` 是否为空 |
 | `original:{title,text}` | 不迁移为事实 | 原型内嵌副本，不是工作台原件；**不复制进数据根**。若它是唯一副本且无磁盘文件，先让用户选择“在原位置登记为原件”或“转为 `note` 记录”，不得静默丢弃；生产只存 `source_document_id` |
 | `pathwayDetail.{imaging,ae,support}` | 不自动迁移 | 演示注释，不是已确认事实；如真实存在，拆成独立 `check`/`symptom`/`note` 记录并带来源 |
 | `department`/`site` | `details_json` 或 `body_system` | 仅展示属性；不参与诊断/分型 |
@@ -1167,7 +1250,8 @@ END;
 | 记录当前缺失 / `null` / 非 JSON 布尔（字符串 `"true"`、数字 `1` 等） | `unknown` | `legacy_unknown` | `needs_review` | 不按形状猜 |
 | 记录 `fileId` 指向的原件为 `private` | `private`（取记录自身与原件中更强的一档） | 自身 `private=true` 时 `migration_default`，否则 `inherited_document` | `ok` | 对齐 SPEC“原件私密时已生成记录同步私密” |
 | 记录 `fileId` 指向的原件为 `unknown` | `unknown` | `inherited_document` | `needs_review` | 原件行不可判定 |
-| 记录 `fileId` 有值但目标原件不存在/不同 subject | `source_document_id=NULL`；记录至少 `unknown` | `legacy_unknown` | `needs_review` | 不伪造 `source_document` |
+| 记录所有修订均无可用 `fileId`（键缺失或 null）、`original` 为空且 `source` 无原件痕迹，且无候选互指（从未登记文件） | 保持记录自身状态（缺失→`unknown`）；`source_floor='not_private'` | `migration_default`（缺失时 `legacy_unknown`） | `ok`；仅隐私缺失时 `needs_review` | `no_file`：`source_document_id=NULL`、`source_kind='manual'`、保留 `source_text`；不因“没有文件”强制 unknown；若之后写入了候选互指，必须重算来源保护 |
+| 记录 `fileId` 有值但目标原件不存在/不同 subject，或 `fileId` 为 null/键缺失但 `original`/`source` 显示曾有原件（`unresolved`） | `source_document_id=NULL`；记录至少 `unknown` | `legacy_unknown` | `needs_review` | 不伪造 `source_document`；`source_kind='document'`；不得当成 `no_file`/手工来源 |
 | `history[]` 单项 `private: true/false` | `private/not_private` | `legacy_import` | `ok` | **只看该历史项自身，不继承记录当前值** |
 | `history[]` 单项缺失/非布尔 | `unknown` | `legacy_unknown` | `needs_review` | 正文原样保留 |
 | `files[]` 项 `private: true` | `private` | `migration_default` | `ok` | `privacy_ever_private=1`、`privacy_epoch=1` |
@@ -1197,6 +1281,7 @@ END;
 migrate_v1(payloads, ctx, adoption_mode='unknown'):
   assert ctx.schema_version == 0
   assert ctx.subject_id != null and ctx.subject_actor_id != null
+  assert ctx.migration_actor_id != null and ctx.migration_actor_id != ctx.subject_actor_id
   assert adoption_mode in ("strict_reject", "unknown")
   BEGIN IMMEDIATE
   ts = ctx.migration_ts                  # UTC ...Z，合法定长
@@ -1224,39 +1309,65 @@ migrate_v1(payloads, ctx, adoption_mode='unknown'):
       file_map[f.legacy_id] = doc_id
 
   # 2) 记录：每条 record 生成独立 record_id，每个修订生成独立 revision_id。
+  #    resolve_author: 仅当 payload 有 authorActorId/onBehalfGrantId 且能同 subject 校验时 known；
+  #    否则 -> ("unknown", NULL, NULL)。不得默认 ctx.subject_actor_id，也不得用迁移 actor 冒充作者。
+  #    历史修订的来源指针必须同样落库（source_chain 覆盖历史），分类规则与当前修订一致。
+  resolve_ref_fields(x):
+      has_ref = ("fileId" in x) and (x.fileId != NULL)
+      doc_id = has_ref ? resolve_same_subject(file_map, x.fileId) : NULL
+      trace = (x.original != NULL) or origin_marker(x.source)   # “原件：/原件已移除”
+      kind = (has_ref or trace) ? "document" : "manual"
+      return (doc_id, kind)
   for r in payloads.records, 按数组顺序逐条:
       rec_id = new_stable_id("rec", r.id)
-      doc_id = resolve_same_subject(file_map, r.fileId)   # 不存在/跨 subject -> NULL
+      has_file_ref = ("fileId" in r) and (r.fileId != NULL)
+      doc_id = has_file_ref ? resolve_same_subject(file_map, r.fileId) : NULL
+      has_origin_trace = (r.original != NULL) or origin_marker(r.source)  # “原件：/原件已移除”
+      history = r.history ? r.history : []    # 老→新，按原序，不排序
+      # 聚合当前及全部历史来源；悬空、跨主体或曾有原件但指针丢失均 unresolved。
+      resolution = resolve_legacy_source_chain(r, history, file_map)
+      # 无任何指针和原件痕迹才 no_file；所有指针均可解析且同主体才 resolved。
       st, origin, val = derive_record_privacy(r.private, doc_id)
+      if resolution == "unresolved":
+          st, origin, val = "unknown", "legacy_unknown", "needs_review"
+      rec_source_kind = (has_file_ref or has_origin_trace) ? "document" : "manual"
+      aes, a_id, grant_id = resolve_author(r)
       INSERT record(record_id=rec_id, subject_id=ctx.subject_id,
-        kind=map_kind(r.kind), author_actor_id=ctx.subject_actor_id,
-        origin_candidate_id=NULL, legacy_ref=r.id,
+        kind=map_kind(r.kind), author_state=aes, author_actor_id=a_id,
+        on_behalf_grant_id=grant_id, origin_candidate_id=NULL, legacy_ref=r.id,
         lifecycle_state="active", created_at=coalesce_utc(r.created_at, ts))
       record_map[r.id] = rec_id
 
-      # 当前修订必须显式写所有必填列，不得依赖列默认值。
-      rev1 = new_stable_id("rev", r.id, 1)
-      INSERT record_revision(
-        revision_id=rev1, record_id=rec_id, revision_no=1,
-        occurred_date=parse_date(r.date), occurred_precision=precision_or_unknown(r.datePrecision),
-        occurred_raw=r.date, end_*=<from r.endDate/ongoing>,
-        privacy_state=st, privacy_origin=origin, validation_state=val,
-        source_document_id=doc_id, source_text=r.source, source_kind=map_source_kind(r.source),
-        change_kind="legacy_import", created_by_actor_id=ctx.subject_actor_id,
-        created_at=coalesce_utc(r.created_at, ts), details_json=<8KiB 内原样>)
-      # 缺精度 -> unknown + needs_review；非法日期 -> raw 保留 + needs_review；
-      # 未知键放 details_json.legacy；字符串不解析成结构。
-
-      for h, idx in r.history, 按数组顺序逐项:
-          rev_no = idx + 2
+      n = len(history)
+      for i, h in enumerate(history):         # 历史：1..N（老→新）
+          rev_no = i + 1
           h_rev = new_stable_id("rev", r.id, rev_no)
-          h_st, h_origin, h_val = derive_history_privacy(h.private)  # 只看该项自身
+          h_doc, h_kind = resolve_ref_fields(h)   # h_doc 为 NULL 且 h_kind='document' 即“指针已丢”
+          h_st, h_origin, h_val = derive_history_privacy(h.private)  # 隐私只看该项自身，来源不改写
           INSERT record_revision(
             revision_id=h_rev, record_id=rec_id, revision_no=rev_no,
             occurred_*, privacy_state=h_st, privacy_origin=h_origin,
-            validation_state=h_val, change_kind="legacy_import",
-            created_by_actor_id=ctx.subject_actor_id, created_at=coalesce_utc(h.created_at, ts),
-            details_json=<原样 + 未知键>)       # 不得复用 rev1/rec_id 作为新行 ID
+            validation_state=h_val, source_document_id=h_doc, source_text=h.source,
+            source_kind=h_kind, change_kind="legacy_import",
+            created_by_actor_id=ctx.migration_actor_id, created_at=coalesce_utc(h.created_at, ts),
+            details_json=<原样 + 未知键>)       # 不得复用任何已有 revision_id/rec_id 作为新行 ID
+
+      # 当前修订：N+1，内容取 record 自身，不取 history 最后一项。
+      cur_no = n + 1
+      rev_cur = new_stable_id("rev", r.id, cur_no)
+      INSERT record_revision(
+        revision_id=rev_cur, record_id=rec_id, revision_no=cur_no,
+        occurred_date=parse_date(r.date), occurred_precision=precision_or_unknown(r.datePrecision),
+        occurred_raw=r.date, end_*=<from r.endDate/ongoing>,
+        privacy_state=st, privacy_origin=origin, validation_state=val,
+        source_document_id=doc_id, source_text=r.source,
+        source_kind=rec_source_kind,
+        change_kind="legacy_import", created_by_actor_id=ctx.migration_actor_id,
+        created_at=coalesce_utc(r.created_at, ts), details_json=<8KiB 内原样>)
+      # 缺精度 -> unknown + needs_review；非法日期 -> raw 保留 + needs_review；
+      # 未知键放 details_json.legacy；字符串不解析成结构。
+      # 自检：cur_no == MAX(revision_no) == n+1；编号连续 1..n+1 无重复；
+      #      当前字段逐项等于 r 的当前字段（失配 -> ROLLBACK revision_self_check_failed）
 
   # 3) 解析 run：document_id 必须非空；缺失即失败关闭，不写占位行。
   for run in payloads.import_runs, 按数组顺序逐项:
@@ -1265,9 +1376,14 @@ migrate_v1(payloads, ctx, adoption_mode='unknown'):
       if run_doc_id == NULL:
           ROLLBACK
           raise migration_error("source_unresolved")   # import_run.document_id NOT NULL
+      method = map_run_method(run.method)
+      consent_id = map_consent(run)
+      if method == "cloud" and consent_id == NULL:
+          ROLLBACK
+          raise migration_error("consent_unresolved")  # 无明确 consent 的云 run 不得迁移，也不得补造
       INSERT import_run(
         import_id=run_id, subject_id=ctx.subject_id, document_id=run_doc_id,
-        method=map_run_method(run.method), consent_id=map_consent(run),
+        method=method, consent_id=consent_id,
         status=map_run_status(run.status), parser_version=run.parserVersion,
         started_at=coalesce_utc(run.startedAt, ts), finished_at=coalesce_utc(run.finishedAt, NULL),
         error_code=run.errorCode)
@@ -1316,6 +1432,14 @@ migrate_v1(payloads, ctx, adoption_mode='unknown'):
   assert 每条 import_candidate.document_id = 所属 run.document_id
   assert 每条 resolved 采纳关系两列互指且同 subject
   assert 每条 unknown 候选 adoption_state="unknown" 且两列均为 NULL
+  assert 每条 record 的 revision_no 连续 1..N+1、当前 = MAX、无重复；当前字段 = payload 当前字段
+  assert author_state="unknown" 的记录两列作者字段均为 NULL；known 的作者同 subject、proxy 有 grant
+  assert 无 method="cloud" 且 consent_id IS NULL 的 run；无 unresolved 来源被写成 not_private
+  assert 每个 no_file 记录 source_kind="manual" 且 source_document_id IS NULL（source_text 保留）
+  assert 无指针但 original/来源含“原件：/原件已移除”的记录 source_kind="document" 且至少 unknown+needs_review（不得落 no_file）
+  assert 任一副本（含历史修订）source_kind="document" 且 source_document_id IS NULL 的记录，resolve_source='unresolved' 且至少 unknown+needs_review
+  assert 不存在“当前修订 not_private 但 resolve_source 受保护（private/unknown/ever 未 release）”的记录；
+         互指写入后若出现，必须追加 privacy 修订或整批 ROLLBACK
   assert 旧 ID 不复用、每行 ID 唯一
   write_migration_report(adoption)
   COMMIT
@@ -1350,19 +1474,20 @@ G3 签认时必须把“现在必须定”的和“以后可以再定”的分�
 - 第 8.1 节目录布局（无 `parsed/`、`tmp/` 会话临时）、第 8.2 节备份不含 `tmp/`；
 - 第 9.3 节 `created_at` 的 NULL/24:00 检查、第 9.5/9.6 节回执 `(subject_id, actor_id, request_id)` 复合主键与三者同时匹配的作用域、锁序与隐私优先的错误顺序；
 - 第 10.1/10.2 节“单事务默认 + 重建例外”的迁移边界，以及重建时 **COMMIT 前** 的 `foreign_key_check`、事务外的 `foreign_keys=OFF/ON`；
-- 第 10.4 节旧数据隐私初始化：true/false/缺失/非布尔、`history[]` 逐项、`files[]`（unknown 不预置 ever/epoch）、缺失 `fileId`、`created_at` 的显式规则与**伪代码**（不是 SQL）；V-33 仍未验证；
+- 第 10.4 节旧数据隐私初始化：true/false/缺失/非布尔、`history[]` 逐项、`files[]`（unknown 不预置 ever/epoch）、`fileId` 缺失/null（区分无原件痕迹与曾有原件痕迹）、`created_at` 的显式规则与**伪代码**（不是 SQL）；V-33 仍未验证；
 - 第 10.4 节采纳关系：`adoption_state`、默认 `unknown` 模式、显式 `strict_reject` 整批拒绝、run/candidate 来源非空、互指自检与报告；Q-31/V-48 未验证；
 - T-03 `record.correct` 不得改变隐私；T-04 epoch 统一口径；T-05 非本人不见受保护历史元数据；T-06 unknown 原件解锁路径；T-07 回执三列主键；T-08 迁移 unknown 不预置 ever；T-09 传播写入新状态。
 
-**本草案自身的 G3 阻塞（不是“设计已完成”）**：以下五项均**明确阻塞**，冻结/建库/生产发布前不得绕过：
+**本草案自身的 G3 阻塞（不是“设计已完成”）**：以下六项均**明确阻塞**，冻结/建库/生产发布前不得绕过：
 
 - **Q-27（sticky 逐条解除）**：`record.releaseSourceLink` 只有合同，**实现、UI、迁移回填、审计展示与端到端测试均未完成**；不得用原件级开关代替，不得提供批量解除。
 - **Q-28（恢复后回执失效）**：策略未设计、未实现、未测试；备份恢复后旧回执可能使重放跳过应重新发生的写入，阻塞版本恢复相关的生产发布。
 - **Q-29（重建表迁移崩溃检测/补偿）**：非原子窗口的检测、停机与恢复流程未设计；未设计前不得进入生产迁移，也不得自动续跑或自动选表。
 - **Q-30（跨 subject 引用校验）**：§9.7 只有清单，**写入校验、迁移后不变量查询、负向测试均未实现**；外键只保证行存在，不保证同 subject。未验证前不得声称多 subject 隔离成立。
 - **Q-31（迁移采纳关系不可判定）**：§10.4 的 `adoption_state`/`resolve_adoption`/`strict_reject`/`unknown` 只有合同与伪代码；**没有 fixture、没有真实旧导出验证、没有整批回滚/unknown 模式测试**。任何迁移在无法证明候选↔记录关系时，不得按文本/顺序猜测或写假互指；默认 `unknown`（候选不可采纳、两列 NULL、报告逐条原因），`strict_reject` 必须显式选择并整批回滚。未验证前不得声称迁移完整或采纳关系已还原。
+- **Q-33（旧 cloud run 无 consent 证据）**：迁移侧无法证明 `cloud_parse` consent 时整批 `ROLLBACK`/`consent_unresolved`；不补造 consent 行、不写 run、不改写成成功状态。该项属**迁移阻塞**（不改变运行时合同），取得真实旧导出/服务方回执前不得声称迁移完整。
 
-**未来事项（记录在案，不阻塞 v1；不得在本版实现）**：Q-27/Q-28/Q-29/Q-30/Q-31 不在本清单，五项已移入上方“本草案自身的 G3 阻塞”。
+**未来事项（记录在案，不阻塞 v1；不得在本版实现）**：Q-27/Q-28/Q-29/Q-30/Q-31/Q-33 不在本清单，已移入上方“本草案自身的 G3 阻塞”；Q-32 默认 `author_state='unknown'`，不阻塞本版。
 
 - Q-10 的“本人逐条授权私密内容进 AI”是否放开——需先改 `docs/SPEC.md` 并重走评审；
 - P-04 回溯口径——需先改 SPEC 再改 §4.1；
@@ -1384,7 +1509,7 @@ G3 记录应逐项写“已定/阻塞/未来”，不能把未来事项写成“
 | 编号 | 约束 | 验证方式 | 当前状态 |
 |---|---|---|---|
 | V-01 | 本任务只修改 `docs/DATA-MODEL-DRAFT.md`；没有创建数据库/数据目录/迁移文件，也没有改其他文件 | 核对本文件与 `git status --short`；工作树中既有未提交修改和并发修改不属本任务，不得回滚 | 已核对（2026-11-03，修订结束时复核）：仅本文件变更；库/目录/迁移均未创建 |
-| V-02 | 每条 `record` 都有 subject/kind/author；每条修订都有 privacy/precision/created_by_actor_id | SQL：`COUNT(*) WHERE ... IS NULL` 全为 0 | 未执行（无库） |
+| V-02 | 每条 `record` 都有 subject/kind/`author_state`；`known` 时作者字段非空且同 subject、`unknown` 时两列均为 NULL；每条修订都有 privacy/precision/created_by_actor_id | SQL：`COUNT(*) WHERE ... IS NULL` 全为 0，且 `author_state` 与两列作者字段的一致性查询为 0 行 | 未执行（无库） |
 | V-03 | 日期组合合法：unknown→NULL；month→`YYYY-MM`；day→真实公历日；非法旧值保留 raw+needs_review；日期列是定长 ASCII 字节 | fixture 含 `2026-02-30`、`2019 年初`、空精度、全角数字/带空格日期；查询非法组合=0，`length(hex(...))` 不符=0 | 未执行 |
 | V-04 | 修订只增不改；`revision_no` 连续；当前=max | 尝试 UPDATE/DELETE 触发 ABORT；查询断号=0 | 未执行 |
 | V-05 | 候选不是事实：`pending` 不出现在看板/时间线/导出/指标 | 各读模型中 `record.origin_candidate_id` 指向的候选 `state!='adopted'` 计数=0 | 未执行 |
@@ -1415,7 +1540,7 @@ G3 记录应逐项写“已定/阻塞/未来”，不能把未来事项写成“
 | V-30 | 原件只靠会话句柄重开：库内无路径/句柄；`import.start` 无会话句柄即 `source_handle_unavailable`；无 `present` 状态 | 扫描 schema 确认无 path/handle 列；刷新后未重选文件调 `import.start` 断言失败；重选后成功；localStorage/IndexedDB 无句柄 | 未执行 |
 | V-31 | 所有日期/瞬时列定长 ASCII 字节：`length` 与 `length(hex())` 同时匹配；`details_json` 按字节 ≤8 KiB；`created_at` 为 UTC `...Z` | 对每个日期列注入全角数字、组合字符、尾随空格、`2026-02-30T...`、`2026-13-01T...`、`24:00:00`；断言 CHECK 拒绝；`details_json` 用多字节内容断言按字节计 | 部分：仅 §11.1 的 `created_at` 骨架；未覆盖所有日期列，未在宿主执行 |
 | V-32 | `created_at` 的 NULL/24:00 修复不能被旧 CHECK 误述：`2026-13-01` 必须拒绝，`2026-02-30` 由归一化不等拒绝而不是 NULL 放行，`24:00` 必须拒绝 | 同一 fixture 分别插入旧 CHECK 与新 CHECK；断言旧表接受 `2026-13-01`/`24:00`、新表全部拒绝；`2024-02-29` 接受、`2026-02-29` 拒绝 | 部分：§11.1 骨架含对应断言，本次未保留执行输出，未在宿主执行 |
-| V-33 | 迁移隐私初始化：true/false/缺失/非布尔分别落 private/not_private/unknown；`history[]` 逐项不继承当前私密；`files[]` 写 ever/epoch/**seq**，unknown 必须 0/0/0；缺失 `fileId` 不伪造原件且记录至少 unknown；候选/run 逐条 INSERT 且同 subject | 用原型形状 fixture 跑 §10.4 伪代码/等价实现；断言 `history` 中缺失项为 unknown、公开项保留、当前私有项不传播到历史；缺失 `fileId` 记录的 `source_document_id IS NULL` 且 `validation_state='needs_review'`；`files` unknown 的 ever/epoch/seq 均为 0；`import_candidate` 行数=payload 候选数且 `import_id` 非空（或显式 unknown）；跨 subject 候选被拒 | **未验证**：draft.4 的 SQL 已删除、伪代码改为 INSERT 但尚无实现；真实旧库未取得；不得把伪代码当 SQL |
+| V-33 | 迁移隐私与结构初始化：true/false/缺失/非布尔分别落 private/not_private/unknown；`history[]` 逐项不继承当前私密；`files[]` 写 ever/epoch/**seq**，unknown 必须 0/0/0；**`history[i]` 按老→新写 `revision_no=i+1`，当前内容写 `N+1` 且不重复进历史**；历史修订的 `fileId`/`source` 同样落 `source_document_id`/`source_kind`（隐私仍只看该项 `private`），不得丢历史指针；**来源三态**：`fileId` 键缺失或 null 且 `original` 为空、`source` 无“原件：/原件已移除”→`no_file` + `source_kind='manual'`；有值但悬空/跨主体，或 `fileId` 为空但保留原件痕迹→`unresolved` + `source_kind='document'` + 至少 unknown+needs_review；**作者**：无证据→`author_state='unknown'` + 两列 NULL，不得默认本人；**云 run**：无 consent 整批 `ROLLBACK`/`consent_unresolved`，不补造 | 用原型形状 fixture 跑 §10.4 伪代码/等价实现；断言 `history` 缺失项 unknown、公开项保留、当前私有项不传播到历史；断言历史编号连续、当前 = `MAX` 且字段 = payload；`fileId` 键缺失/null 且无原件痕迹的记录 `source_document_id IS NULL`、`source_kind='manual'` 且不因缺文件强制 unknown；悬空记录至少 unknown+needs_review；`fileId` 为空但 `original`/来源含原件痕迹的记录断言 `unresolved`+`source_kind='document'`+`needs_review`，不得落 manual；`files` unknown 的 ever/epoch/seq 均为 0；`import_candidate` 行数=payload 候选数且 `import_id` 非空；跨 subject 候选被拒；cloud run 缺 consent 断言无 run/无候选且整批回滚 | **未验证**：伪代码无实现、真实旧库未取得；不得把伪代码当 SQL |
 | V-34 | sticky 逐条解除：release 只清 `(record, document, 当前 epoch, 当前 state_seq)`；旧 epoch/旧 seq 失效；`unknown` 往返后旧 release 失效；release 不改记录隐私；proxy 无此能力；未实现前整套流程是 G3 阻塞 | fixture：doc private→not_private(ever=1) 仍 protected；release 后 `source_locked` 才可能为 false；doc 再 private（epoch+1）后旧 release 不生效；`not_private→unknown→not_private`（seq 递增）后旧 release 不生效，必须重新 release；同 `(record,doc,epoch,seq)` 重复 release 被拒；release 后记录仍 `not_private`，需单独 `setPrivacy` | **部分且不可当证据**：§11.1 旧 release/epoch 断言曾观察过；draft.6 新增的 `privacy_state_seq`/`document_state_seq` 断言本次未执行；命令/UI/迁移/端到端均无证据；G3 阻塞 |
 | V-35 | 出站双 scope：AI/导出/artifact 必需同时校验选中 revision 与 current record；任一侧受保护即拒绝；AI 只发当前修订 | fixture：记录当前公开但选中旧私密修订 → AI/导出/artifact 全部拒绝；当前受保护但选中旧公开修订 → 同样拒绝；AI 载荷只含 current `revision_no`，不含修订号列表/来源 ID | 未执行 |
 | V-36 | artifact 构建/下载隔离：构建时记录双 scope `included_private`；下载时重判并重算 `contains_private`；构建后被保护置 `quarantined`；每个私密条目各自需新的匹配 `private_export`；proxy 不可下载含私密产物 | 构建后把记录转 private，断言 artifact `quarantined` 且下载拒绝；同一 `private_export` 第二次下载断言 `consent_required`；含两条私密项的产物只签一条同意，断言 `consent_required`；proxy 下载含私密条目断言 `not_authorized`；回执无记录 ID | 未执行 |
@@ -1431,6 +1556,11 @@ G3 记录应逐项写“已定/阻塞/未来”，不能把未来事项写成“
 | V-46 | 新挂受保护来源写入保护（INV-06 消矛盾）：`record.create`/`record.attachSource`/`candidate.adopt` 对新挂 `private`/`unknown`/`ever_private=1` 未 release 来源，初始/新修订必须写 `private`/`unknown`；显式 `not_private` 断言 `privacy_locked`；`attachSource` 只升不降、仅 self；`record.correct` 换到此类来源拒绝；`setPrivacy` 仍是唯一降低入口 | 分别构造 private、unknown、ever_private=1 已改 not_private 未 release 三类来源；断言新记录/采纳/attach 后存储态为 private/unknown（不是仅读时过滤）；显式公开请求失败；attach 到更弱来源保持当前 private；attach 后 `setPrivacy(not_private)` 才能降；proxy/demo 调 attach 断言 `not_authorized`；直接 SQL 写 `not_private` 的负向实现被读模型/不变量抓到 | 未执行 |
 | V-47 | `data_version` 与产物隔离同事务：传播/采纳/恢复/隐私/来源/授权/产物状态每批只 +1；受影响 artifact `status`/`contains_private`/`status_data_version` 同事务；任一条失败整体回滚；下载逐条重判，不靠 `status_data_version` 放行 | 统计一次传播的 `data_version` 增量恰为 1；artifact `status_data_version` 等于新版本且 `quarantined`/`stale` 同事务；注入 artifact 更新失败断言 `data_version` 与事实均回滚；`status_data_version` 落后但 `status='ready'` 时下载仍按 `output_protected` 拒绝；`contains_private` 重算与存储不一致断言隔离 | 未执行 |
 | V-48 | 迁移采纳关系不猜：显式双向链接且同 subject → `adoption_state='resolved'` 并写互指；缺失/一侧/冲突 → 默认 `unknown` 模式候选 `pending`+`adoption_state='unknown'`+两列 NULL+不可采纳，报告逐条原因；显式 `strict_reject` 整批 `ROLLBACK`、不写 ledger；禁止文本/顺序/日期推断与伪造 ID | 用四类 fixture：双向一致、仅 record 一侧、仅 candidate 一侧、两列指向不同对象；断言 resolved 互指、默认模式写入 unknown 且 `candidate.adopt` 返回 `adoption_unresolved`、显式 strict 整批回滚且候选/记录为 0；文本相同但无链接的 fixture 不得被判定 adopted；报告计数与 legacy 键可核对 | 未执行；G3 阻塞（Q-31） |
+| V-49 | 历史编号与当前自检：`revision_no` 连续无重复，历史 1..N（老→新）、当前 N+1=`MAX`；写入/读取/迁移都自检“当前字段 = 第 N+1 版修订”；失配 `revision_self_check_failed`/`needs_review`，不回退历史最后一项；非本人只对可见集重排显示序号 | 用 3 条历史 + 1 当前 fixture：断言编号 1..3 与 4；按旧“当前=1、历史=2..4”写法的实现被抓；篡改当前字段与第 4 版不一致，断言读取失败关闭且不显示历史末项；非本人响应无规范编号、无断号、无空位 | 未执行 |
+| V-50 | `link_state` 四态语义：无 `active`；`unverified/verified` 可新挂，`missing/removed` 被拒（`document_missing`/`document_removed`）且不自动复活；四态均不改 `privacy_state`/`epoch`/`seq`；`removed` 且已知 `not_private`+`ever=0` 不因移除受保护，`unknown`/曾私密未 release 仍受保护 | 四态 fixture 分别 attach：missing/removed 断言失败；插入 `active` 断言非法枚举；removed 的公开记录断言仍可读；removed 的 unknown/曾私密记录断言仍受保护；verified 后隐私字段不变、`last_verified_at` 更新 | 未执行 |
+| V-51 | 来源三态：`no_file`（无任何来源指针——含历史修订——且 `source_kind='manual'`；迁移 `fileId` 键缺失/null 且任一修订均无原件痕迹、新写入显式声明）不强制 unknown、不标 needs_review；`resolved` 需行存在同 subject 且候选链一致；`unresolved`（悬空/跨主体/不一致/互指不成立/任一副本 `source_kind='document'` 但无指针/指针已丢但保留原件痕迹）→ unknown+source_locked+needs_review，禁止 adopt/release/setPrivacy(not_private)；`source_document_id IS NULL` 不等于手工 | 手工无来源记录断言 `no_file`、`source_kind='manual'`、非 needs_review；删指针的悬空链断言仍 `unresolved` 受保护；`fileId` 为 null 但 `original`/来源含“原件：/原件已移除”的记录断言 unresolved+document+needs_review，不得判 manual；跨 subject 断言 `cross_subject_reference`；resolved 文档 attach 成功；NULL 指针但 `origin_candidate_id` 存在的记录不得判 `no_file` | 未执行 |
+| V-52 | 云解析无 consent 失败关闭：`import.start` 在建 run/上传/建候选前校验 `cloud_parse` consent（self、未撤回、document/subject 匹配）；缺失 `consent_required` 且无 run/无上传/无候选/无 `tmp/`；`method='cloud'` 的 `import_run.consent_id` NOT NULL；迁移 cloud run 无 consent 整批回滚 `consent_unresolved`，不补造 | 无 consent 调 `import.start` 断言 `consent_required` 且 run/候选计数为 0、无上传调用；撤回 consent 后同断言；直接插入 cloud run 缺 consent 断言 CHECK 失败；迁移 fixture 含无 consent cloud run 断言 `ROLLBACK`、无 consent 行、报告 `consent_unresolved` | 未执行 |
+| V-53 | 作者未知不伪造：`author_state ∈ {known,unknown}`；unknown 两列 NULL、UI“作者未知”；known self/proxy 约束；迁移无作者证据一律 unknown，不得默认 `ctx.subject_actor_id`/`system`；`own_entries` 不把 unknown 当自己写的 | 旧 payload 无作者字段迁移后全部 `unknown` 且两列 NULL；有明确作者/代理 grant 的记录 known 且一致；篡改 unknown 记录填 self 断言约束失败；proxy `own_entries` 不含 unknown 作者记录；读模型/回执不把 unknown 显示成本人 | 未执行 |
 
 ### 11.1 本机可复现 SQLite 验证（2026-11-03）
 
@@ -1502,7 +1632,7 @@ console.log('SQLite core regression: PASS');
 - `record_revision` 的日期 CHECK 对 `2026-02-30` 拒绝、对 `2026-02` 接受、对 `2026-13` 拒绝；
 - `privacy_state='unknown'` 不得被任何默认读模型当成 `not_private`。
 
-这些检查必须在 M5 的测试库重新执行，并把结果附在 G3/M5 记录中；仅“文档写了”或“骨架跑通”不算通过。**V-33 的迁移隐私初始化、V-43～V-48 的来源/采纳/恢复/保护写入/版本隔离均没有可执行实现或测试，状态保持“未验证/未执行”。**
+这些检查必须在 M5 的测试库重新执行，并把结果附在 G3/M5 记录中；仅“文档写了”或“骨架跑通”不算通过。**V-33 的迁移隐私/编号/来源三态/作者/consent 初始化、V-43～V-53 的来源/采纳/恢复/保护写入/版本隔离/链状态/作者状态均没有可执行实现或测试，状态保持“未验证/未执行”。**
 
 ---
 
@@ -1543,6 +1673,8 @@ Q-03 已按 SPEC 定案，保留在表中是为了让 G3 看到“为什么不�
 | Q-29 | 重建表迁移的崩溃检测与恢复：如何判断旧表/新表完整，是否自动补偿 | SQLite 关外键必须在事务外，重建存在非原子窗口；`migration.lock` 不足以判断进度 | 默认失败即停、从迁移前备份恢复，不自动续跑；完整检测/补偿未设计。**未设计前重建迁移不得进入生产发布，是 G3 阻塞** |
 | Q-30 | 跨 subject 引用校验的实现与迁移后不变量：§9.7 列出的每类引用是否都在写入路径校验同 subject；迁移后是否有全量不变量查询与负向测试 | 本版只有合同，**没有实现、没有迁移后校验、没有跨 subject fixture**；外键只保证行存在，不保证同 subject。多 subject 分区在 `subject_id` 泄漏时等于失效 | 所有写命令在事务内校验并返回 `cross_subject_reference`；迁移 `COMMIT` 前跑 §9.7 不变量查询，有行即 `ROLLBACK`；补 V-38 负向测试。**实现并验证前，多 subject 隔离不得声称成立，是 G3 阻塞** |
 | Q-31 | 迁移无法证明候选↔记录采纳关系：`record.origin_candidate_id`/`candidate.adopted_record_id` 缺失、单侧、冲突或跨 subject 时，是否继续迁移 | 旧导出没有统一外键；文本/日期/顺序相似不能证明同一事实，按相似度猜会伪造采纳关系，整批拒绝又会阻塞迁移。两种错误都会让“迁移完整”成为假声明 | §10.4 定义 `adoption_state`、默认 `unknown` 模式（候选 `pending`+两列 NULL+不可采纳+报告）、显式 `strict_reject` 整批 `ROLLBACK`；禁止推断/伪造 ID。**实现、fixture、真实旧库验证均未完成，Q-31/V-48 为 G3 阻塞** |
+| Q-32 | 旧数据作者判定证据：什么字段/来源足以证明“作者是谁”（录入者、代理授权号、署名、导入清单），无法证明时是否永久 `unknown` | 旧导出没有统一作者字段；按“谁执行迁移”或“记录属于该 subject”推断作者，会把代记/他人内容冒充本人；永久 unknown 又会影响代记 `own_entries`、导出署名与审计展示 | 默认 `author_state='unknown'`，不推断、不默认本人/`system`；M5 取得真实旧导出后确认可核验证据；未取得前 unknown 是正确结果，不阻塞本版合同 |
+| Q-33 | 旧云解析 run 的 consent 证据：旧导出/服务方回执能否证明当时取得 `cloud_parse` 同意；没有证据时整批拒绝还是隔离 run 供人工核对 | 补造 consent 等于伪造患者同意；把无 consent 的 run 迁进来又会让“已同意”成为假声明；两种都会污染审计 | 本版按 D-30/INV-32 失败关闭：无法证明 consent 的 cloud run 整批 `ROLLBACK`/`consent_unresolved`，不写 run、不补 consent；若要迁移必须先取得可核验证据。**该项属迁移阻塞（不改变运行时合同）** |
 
 ---
 
@@ -1559,20 +1691,20 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 - [ ] **身份与授权前置**：确认 actor 只从会话/宿主解析、请求体身份被忽略；确认 `demo_unverified` 只能写 demo subject；确认 proxy 需 `host_authenticated` + 有效 grant 且 scope 覆盖 kind/日期；确认 consent/setPrivacy/release 仅 self；确认拒绝不区分无权限/不存在（V-40）。
 - [ ] **缓存隔离**：确认缓存键含 `subject_id + data_version + read_model_version + viewer_actor_id + 授权 scope 版本`；确认本人/代理、跨 subject 缓存不互用；确认授权变化递增 `data_version`（V-41）。
 - [ ] **unknown 往返**：确认 `privacy_state_seq` 在每次实际状态变化时递增、同值不增；确认 release 绑定签发 seq，`private→not_private→release→unknown→not_private` 后旧 release 失效、必须重新逐条 release；确认迁移 seq 初值（private=1，其他=0）（V-34/V-42）。
-- [ ] **历史**：确认 `record_revision` 全量快照、只增不改、当前=max；确认受保护历史默认只回元数据（**仅本人视图**；非本人 0 正文且 0 元数据）、按条判断不回溯、打印不输出正文与元数据。
+- [ ] **历史**：确认 `record_revision` 全量快照、只增不改、当前=max=N+1、历史编号 1..N（老→新）连续、当前内容不重复进历史；确认写入/读取/迁移都自检“当前字段 = 第 N+1 版”，失配失败关闭（V-49）；确认受保护历史默认只回元数据（**仅本人视图**；非本人 0 正文且 0 元数据）、按条判断不回溯、打印不输出正文与元数据。
 - [ ] **日期**：确认 day/month/unknown + raw；确认不补日期、不展开月份、非法旧值标待核；确认年份边界（或改）；确认日期/瞬时字段按**定长 ASCII 字节**校验（V-31）。
 - [ ] **事实类型**：确认第 5.3 节 10 个 kind 与页面映射；确认 observation/event 不再平行建表；确认“副作用/感受”是否新增 kind（Q-06）。
-- [ ] **导入**：确认候选生命周期、采纳事务、丢弃清空正文、私密继承、云解析 consent 与“不声称云端已删”；确认**整份解析全文默认不另存**（候选 `proposed_text` 除外，中间产物只走会话 `tmp/`）、`manifests` 只存元数据；确认**撤回解析不删已采纳记录与来源指针**（V-14）。
-- [ ] **原件**：确认**不复制原件、只登记元数据**、`source_document_id` 只是出处/审计关联、重开需**会话文件句柄**（不持久化）、`link_state` 只表示最近会话核对；确认无 `present`、无持久 `parsed/`；确认 Q-17 的“未来是否允许持久解析/复制原件”仍是未来事项。
+- [ ] **导入**：确认候选生命周期、采纳事务、丢弃清空正文、私密继承、云解析 consent 的失败关闭顺序（建 run/上传/建候选**之前**校验；缺失 `consent_required` 且零副作用；迁移无 consent 的 cloud run 整批拒绝，不补造，V-52）与“不声称云端已删”；确认**整份解析全文默认不另存**（候选 `proposed_text` 除外，中间产物只走会话 `tmp/`）、`manifests` 只存元数据；确认**撤回解析不删已采纳记录与来源指针**（V-14）。
+- [ ] **原件**：确认**不复制原件、只登记元数据**、`source_document_id` 只是出处/审计关联、重开需**会话文件句柄**（不持久化）；确认 `link_state` 只有 `unverified/verified/missing/removed`（无 `active`）、只表示最近会话核对、不是隐私状态，新挂只允许前两者、`missing/removed` 不得自动复活，且不因移除把已知 `not_private+ever=0` 改为受保护（V-50）；确认无 `present`、无持久 `parsed/`；确认 Q-17 的“未来是否允许持久解析/复制原件”仍是未来事项。
 - [ ] **数据目录**：确认显式选择、marker、**仅受管理文件用相对路径**、根边界、目录布局（含会话 `tmp/`）、备份不含 `tmp/`、卸载不删除。
 - [ ] **持久化**：确认 SQLite 为默认候选；确认每连接 `foreign_keys=ON`、`BEGIN IMMEDIATE`、无级联删除；在 Q-08 取得宿主运行时证据前不建生产库。
 - [ ] **并发与幂等**：确认 `command_receipt` 复合主键 `(subject_id, actor_id, request_id)`、最小化（不存受保护 ID/正文）与三者同时匹配的作用域、`expected_data_version`、三路合并，以及 `revision_conflict`/`stale_revision`/`stale_data_version` 的优先级（V-20/V-21）；确认 §9.6 锁序只是草案、未经压测。
 - [ ] **AI**：确认**本版** AI 永不接收私密/未知、无逐条例外、无 override；确认 **Q-10 的“未来逐条授权”仍是未决政策**，不得由 G3 勾选或配置打开（V-25）。
-- [ ] **迁移**：确认 `schema_version=1`、迁移 ledger 连续唯一、备份/失败回滚、expand/contract；确认**单事务为默认、重建表是显式非原子例外**且 Q-29 未设计前不进入生产；确认重建时 `foreign_keys=OFF` 在事务外、`foreign_key_check` 在 COMMIT 前、`ROLLBACK` 不留孤儿、提交后 `ON` 并复核；确认原型映射与 §10.4 隐私初始化（true/false/缺失/非布尔、`history[]` 逐项、`files[]` unknown 为 0/0/0、缺失 `fileId`、`created_at`）**只有伪代码，不含可执行 SQL，未实现、未验证**；确认候选/run 逐条 INSERT、两表来源非空、`adoption_state`/互指/报告按 §10.4；确认默认 `unknown`（候选不可采纳）、`strict_reject` 显式整批回滚（V-44/V-48）。**Q-27/Q-28/Q-29/Q-30/Q-31 均为 G3 阻塞。**
+- [ ] **迁移**：确认 `schema_version=1`、迁移 ledger 连续唯一、备份/失败回滚、expand/contract；确认**单事务为默认、重建表是显式非原子例外**且 Q-29 未设计前不进入生产；确认重建时 `foreign_keys=OFF` 在事务外、`foreign_key_check` 在 COMMIT 前、`ROLLBACK` 不留孤儿、提交后 `ON` 并复核；确认原型映射与 §10.4 隐私初始化（true/false/缺失/非布尔、`history[]` 逐项、`files[]` unknown 为 0/0/0、`fileId` 缺失/null 且无原件痕迹、`created_at`）**只有伪代码，不含可执行 SQL，未实现、未验证**；确认候选/run 逐条 INSERT、两表来源非空、`adoption_state`/互指/报告按 §10.4；确认默认 `unknown`（候选不可采纳）、`strict_reject` 显式整批回滚（V-44/V-48）；确认历史编号 `history[i]→i+1`、当前 `N+1` 且迁移后自检（V-49）；确认来源三态 `no_file/resolved/unresolved`、`fileId` 键缺失/null 与“曾有原件但指针已丢”分开处理（V-33/V-51）；确认无作者证据时 `author_state='unknown'`、两列 NULL，不默认本人（V-53）；确认 cloud run 无 consent 整批 `ROLLBACK`/`consent_unresolved`（V-52）。**Q-27/Q-28/Q-29/Q-30/Q-31 均为 G3 阻塞；Q-33 为迁移阻塞。**
 - [ ] **版本恢复**：确认记录级恢复以新修订写入、不删历史、**只恢复内容、不恢复/降低隐私、不得洗白**、self-only、来源指针保留；库级恢复走 10.3 校验；确认恢复后回执失效**尚未设计，Q-28 为 G3 阻塞**（V-27/V-37）。
-- [ ] **验证**：确认第 11 节 V-01～V-48 为 M5 验收项，而不是“开发自测即可”；§11.1 只保留**可重跑骨架**（`created_at` CHECK、外键重建回滚、三列回执主键、sticky/release/epoch），**不是**“批量断言全部通过”，也不覆盖命令层、迁移、代理授权、跨 subject 或宿主 Q-08；不得把骨架当端到端证据。本版新增 V-35～V-42 与 V-43～V-48 全部为**未执行**，不得写成已通过；V-48 另受 Q-31 阻塞。
+- [ ] **验证**：确认第 11 节 V-01～V-53 为 M5 验收项，而不是“开发自测即可”；§11.1 只保留**可重跑骨架**（`created_at` CHECK、外键重建回滚、三列回执主键、sticky/release/epoch），**不是**“批量断言全部通过”，也不覆盖命令层、迁移、代理授权、跨 subject 或宿主 Q-08；不得把骨架当端到端证据。本版新增 V-35～V-42、V-43～V-48 与 V-49～V-53 全部为**未执行**，不得写成已通过；V-48 另受 Q-31 阻塞，V-53/Q-32、V-52/Q-33 的旧数据证据仍未取得。
 - [ ] **DDL**：确认第 9.3 节只是示意、其省略清单已逐项对完整脚本验收；不把示例字段数当合同；确认字节/ASCII 检查只示例了部分列（V-28/V-31）。
-- [ ] **未决项**：Q-01～Q-31 中仍标未决的每项有负责人/结论（Q-03 已定，不再作为二选一）；**Q-27/Q-28/Q-29/Q-30/Q-31 已明确列入 G3 阻塞，不得写成“不阻塞 v1”**；未来事项仅保留 Q-10 未来例外、Q-17 放宽、P-04 备选、Q-02/Q-23/Q-19/Q-14 等，逐条标注“不阻塞 v1”，不得以“后续再说”混进阻塞清单，也不得把未设计写成已完成。
+- [ ] **未决项**：Q-01～Q-33 中仍标未决的每项有负责人/结论（Q-03 已定，不再作为二选一）；**Q-27/Q-28/Q-29/Q-30/Q-31 已明确列入 G3 阻塞，不得写成“不阻塞 v1”**；Q-33 为迁移阻塞（不改变运行时合同），Q-32 默认 `unknown` 且不阻塞本版；未来事项仅保留 Q-10 未来例外、Q-17 放宽、P-04 备选、Q-02/Q-23/Q-19/Q-14 等，逐条标注“不阻塞 v1”，不得以“后续再说”混进阻塞清单，也不得把未设计写成已完成。
 
 **签认后也只允许：** 先建测试库 → 跑 fixture/不变量 → 通过后再建用户数据根。  
 **签认不等于：** 患者访谈、临床审核、路径全通过、真实云服务、Desktop 装机或安全验收。
@@ -1590,6 +1722,7 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 | v0.1.0-draft.5 | 2026-11-03 | 按独立审查（Q-27/28/29 阻塞、迁移 SQL 缺陷、V33 未验证、批量断言声明不可复现）与全文一致性自查修订：① Q-27/Q-28/Q-29 **全部明确列为 G3 阻塞**，从“未来事项”移出；② 删除 §10.4 不可执行/跨行泄露的迁移 SQL（列名错、漏必填、多行共用 ID、候选 `UPDATE...FROM` 无逐行条件），改为逐行伪代码与硬约束；③ `record.correct`/`restoreRevision` **完全不得改变隐私**，携带或企图写隐私一律 `privacy_changed`，唯一入口 `setPrivacy`；④ 统一 `privacy_epoch`：初值 0，每次进入 `private`（含注册/迁移即私密）严格 +1，`unknown` 不预置 ever/epoch；⑤ 非本人对受保护历史**连元数据/修订号/计数/空位都不可见**，打印同样不放；⑥ 明确 `unknown` 原件唯一解锁路径（`document.setPrivacy(not_private)`，ever=0 不需 release，ever=1 仍需逐条 release）；⑦ `command_receipt` 主键改为 `(subject_id, actor_id, request_id)`，重放/读取/迁移全部三列匹配，旧单列/双列回执失效；⑧ 迁移 `unknown` 不预置 ever/epoch，候选逐行更新；⑨ 传播新修订必须写 document 的新状态（private/unknown），不得一律写 private；⑩ 删除批量断言“全部通过”声明与不可复现结果表，§11.1 只保留可重跑骨架；V-33 改为**未验证**；新增 T-01～T-12 逐条处置 | **待 G3**；Q-27/Q-28/Q-29 阻塞；未建库/未迁真实旧库/未在 Desktop 宿主执行；迁移只有伪代码，无任何可执行 SQL |
 | v0.1.0-draft.6 | 2026-11-03 | 按安全复核（U-01～U-10）修订：① 出站统一 `output_protected(selected revision, current record)`，AI 只发当前修订，导出/artifact 构建与每次下载双 scope 校验；artifact 构建后被保护置 `quarantined`，`contains_private=1` 每次下载需新 `private_export`；② `record.restoreRevision` 改 self-only、恢复不改当前隐私、目标保护等级高于当前即 `privacy_locked`、复制来源并新增 `restored_from_revision_id`；③ 新增 §9.7 跨 subject 引用清单、写入校验与迁移后不变量，Q-30 列为 G3 阻塞；④ 候选来源缺失/不一致/跨 subject 失败关闭为 `source_unresolved`，仅本人可显式转 manual；⑤ proxy adopt 强制 `unknown`+`needs_review`+`privacy_origin='proxy_default'` 并校验 grant，新增 §3.5 身份与授权前置，命令表加“允许调用者”；⑥ 缓存键加 `subject_id` 与授权 scope 版本；⑦ 传播只改当前 `not_private` 记录、候选不降级、artifact 隔离；⑧ 新增 `privacy_state_seq`，release 绑定 `document_state_seq`，`unknown` 往返旧 release 失效；⑨ 删除 §10.4 残留 `UPDATE import_candidate` 伪 SQL，改为逐条 INSERT `import_run`/`import_candidate`；⑩ 新增 V-35～V-42（全部未执行），更新 V-23/V-25/V-27/V-33/V-34；新增 INV-23～27、D-22～24、U-01～U-10；**未声称任何实现/迁移/验收已完成** | **待 G3**；Q-27/Q-28/Q-29/Q-30 阻塞；未建库/未迁真实旧库/未在 Desktop 宿主执行；迁移只有伪代码，无可执行 SQL；新增验收全部“未执行” |
 | v0.1.0-draft.7 | 2026-11-03 | 按五问复核（W-01～W-05）修订：① 来源链加入 `candidate_source_ok`，候选/run/document 悬空、跨 subject、`candidate.document_id != run.document_id`、`adopted_record_id`/`origin_candidate_id` 不互指一律失败关闭，`source_locked=true`，不可采纳/解除/降公开（V-43）；② `import_run`/`import_candidate` 统一 `subject_id`/`document_id` 非空与复合引用，候选 doc=run doc，迁移缺失整批拒绝（V-44）；③ 新增 `import_candidate.adoption_state` 与 §10.4 采纳解析：只有双向显式一致才写互指，默认 `unknown` 模式候选 `pending`+两列 NULL+不可采纳并报告，显式 `strict_reject` 整批 `ROLLBACK`，禁止文本/顺序/日期推断（Q-31/V-48）；④ `record.restoreRevision` 在 `BEGIN IMMEDIATE` 内重读 `current/target/privacy/source_chain`，先校验 `expected_data_version`/`expected_current_revision_no`，再做保护判定，artifact 同事务 stale（V-45）；⑤ 新增 §4.7：create/attachSource/adopt 新挂受保护来源必须**写入** `private`/`unknown`，显式公开 `privacy_locked`，attachSource 只升不降、仅 self，修正 INV-06 与读时过滤矛盾（V-46）；⑥ `data_version` 每批只 +1，artifact `status`/`contains_private`/`status_data_version` 同事务更新，下载逐条重判（V-47）；新增 D-25/26、INV-28/29；**V-43～V-48 全部未执行；Q-27～Q-31 阻塞；未实现/未迁移/未在宿主执行** | **待 G3**；Q-27/Q-28/Q-29/Q-30/Q-31 阻塞；未建库/未迁真实旧库/未在 Desktop 宿主执行；迁移只有伪代码，无可执行 SQL；新增验收全部“未执行” |
+| v0.1.0-draft.8 | 2026-11-03 | 按六项复核（X-01～X-06）修订：① 历史编号固定为老→新 1..N、当前 N+1，迁移伪代码改为 `history[i]→i+1`、当前 `len+1`，写入/读取/迁移自检“当前字段 = 第 N+1 版”（D-27/INV-30/§5.1/V-33/V-49）；② 删除不存在的 `link_state='active'`，明确四态、可新挂白名单与“link_state 不改隐私”，`missing/removed` 拒绝新挂、不自动复活，也不把已知 `not_private+ever=0` 记录变成受保护（D-28/INV-31/§4.7/§6.1/V-50）；③ 来源解析统一 `no_file/resolved/unresolved`，悬空/跨主体/不一致→`unresolved→unknown`，手工无来源→`no_file` 且不强制 unknown，`fileId` 键缺失/null 与“曾有原件但指针已丢”分开（D-29/INV-28/§4.1/§4.5/§10.4/V-33/V-51）；④ 云解析无 consent 失败关闭：建 run/上传/候选前校验、缺失零副作用、`method='cloud'` 的 `consent_id` NOT NULL、迁移无 consent 整批回滚（D-30/INV-32/§6.2/§9.2/§9.4/V-52）；⑤ 新增 `record.author_state`，unknown 时两列 NULL、UI“作者未知”，迁移不再默认写本人（D-31/INV-08/INV-33/§3.2/§9.2/§10.4/V-53）；⑥ 重写 V-33、新增 V-49～V-53 全部未执行；新增 Q-32/Q-33 | **待 G3**；Q-27～Q-31 阻塞；未建库/未迁真实旧库/未在宿主执行；迁移只有伪代码，无可执行 SQL；V-33/V-49～V-53 均“未验证/未执行” |
 
 ---
 
@@ -1604,8 +1737,9 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 - 没有实现 §4.1 `protected_revision`/`protected_record`、§4.6 传播、§9.6 锁序、回执最小化或会话文件句柄；它们只是合同草案，未编码、未测并发、未压测；
 - 没有实现 `record.releaseSourceLink`、`source_link_release` 表、UI、迁移回填或端到端测试；**sticky 的逐条解除只有合同，整套流程是 G3 阻塞**，不能因为文档写了命令名就当成可用功能；
 - 没有在 DSH Desktop 宿主执行任何迁移/DDL；§9.3 的日期/字节检查只在 `node:sqlite` 3.53.4 内存库做过语法/CHECK 冒烟，§11.1 只保留可重跑骨架（不是批量断言结果），宿主 `Z` 后缀/`T` 分隔符/JSON1/部分索引兼容性仍未核验（Q-08）；
-- 没有实现 §10.4 迁移伪代码，也没有留下任何可执行迁移 SQL；没有在真实旧库执行迁移，真实旧库需 M5 授权与去标识后才可验证（V-33 保持“未验证”）；没有实现 `adoption_state`、`resolve_adoption`、`strict_reject`/`unknown` 模式、候选/run 非空拒绝或互指自检，**迁移采纳关系未实现、未迁移、未测试（Q-31/V-48 阻塞）**；
+- 没有实现 §10.4 迁移伪代码，也没有留下任何可执行迁移 SQL；没有在真实旧库执行迁移，真实旧库需 M5 授权与去标识后才可验证（V-33 保持“未验证”）；没有实现 `adoption_state`、`resolve_adoption`、`strict_reject`/`unknown` 模式、候选/run 非空拒绝或互指自检，**迁移采纳关系未实现、未迁移、未测试（Q-31/V-48 阻塞）**；历史编号/当前自检、来源三态、作者 unknown、cloud consent 的迁移分支同样未实现（V-33/V-49～V-53），无 consent 的旧 cloud run 无证据时整批拒绝（Q-33）；
+- 没有实现历史编号“老→新 1..N、当前 N+1”的写入/读取/迁移自检，也没有实现 `record.author_state`、`link_state` 四态校验、来源三态 `resolve_source` 或云解析 consent 的前置失败关闭；V-49～V-53 全部“未执行”，不得把合同当可用功能；
 - 没有验证备份恢复后的回执失效（Q-28）或重建表崩溃恢复（Q-29）；两项均明确标为 **G3 阻塞**，未设计前不得进入生产发布；
-- 没有实现 §3.5 身份/授权前置、`output_protected` 双 scope、§9.7 跨 subject 校验、`privacy_state_seq`/`document_state_seq`、`candidate_source_ok` 来源链解析、§4.7 `source_floor`/`attach_state`/`record.attachSource`、§5.1 恢复事务重读/版本前置、或 `data_version` 与 artifact `status_data_version` 同事务；这些只是合同与验收项，V-35～V-48 全部“未执行”；
-- 没有修复任何已发布代码或数据库；本文件只是 draft.7 合同文本，不能当作漏洞已修复的证据；
+- 没有实现 §3.5 身份/授权前置、`output_protected` 双 scope、§9.7 跨 subject 校验、`privacy_state_seq`/`document_state_seq`、`candidate_source_ok` 来源链解析、§4.7 `source_floor`/`attach_state`/`record.attachSource`、§5.1 恢复事务重读/版本前置、或 `data_version` 与 artifact `status_data_version` 同事务；这些只是合同与验收项，V-35～V-53 全部“未执行”；
+- 没有修复任何已发布代码或数据库；本文件只是 draft.8 合同文本，不能当作漏洞已修复的证据；
 - 没有把 G2 当成 G3；本文件仍需签认。
