@@ -185,6 +185,7 @@
     if (!t || t === document.body || t === document.documentElement) t = null
     if (!t && state.lastPointer && state.lastPointer.closest) t = state.lastPointer.closest('[data-primer-open],button,a')
     state.trigger = t || findTrigger()
+    state.lastTrigger = state.trigger
     state.scrollY = global.scrollY || document.documentElement.scrollTop || 0
     state.open = true
     el.hidden = false
@@ -230,7 +231,7 @@
   /* ---------- 事件 ---------- */
   function onPop() {
     if (ourState()) {
-      if (!state.open) open(findTrigger(), true)
+      if (!state.open) open(state.lastTrigger && state.lastTrigger.isConnected ? state.lastTrigger : findTrigger(), true)
     } else if (state.open) applyClose()
   }
 

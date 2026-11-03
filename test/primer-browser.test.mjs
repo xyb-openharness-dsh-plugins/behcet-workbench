@@ -17,7 +17,7 @@ test('疾病概要入口、四段数据与单层返回', async t => {
     const check=(v,m)=>{if(!v)throw Error(m)};
     const wait=()=>new Promise(r=>setTimeout(r,120));
     if(document.readyState==='loading') await new Promise(r=>document.addEventListener('DOMContentLoaded',r,{once:true}));
-    const btn=document.querySelector('[data-primer-open]');
+    const btn=document.querySelector('[data-primer-entry="hero"]');
     check(btn && btn.offsetWidth && /定义/.test(btn.getAttribute('aria-label')) && /趋势/.test(btn.getAttribute('aria-label')),'P1 入口');
     const sections=window.DISEASE_PRIMER.sections;
     check(sections.map(s=>s.title).join('|')==='定义|医学资料规范和指南情况|目前治疗全景概要|发展趋势','P8 顺序');
