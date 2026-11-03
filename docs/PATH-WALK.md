@@ -25,12 +25,12 @@ node scripts/path-walk.mjs --json --out /tmp/path-walk.json
 # 会把真实 PASS/FAIL 逐条打印，但不把当前失败数写死成“预期”。
 npm run test:path-walk
 
-# 路径门槛：有 FAIL 就退出 1；当前 4/15 PASS，因此退出 1。
+# 路径门槛：有 FAIL 就退出 1；当前 5/15 PASS，因此退出 1。
 npm run probe:paths
 ```
 
 `test/path-walk/harness.test.mjs` 放在子目录，故意不被 `test/*.test.mjs` 收集。
-当前 11 条路径未通过，若把它并进 `check`，要么让 check 变红，要么把失败快照
+当前 10 条路径未通过，若把它并进 `check`，要么让 check 变红，要么把失败快照
 当成绿灯；两者都不诚实。等 15/15 通过后，再把 `probe:paths` 并入 check 链。
 `test/path-walk-result.test.mjs` 的聚合单元测试仍在默认 `npm test` 内。
 
@@ -56,15 +56,15 @@ npm run probe:paths
 
 ## 自动走查结果（2026-11-03）
 
-- 原型 SHA-256：`033a28357838351791ade2004d4f98446917175c86f5d9f9c357192c9cb0ae42`（运行前后一致；包含 S09 私密标记修改）。
+- 原型 SHA-256：`a39e4e2ad852dbb6a7ee5d4fee25043de23460fa4deb7b88b3d4abd27e2b8ac6`（运行前后一致；包含 S03 求助信息修改）。
 - Chromium：154.0.8037.57，视口 1280×900
-- 汇总：15 条中 **4 PASS / 11 FAIL**；其中手工或产物不成立 5 条，仅 AI 默认通道缺失 6 条。
+- 汇总：15 条中 **5 PASS / 10 FAIL**；其中手工或产物不成立 4 条，仅 AI 默认通道缺失 6 条。
 
 | ID | 场景 | 结论 | 手工/产物 | AI 通道 | 主要缺口 |
 | --- | --- | --- | --- | --- | --- |
 | S01 | 记录发作 | FAIL | PASS | FAIL | 只有手工表单，无叙述生成候选与逐项确认 |
 | S02 | 跨科时间线 | PASS | PASS | PASS | 无冲突来源样本，未验证冲突并列 |
-| S03 | 求助信息 | FAIL | FAIL | N/A | 仅一句「待临床审核」占位，缺来源、审核状态、联系医疗专业人员提示 |
+| S03 | 求助信息 | PASS | PASS | N/A | 可查来源与未审核状态及联系提示；无已审核分诊清单，急救句仍待核 |
 | S04 | 血管资料 | FAIL | FAIL | FAIL | 落到普通文字记录页，无资料上传、候选确认、材料计数、缺失标记 |
 | S05 | 消化症状 | FAIL | PASS | FAIL | 症状与检查可分别手工记录并列回看；缺少 AI 候选与逐项确认 |
 | S06 | 记录治疗 | FAIL | PASS | FAIL | 手工/未知剂量可验证，无药名剂量候选通道 |

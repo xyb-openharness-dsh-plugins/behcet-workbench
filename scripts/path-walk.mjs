@@ -323,7 +323,7 @@ async function runS02(ctx) {
 
 async function runS03(ctx) {
   const driver = ctx.driver;
-  await ctx.check('manual', '手工步骤：查看经审核求助信息', async () => {
+  await ctx.check('manual', '手工步骤：查看审核状态及联系提示', async () => {
     const text = await pageText(driver);
     must(text.includes('尚待临床审核'), '求助信息页没有审核状态文字');
     const missing = [];
@@ -333,11 +333,13 @@ async function runS03(ctx) {
     return '审核状态与来源、求助指引均可见';
   });
   await ctx.check('product', '产物：来源/审核状态可查', async () => {
-    const controls = await driver.eval(
-      "document.querySelectorAll('#main button, #main [data-source], #main a').length",
-    );
-    must(controls > 0, '页面没有任何可查看来源或审核信息的控件');
-    throw new Error('页面只有「相关内容尚待临床审核」占位，不能查看来源，也没有未审核时联系医疗专业人员的指引');
+    await driver.click('#main [data-action="s03-sources"]');
+    await driver.waitFor("document.querySelector('#dialog').open === true", { label: '来源和审核状态' });
+    const body = await dialogText(driver);
+    must(body.includes('未临床审核') && body.includes('0 次'), '未如实展示审核状态');
+    must(body.includes('E08') && body.includes('全文未取得'), '来源和取得状态不完整');
+    await driver.click('#dialog-foot [data-action="cancel"]');
+    return '实际打开来源弹窗，核对未审核状态及来源取得情况';
   });
   await noteAiRedline(ctx, driver, '不做 AI 分诊');
   await ctx.check('return', '回首页', () => returnHome(driver));
