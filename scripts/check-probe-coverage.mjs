@@ -26,8 +26,11 @@ const fails = [], oks = [];
    原型不存在 → 明确 skip 并说清"等原型出来才开始保护"，而不是静默通过或直接崩。
    注意：skip 不是静默——它会把 skip 原因打出来，避免以后误以为已经被保护了。 */
 if (!existsSync(APP)) {
+  const htmlExists = existsSync(join(ROOT, 'prototypes/v0.2/index.html'));
   console.log(JSON.stringify({ pass: true, skipped: true,
-    reason: 'prototypes/v0.2/app.js 还不存在（原型未开始）：探针覆盖断言暂不启用，原型落地后自动生效。',
+    reason: htmlExists
+      ? '发现单文件 HTML 原型，但本检查器只支持 app.js 的 ROUTES；尚未检查任何原型路由覆盖。'
+      : 'prototypes/v0.2/app.js 和 index.html 不存在：探针覆盖断言尚未启用。',
     fails: [], oks: [] }, null, 2));
   process.exit(0);
 }
