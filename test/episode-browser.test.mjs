@@ -1,13 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
 import { makePrototypeFixture } from './helpers/prototype-fixture.mjs';
+import { runPage } from './helpers/cdp-probe.mjs';
 
 test('发作记录可新增未知结束、更正回看并遵守私密出口', async t => {
-  const browser = process.env.CHROMIUM || '/usr/bin/chromium';
   const fx = await makePrototypeFixture(t, 'beipal-episode-');
-  const html = fx.html;
   const probe = `<script>
   (async () => { try {
     const check=(v,m)=>{if(!v)throw Error(m)};
@@ -47,7 +44,13 @@ test('发作记录可新增未知结束、更正回看并遵守私密出口', as
     document.querySelector('[data-save-correction]').click();
     check(r.endDate==='2026-01-05' && r.site==='舌' && r.history[0].endDate==='', '更正历史');
     check(!state.selected.has(r.id) && !state.timelineSelected.has(r.id),'私密内容更正后必须重新选择');
-    check(document.querySelector('main').textContent.includes('结束：未知') && document.querySelector('main').textContent.includes('测试私密原文'),'旧值回看');
+    check(document.querySelector('main').textContent.includes('结束：未知') && !document.querySelector('main').textContent.includes('测试私密原文'),'初始泄露旧私密版本');
+    let historyToggle=document.querySelector('[data-history-toggle="'+r.id+'"]');
+    check(historyToggle&&historyToggle.getAttribute('aria-expanded')==='false','缺少私密历史展开入口');
+    historyToggle.click();
+    check(document.querySelector('main').textContent.includes('测试私密原文'),'展开后不能回看旧值');
+    document.querySelector('[data-history-toggle="'+r.id+'"]').click();
+    check(!document.querySelector('main').textContent.includes('测试私密原文'),'收起后旧私密版本仍留在页面');
     document.querySelector('[data-correct="'+r.id+'"]').click();
     document.querySelector('#entry-private').checked=false;
     document.querySelector('#entry-text').value='公开新原文';
@@ -67,7 +70,11 @@ test('发作记录可新增未知结束、更正回看并遵守私密出口', as
     const exported=await captured.text();URL.createObjectURL=originalCreate;HTMLAnchorElement.prototype.click=oldClick;
     check(exported.includes('公开新原文') && exported.includes('结束：2026-01-05 · 部位：舌') && !exported.includes('测试私密原文'),'下载仅含所选当前版本和发作字段');
     go('发作与病程','发作记录');
-    check(document.querySelector('main').textContent.includes('测试私密原文'),'本人详情可回看旧私密版本');
+    check(!document.querySelector('main').textContent.includes('测试私密原文'),'本人详情初始泄露旧私密版本');
+    historyToggle=document.querySelector('[data-history-toggle="'+r.id+'"]');
+    check(historyToggle,'本人详情缺少私密历史展开入口');
+    historyToggle.click();
+    check(document.querySelector('main').textContent.includes('测试私密原文'),'本人详情展开后不能回看旧私密版本');
     document.querySelector('[data-action=discuss]').click();
     check(document.querySelector('#draft').value.includes('口腔不适'),'公开记录进入草稿');
     state.timelineSelected.add(1);
@@ -78,9 +85,7 @@ test('发作记录可新增未知结束、更正回看并遵守私密出口', as
     document.body.dataset.episodeTest='PASS';
   } catch(e) { document.body.dataset.episodeTest='FAIL: '+e.message; } })();
   </script>`;
-  await writeFile(fx.indexPath, html.replace('</body>', probe + '</body>'));
-  const run = spawnSync(browser, ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', fx.url], { encoding:'utf8', timeout:30000 });
-  if (run.error?.code === 'ENOENT') { t.skip('Chromium 不可用；设置 CHROMIUM 指向浏览器'); return; }
-  assert.equal(run.status, 0, run.stderr);
-  assert.match(run.stdout, /data-episode-test="PASS"/, run.stdout.match(/data-episode-test="[^"]*"/)?.[0] || run.stderr);
+  await fx.injectProbe(probe);
+  const result = await runPage(fx.url, 'document.body.dataset.episodeTest || ""', { timeoutMs: 30000 });
+  assert.equal(result, 'PASS');
 });

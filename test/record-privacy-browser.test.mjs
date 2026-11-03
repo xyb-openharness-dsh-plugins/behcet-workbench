@@ -57,10 +57,20 @@ const probe = `(async()=>{try{
   check(ownerView.dataset.adviceOwner==='1','本人医嘱页回看未标记为本人视图');
   ownerView.click();
   body=dialogText();
-  check(body.includes('医嘱私密旧版'),'本人页回看丢失私密历史版本');
+  check(!body.includes('医嘱私密旧版'),'本人页回看初始泄露私密历史版本');
   check(body.includes('医嘱第二公开版')&&body.includes('医嘱当前公开版'),'本人页回看缺少公开版本');
+  const ownerHistoryToggle=q('#dialog-body [data-history-toggle="'+advice.id+'"]');
+  check(ownerHistoryToggle.getAttribute('aria-expanded')==='false','本人页回看缺少收起的私密历史入口');
+  ownerHistoryToggle.click();
+  body=dialogText();
+  check(body.includes('医嘱私密旧版'),'本人页回看展开后仍丢失私密历史版本');
+  q('#dialog-body [data-history-toggle="'+advice.id+'"]').click();
+  check(!dialogText().includes('医嘱私密旧版'),'本人页回看收起后私密历史仍在页面');
   click('#dialog [data-action="cancel"]');
-  check(q('[data-advice-row="'+advice.id+'"]').textContent.includes('医嘱私密旧版'),'本人页列表未显示私密更正历史');
+  const ownerRow=q('[data-advice-row="'+advice.id+'"]');
+  check(!ownerRow.textContent.includes('医嘱私密旧版'),'本人页列表初始泄露私密更正历史');
+  ownerRow.querySelector('[data-history-toggle="'+advice.id+'"]').click();
+  check(ownerRow.textContent.includes('医嘱私密旧版'),'本人页列表展开后未显示私密更正历史');
 
   /* ── 2. 通用记录更正：私密切换、清选择与草稿、历史隐私、未变不追加 ── */
   go('看板');

@@ -23,7 +23,12 @@ test('治疗记录保留未知、精度、来源、更正与私密出口', async
     go('治疗与用药','当前用药');document.querySelector('[data-correct="'+r.id+'"]').click();
     document.querySelector('#t-private').checked=false;document.querySelector('#t-drug').value='更正药名';document.querySelector('#t-dose').value='原文剂量';document.querySelector('#t-source').value='更正来源';document.querySelector('#t-precision').value='unknown';document.querySelector('#t-precision').dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-save-correction]').click();
     check(r.history[0].drug==='合成药名' && r.history[0].source==='合成处方' && r.history[0].private===true && r.date==='' && r.datePrecision==='unknown','更正历史及未知日期');
-    check(document.querySelector('main').textContent.includes('合成处方'),'本人可回看旧来源');
+    check(!document.querySelector('main').textContent.includes('合成处方'),'本人页初始泄露私密旧来源');
+    const historyToggle=document.querySelector('[data-history-toggle="'+r.id+'"]');
+    check(historyToggle&&historyToggle.getAttribute('aria-expanded')==='false','本人页缺少私密历史展开入口');
+    historyToggle.click();
+    check(document.querySelector('main').textContent.includes('合成处方'),'本人展开后不能回看旧来源');
+    document.querySelector('[data-history-toggle="'+r.id+'"]').click();
     go('看板');check(!document.querySelector('main').textContent.includes('合成处方'),'首页不泄露私密历史');
     document.querySelector('[data-action=discuss]').click();check(document.querySelector('#draft').value.includes('更正药名') && !document.querySelector('#draft').value.includes('合成处方'),'AI 仅当前公开版本');
     go('复诊与准备','就诊准备与导出');const choice=document.querySelector('[data-select="'+r.id+'"]');choice.checked=true;choice.dispatchEvent(new Event('change',{bubbles:true}));check(document.querySelector('#export-preview').textContent.includes('原文剂量') && !document.querySelector('#export-preview').textContent.includes('合成处方'),'导出仅当前选择');

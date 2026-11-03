@@ -45,7 +45,7 @@ const probe = `(async()=>{try{
   check(q('#dialog-title').textContent==='授权与隐私','弹窗标题不对');
   check(dialogText().includes('不宣称加密'),'缺少不宣称加密的边界说明');
   check(dialogText().includes('AI 草稿始终排除私密'),'缺少 AI 始终排除私密说明');
-  check(dialogText().includes('账号权限')&&dialogText().includes('服务端隔离'),'缺少不宣称真实权限/服务端隔离的说明');
+  check(dialogText().includes('没有账号')&&dialogText().includes('不是登录身份')&&dialogText().includes('服务端隔离'),'缺少无账号授权/真实权限/服务端隔离的说明');
   check(!dialogText().includes('已加密'),'文案不应声称已加密');
   check(q('[data-record-private="3"]').checked,'私密记录未显示为已标记');
   check(q('[data-record-private="3"]').getAttribute('aria-label').includes('私密'),'私密开关缺少可区分的无障碍名称');

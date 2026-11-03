@@ -106,7 +106,13 @@ const probe = `(async()=>{try{
   check(second.text==='更正后的医嘱原文'&&second.proposer===''&&second.reviewDate===''&&second.private===false,'更正后的未知字段被补写');
   const corrected=document.querySelector('main').textContent;
   check(corrected.includes('更正后的医嘱原文')&&corrected.includes('提出者：未知')&&corrected.includes('拟复查日期：未知'),'更正后的当前事实未回看');
-  check(corrected.includes('更正前（1）')&&corrected.includes('请三个月后复查口腔'),'本人不能回看私密旧版本');
+  check(!corrected.includes('请三个月后复查口腔'),'本人页初始泄露私密旧版本');
+  const historyToggle=document.querySelector('[data-history-toggle="'+second.id+'"]');
+  check(historyToggle&&historyToggle.getAttribute('aria-expanded')==='false','本人页缺少私密历史展开入口');
+  historyToggle.click();
+  check(document.querySelector('main').textContent.includes('请三个月后复查口腔'),'本人展开后不能回看私密旧版本');
+  document.querySelector('[data-history-toggle="'+second.id+'"]').click();
+  check(!document.querySelector('main').textContent.includes('请三个月后复查口腔'),'收起后私密旧版本仍留在页面');
 
   document.querySelector('[data-correct="'+second.id+'"]').click();
   document.querySelector('[data-save-correction="'+second.id+'"]').click();
