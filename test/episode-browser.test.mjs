@@ -46,7 +46,7 @@ test('发作记录可新增未知结束、更正回看并遵守私密出口', as
     document.querySelector('#entry-text').value='更正原文';
     document.querySelector('[data-save-correction]').click();
     check(r.endDate==='2026-01-05' && r.site==='舌' && r.history[0].endDate==='', '更正历史');
-    check(state.selected.has(r.id) && state.timelineSelected.has(r.id),'私密保持私密时保留显式选择');
+    check(!state.selected.has(r.id) && !state.timelineSelected.has(r.id),'私密内容更正后必须重新选择');
     check(document.querySelector('main').textContent.includes('结束：未知') && document.querySelector('main').textContent.includes('测试私密原文'),'旧值回看');
     document.querySelector('[data-correct="'+r.id+'"]').click();
     document.querySelector('#entry-private').checked=false;
