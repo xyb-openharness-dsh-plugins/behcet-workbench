@@ -1,14 +1,17 @@
 # 数据模型与迁移合同（草案）
 
 > 文档：`docs/DATA-MODEL-DRAFT.md`  
-> 版本：`v0.1.0-draft.8`
+> 版本：`v0.1.0-draft.9`
 > 日期：2026-11-03  
-> 状态：**只读分析后的原创草案；未冻结；待 G3 签认**；0 患者访谈、0 临床审核；G2 只确认原型范围，不能继承为 G3。本版只做合同文本修订，**未建库、未跑迁移、未做宿主验证、未写业务代码**。  
-> 依据：2026-11-03 用户 G2 确认、`docs/SPEC.md`、`docs/SCENARIOS.md`、`docs/UI-DESIGN.md`、`docs/INTERACTION-DESIGN.md`、`docs/04-DATA.md`、`docs/14-HTML-AND-DATA-CONTRACT.md`、2026-11-03 独立审查 R-01～R-14（见 §0.1）、draft.3 复核 S-01～S-10（见 §0.2）、T-01～T-12（见 §0.3）、本轮安全审查 U-01～U-10（见 §0.4）、本轮五问复核 W-01～W-05（见 §0.5）、draft.8 六项复核 X-01～X-06（见 §0.6），以及 `prototypes/v0.2/` 的实际实现。
+> 状态：**只读分析后的原创草案；未冻结；待 G3 签认**；0 患者访谈、0 临床审核；G2 只确认原型范围，不能继承为 G3。draft.9 只按原型实测修订合同文本，**未建库、未跑迁移、未做宿主验证、未写业务代码**；G3 未签。
+>
+> 依据：2026-11-03 用户 G2 确认、`docs/SPEC.md`、`docs/SCENARIOS.md`、`docs/UI-DESIGN.md`、`docs/INTERACTION-DESIGN.md`、`docs/04-DATA.md`、`docs/14-HTML-AND-DATA-CONTRACT.md`、2026-11-03 独立审查 R-01～R-14（见 §0.1）、draft.3 复核 S-01～S-10（见 §0.2）、T-01～T-12（见 §0.3）、本轮安全审查 U-01～U-10（见 §0.4）、本轮五问复核 W-01～W-05（见 §0.5）、draft.8 六项复核 X-01～X-06（见 §0.6）、draft.9 四项原型事实复核 Y-01～Y-04（见 §0.7），以及 `prototypes/v0.2/` 的实际实现。
 > 边界：本文件**不创建生产数据库、不建表、不写迁移脚本、不修改其他文件**。G3 签认前不得据此建库；G3 之后也只能先建测试库并跑完本文件第 11 节的可验证约束。**本版最优先的修订是向 `docs/SPEC.md` 对齐**：原件不复制、不缓存，登记只是出处关联；移除/撤回不静默删手工来源；代记者看不到私密元数据；AI 本版禁止接收私密或隐私未知内容，未来例外仍属未决。与 SPEC 冲突时以 SPEC 为准，本文件回改，不用“数据模型更完整”覆盖已确认规格。  
 > 前几轮已写入的复核要点（draft.6/7，保留）：① Q-27/Q-28/Q-29/Q-30/Q-31 **全部明确标为 G3 阻塞**；② 清除 §10.4 残留的 `UPDATE import_candidate` 伪 SQL，改为逐条 INSERT `import_run`/`import_candidate` 的伪代码，并明确“任何人不得从旧版本复制执行”；③ `record.correct` **完全不得改变隐私**，隐私只能走 `record.setPrivacy`；④ 统一 `privacy_epoch`（进入 `private` 才 +1）并新增 `privacy_state_seq`（任何隐私状态变化 +1），用后者使 `unknown` 往返后的旧 release 自动失效；⑤ 非本人连受保护历史的元数据、修订号、计数和空位都不可见；⑥ 明确 `unknown` 原件的唯一解锁路径；⑦ `command_receipt` 主键 `(subject_id, actor_id, request_id)`；⑧ 迁移 `unknown` 不预置 ever/epoch；⑨ 传播写入原件新状态且**不降级**已有的 `private`；⑩ 删除不可复现的批量断言结果表，只保留可重跑骨架；V-33 改为未验证。**本轮新增：出站（导出/AI/产物）必须同时校验“选中的那一版修订”与“当前记录”，不能只看其一；恢复历史只能本人且不得洗白；跨 subject 引用全部校验并把 Q-30 列为 G3 阻塞；缺失候选来源失败关闭；代理采纳候选强制 `unknown` 并校验全部写入的身份/授权范围；缓存键必须含 `subject_id`；迁移伪代码不含可执行 SQL。**本轮五问复核（W-01～W-05）：来源链悬空/跨主体/不一致一律失败关闭；`import_run`/`import_candidate` 统一 `subject_id`/`document_id` 与复合引用；迁移无法判定采纳关系时默认 `unknown`（候选不可采纳），可显式选择整批拒绝，并列为 Q-31/G3 阻塞；`record.restoreRevision` 在事务内重读并前置版本校验；新挂受保护来源必须写入保护状态；`data_version` 与 artifact 隔离在同一事务一致。新增 V-43～V-48，全部未执行。所有未执行项一律标“未验证”。**
 
 > **draft.8 本轮复核要点（X-01～X-06）**：① 历史编号固定为“老→新 1..N、当前 N+1”，迁移与读取都要自检当前内容，不允许把当前内容再当历史、也不允许把最新版标成第 1 版；② `link_state` 只有 `unverified/verified/missing/removed` 四态，`active` 不存在，四态对“可新挂/保护”的语义分开写清；③ 来源解析固定为 `no_file/resolved/unresolved` 三态，悬空/跨主体/不一致一律 `unresolved → unknown`，手工无来源不得混同为悬空；④ 云解析 run 无 consent 失败关闭（运行时不建 run、不上传、不建候选；迁移整批拒绝），不伪造 consent 或成功状态；⑤ 作者无法确定时 `author_state='unknown'`、两列作者字段为 NULL，不默认记成本人；⑥ V-33 按上述五类重写，新增 V-49～V-53，全部**未执行/未验证**。
+
+> **draft.9 原型事实复核要点（Y-01～Y-04）**：① **历史修订从未保存 `fileId`**：原型 `history[]` 只有日期、正文、`source`、`private`，血管另有 `fileLinked` 布尔；没有文件 ID、文件名、大小、登记时间，也没有 `original`。迁移**不得**用当前记录的 `fileId`、文件名相似、日期/顺序或 `fileLinked=true` 回填历史；历史来源只能落 `source_kind='legacy_text'`（普通“原件：文件名”文本）或 `'removed_irrecoverable'`（已移除文本），无指针、不猜、不标成“悬空”。② **未知日期精度**：原型 `date` 字段可保留原文而 `datePrecision='unknown'`；迁移必须 `occurred_date=NULL`、`occurred_raw=原文`、`needs_review=1`，不得按形状补日/月，也不得用今天、文件时间、导入时间或治疗时长反推；原文为空也保留“日期未知”的待核语义，用户确认“确实记不清”后才清 `needs_review`，日期仍为 NULL。③ **移除原件不可恢复**：原型确认移除时把 `state.files` 的整项过滤掉、把相关记录的 `fileId`/`original` 置空，并把当前与历史来源中的自动文件名 `scrub` 成“原件已移除”；没有墓碑行、`removed_at/by`、`link_state='removed'`、原文件名/大小/登记时间/隐私，刷新即失。迁移**禁止伪造** `source_document`、墓碑或文件名；只能以 `source_kind='removed_irrecoverable'` 保留“曾有原件但登记已不可恢复”的事实并计数。④ **区分既存事实与未来设计**：draft.8 §6.1 的“软删登记、保留 `display_name`、行不物理删除、历史指针保留”是**未来产品设计，尚未实现、未被原型验证**，不得写成原型已具备或迁移可依赖的事实；§0.7 逐项列明。新增 D-32、部分修订 D-29/INV-22/INV-28/§4.1/§4.5/§4.7/§5.1/§5.2/§6.1/§10.4/V-03/V-26/V-33/V-51，新增 V-54～V-57，全部**未执行**；G3 仍未签。
 
 ---
 
@@ -21,7 +24,7 @@
 3. **来源与候选层**：`source_document` 只保存原件登记（不复制内容），`import_run`/`import_candidate` 保存解析过程与候选；候选不是事实，逐条采纳才生成 `record`。
 4. **读模型与产物层**：看板、时间线、一图秀、治疗阶段、复诊预览都从同一组 `record_revision` 派生；导出是冻结的 `artifact`，不是当前事实的副本。
 
-据此形成的 31 条核心决定：
+据此形成的 32 条核心决定：
 
 | 编号 | 决定 | 理由 |
 |---|---|---|
@@ -53,9 +56,10 @@
 | D-26 | **版本与产物隔离同事务**：每批事实/隐私/来源/授权/产物状态变化只递增一次 `subject.data_version`，并在同一事务把所有受影响 artifact 置 `quarantined`/`stale` 且写 `status_data_version=新 data_version`；`artifact.build` 的 `source_data_version` 是构建前快照、`status_data_version` 是提交后版本；下载每次重判，不能只看 `status` 或文件路径 | 只递增版本不隔离产物会让旧产物继续可下载；只隔离产物不递增版本会让读模型/缓存继续显示旧状态；两者必须同事务一致 |
 | D-27 | **历史编号固定为“老→新 1..N，当前 N+1”**：`record_revision.revision_no` 从 1 连续递增；历史列表只含 1..N（老→新），当前内容 = `N+1 = MAX(revision_no)`，不得把当前内容再复制成一条历史；非本人视图只按可见集重排显示序号，不得暗示存在隐藏修订 | 原型 `history[]` 按 push 顺序保存“上一版”，当前内容在记录自身；旧迁移把当前写成 1、历史写成 2..N+1，会把“最新”标成“第 1 版”。读取时自检当前字段必须等于 N+1 修订，失配按 `needs_review` 失败关闭，不能用历史最后一项冒充当前 |
 | D-28 | **`link_state` 只有 `unverified/verified/missing/removed`，没有 `active`**；它只表示“最近一次会话核对结果”，不是隐私状态，也不改变 `privacy_state`/`privacy_epoch`/`privacy_state_seq`。新挂只允许 `unverified/verified`；`missing`/`removed` 不可新挂（`document_missing`/`document_removed`），已有关联保留并按隐私状态判定保护 | 把不存在的 `active` 写成挂接前提会让迁移/新挂路径直接失败；把 `verified` 当“可打开”、把 `removed` 当“隐私归零”都会制造假能力/假公开。`missing/removed` 且隐私已知 `not_private`、`ever=0` 时不因链接状态本身变成受保护；隐私未知或曾私密未 release 时仍按 `unknown` 保护 |
-| D-29 | **来源解析只返回 `no_file` / `resolved` / `unresolved` 三态**：该记录当前与历史修订都无 document/candidate 指针**且 `source_kind='manual'`**（新写入须显式声明；迁移中该记录所有修订的 `fileId` 键不存在或为 null 且 `original`/来源无原件痕迹）→ `no_file`；指针存在且可解析同 subject → `resolved`；指针存在但行缺失/跨 subject/候选-run-doc 不一致/互指不成立，或无指针但保留“曾有原件”痕迹（`source_kind='document'`）→ `unresolved` → 必须按 `unknown` 保护 | “没有指针”和“指针悬空”是两件事：前者是手工无来源，不能强制 unknown 或标 needs_review；后者是丢失/污染，必须 unknown + `source_locked`。只把 NULL 当“无来源”会让删指针洗白悬空链；把悬空当手工会让受保护正文变公开，而原型手工记录与“移除原件”都写 `fileId:null`，必须靠 `original`/来源文本区分 |
+| D-29 | **来源解析返回 `no_file` / `resolved` / `legacy_text` / `removed_irrecoverable` / `unresolved` 五态**：当前无任何 document/candidate 指针、`source_kind='manual'`、且当前与历史均无原件痕迹 → `no_file`；指针存在且可解析同 subject → `resolved`；无指针但来源只有文本型“原件：文件名”（典型为历史修订；原型 `history[]` 从未保存 `fileId`）→ `legacy_text`，保留 `source_text`、**记录当前隐私**至少 `unknown`、`needs_review=1`，**不猜测回填**；无指针且来源为“原件已移除”、文件项已被删除 → `removed_irrecoverable`，保留原文、**记录当前隐私**至少 `unknown`、`needs_review=1`，**不伪造墓碑**；历史修订自身隐私仍只看该项 `private`，不因来源分类回溯改写；指针存在但行缺失/跨 subject/候选-run-doc 不一致/互指不成立 → `unresolved` → 必须按 `unknown` 保护并 `source_locked` | “没有指针”“历史只有文本”“原件已移除”“指针悬空”是四件不同的事。原型历史从不保存 `fileId`，把历史文本当 document 会制造假悬空；把移除当软删会伪造可恢复性。`legacy_text`/`removed_irrecoverable` 都是不可解析的既存事实，只能保守保护并提示重新登记，不能洗成 `manual` 或 `resolved` |
 | D-30 | **云解析无 consent 失败关闭**：`import.start` 在创建 run、上传字节、创建候选之前校验 `cloud_parse` consent（self、未撤回、document/subject 匹配）；缺失返回 `consent_required`，不建 run。迁移中 `method='cloud'` 且无法证明 consent 的 run 整批 `ROLLBACK`/`consent_unresolved`，不得伪造 consent 行或状态 | “先建 run 再补同意”会留下已发送/已解析的无同意记录；“迁移时补一个 consent”等于伪造患者同意。失败关闭比事后删除更可审计 |
 | D-31 | **作者无法确定不得伪造**：`record.author_state ∈ {known, unknown}`；`unknown` 时 `author_actor_id`/`on_behalf_grant_id` 均为 NULL，界面显示“作者未知”，不得默认记为本人、`system` 或任何具体 actor；只有 payload 明确作者或代理+有效 grant 才写 `known` | 旧数据没有作者字段；迁移把所有记录写成 `ctx.subject_actor_id` 等于把代记/他人内容冒充本人亲笔，也会误导 `own_entries` 读取范围。`system` 只是迁移执行者，不是作者 |
+| D-32 | **历史修订从未保存 `fileId`，不得猜测回填；移除原件没有墓碑，不得伪造登记**：原型 `history[]` 的每一版只有日期/正文/`source`/`private`（血管另有 `fileLinked` 布尔），没有 `fileId`、文件名、大小、登记时间或 `original`。迁移只接受“当版显式非空 `fileId`”作为指针；键不存在或为 NULL 时一律 `source_document_id=NULL`，普通“原件：文件名”文本落 `source_kind='legacy_text'`、已移除文本落 `'removed_irrecoverable'`，不得用当前 `fileId`、文件名相似、日期/顺序或 `fileLinked=true` 反推。原型移除原件直接删除 `files[]` 项、把当前 `fileId`/`original` 置空并 scrub 当前/历史来源，没有墓碑；迁移不得伪造 `source_document` 行、`removed_at/by`、`link_state='removed'` 或文件名，只能以 `source_kind='removed_irrecoverable'` 保留“曾有原件但登记已不可恢复”的事实并计数 | 把“当时关联过原件”升级成某个具体文件，会把 A 文件的内容/隐私归到 B 文件；把不存在的墓碑补出来，会让“可恢复/可解除”变成假装。历史文本是证据，不是外键；不可恢复只能如实标注，不能借未来软删设计回填 |
 
 ### 0.1 本次独立审查的处理（R-01～R-14）
 
@@ -158,6 +162,21 @@
 
 **当前状态：不存在生产数据库、不存在真实数据目录、未执行任何迁移。** 本文件是合同草案，不是实现证据。
 
+> **历史注记（draft.9）**：上表 X-03 是 draft.8 的处置记录，其中“无指针但保留‘曾有原件’痕迹 → `unresolved`”已被 draft.9 按 Y-01/Y-03 取代：普通“原件：文件名”文本落 `legacy_text`，移除后文本落 `removed_irrecoverable`，两者都不标 `unresolved`/`document`。X-01～X-06 作为历史不重写；当前口径以 D-29、INV-22/INV-28、§4.1、§4.5、§4.7、§10.4 为准。
+
+### 0.7 原型既存事实与未来设计（Y-01～Y-04）
+
+本版把“原型实际如此”与“未来产品应如何”分开。原型是 `prototypes/v0.2/index.html` 的内存演示：**无 localStorage/IndexedDB、无真实旧库、刷新即重置**。因此下列“原型事实”只证明当前 UI/state 的行为，不能证明生产环境已实现任何表、迁移或恢复能力；§6.1 的软删墓碑、`removed_at/by`、`link_state='removed'` 等仍按**未来设计**处理，未实现、未验证。
+
+| 编号 | 原型事实（逐行复核） | 对迁移的约束 | 不得做的事 |
+|---|---|---|---|
+| Y-01 | `history[]` 的每个对象由 `data-save-correction` 分支生成，键只有日期/正文/`source`/`private`（血管另有 `fileLinked:!!r.fileId` 布尔）；**没有 `fileId`、文件名、大小、登记时间、`original`**；`demo-data*.js` 的 `history` 全为空数组 | 当版 `fileId` 键缺失或 NULL 时 `source_document_id=NULL`；来源文本按痕迹落 `source_kind='legacy_text'` 或 `'removed_irrecoverable'`（保留原文），不计入 `source_chain`；报告“历史文本来源/不可恢复来源”计数 | 用当前记录 `fileId`、文件名相似、日期/顺序或 `fileLinked=true` 回填具体 `source_document`；把历史文本标成 `document` 再判悬空；为历史补 `original` |
+| Y-02 | 日期输入可有原文而 `datePrecision='unknown'`；显示层 `dateText` 显示“日期未知”，`rawDateNote` 仅在 `precision==='unknown'` 且 `date` 非空时显示“原始值/原始精度，待核，不参与排序”；没有独立 `raw` 列，原文存在 `date` 字符串；新增记录只收 `#entry-date`，未知日期主要来自候选采纳 | `occurred_date=NULL`、`occurred_precision='unknown'`、`occurred_raw=原文`（原文为空则 NULL）、`needs_review=1`；不参与排序/时间轴定位；用户确认“确实记不清”后才清 `needs_review`，日期保持 NULL | 按 `YYYY-MM`/`YYYY` 形状补 `-01`/`-01-01`；用今天、文件时间、导入时间、治疗时长、发作顺序反推；把原文丢成空串；把 `unknown` 当 `day` 渲染 |
+| Y-03 | 移除原件：`data-file-del-confirm` 直接 `state.files=state.files.filter(...)`、`state.candidates=...filter(...)`；关联记录 `r.fileId=null;r.original=null`；当前与历史 `source` 用 `scrubRemovedFileName` 只把全等的“原件：文件名”改成“原件已移除”（带备注变体不改），空则“原件已移除”；**无 tombstone 行、无 `removed_at/by`、无 `link_state='removed'`、无原文件名/大小/登记时间/隐私副本**；演示无持久化，刷新后连“曾移除”也消失 | 迁移对“当前无指针但来源含‘原件已移除’/‘原件：残留名’”的记录：`source_kind='removed_irrecoverable'`、`source_document_id=NULL`，**记录当前隐私**至少 `unknown`、`needs_review=1`，保留 `source_text` 原文；报告计数并提示“具体原件不可恢复”；用户可重新登记原件后再解析 | 伪造 `source_document` 行、`removed_at/by`、`link_state='removed'`、`display_name`、`byte_size`、`registered_at`；从“原件已移除”猜文件名；按 `fileLinked=true` 反推文件；把不可恢复说成“已软删可恢复”；删除手工 `source_text` |
+| Y-04 | §6.1 的“移除只置 `link_state='removed'`、保留 `display_name`、行不物理删除、历史指针保留”是 draft.8 写的**未来产品设计**；原型没有 `source_document` 表、没有墓碑、没有 `removed_at`，也没有历史指针 | 合同可保留该未来设计供实现，但必须显式标注“未实现/待验证”，V-26 只作未来验收，不能声称原型已通过；迁移不得依赖它 | 把未来设计写成“原型已具备”；用 V-26 的软删断言证明旧数据可恢复；在 §15 之外声称已实现 |
+
+据此 draft.9 新增 D-32、INV-34～INV-36，并修订 D-29/INV-22/INV-28/§4.1/§4.5/§4.7/§5.1/§5.2/§6.1/§9.2/§10.4/§11/§13/§14/§15；**全部验收仍未执行，G3 仍未签**。
+
 ---
 
 ## 1. 术语与范围
@@ -206,18 +225,21 @@
 - **INV-19 幂等**：相同 `request_id` 与相同载荷的重放必须返回首次结果，不得产生第二个修订、第二个产物或第二次出站；幂等回执与副作用同事务。
 - **INV-20 外键执行**：SQLite 连接必须显式开启外键并自检；任何迁移/恢复完成后 `PRAGMA foreign_key_check` 必须为空，否则拒绝启动。重建表的检查必须在**同一事务 COMMIT 之前**执行；`PRAGMA foreign_keys=OFF/ON` 必须在事务外切换，提交后再复核一次。
 - **INV-21 保护判定唯一（双 scope）**：读模型、导出、摘要、AI、打印、代记查询、审计/回执可见性必须调用同一个 §4.1 实现，但只能传两个显式 scope：`revision`（历史显示，只看修订自身 `effective_state`）或 `record`（当前记录/选择/改公开/代理可见性，另加来源链与 sticky）。不得各自写“只看当前 `privacy_state`”的简化版，不得用配置切换回溯口径，也不得让调用方临时选择“宽松”scope。
-- **INV-22 来源链继承**：记录的保护状态沿 `source_document → import_run → import_candidate → record` 以及历史修订的 `source_document_id` 继承；链上任一环当前为 `private/unknown`、缺失/悬空/跨 subject/不一致、不可判定，或 `privacy_ever_private=1` 且该 `(record, document, 当前 privacy_epoch, 当前 privacy_state_seq)` 没有有效 `source_link_release`，记录即受保护。删掉当前修订的来源指针**不能**解除链上保护；历史显示不走这条链，只看修订自身状态。
+- **INV-22 来源链继承且只收真实指针**：记录的保护状态沿 `source_document → import_run → import_candidate → record` 以及当前/历史修订中**真实非空**的 `source_document_id` 继承；链上任一环当前为 `private/unknown`、缺失/悬空/跨 subject/不一致、不可判定，或 `privacy_ever_private=1` 且该 `(record, document, 当前 privacy_epoch, 当前 privacy_state_seq)` 没有有效 `source_link_release`，记录即受保护。删掉当前修订的来源指针**不能**解除链上保护；历史显示不走这条链，只看修订自身状态。`source_kind='legacy_text'`/`'removed_irrecoverable'` 没有可解析指针，不并入 `source_chain()`，但按 D-29 保持**记录当前**隐私至少 `unknown` + `needs_review=1`（历史修订自身仍只看该项 `private`），不得因“无指针”被当成手工无来源而降公开。
 - **INV-23 出站双 scope**：导出、AI、artifact 的每个选中条目都必须同时通过 `protected(selected_revision,'revision')` 与 `protected(record_current,'record')`；任一受保护即不得进入 AI，导出/artifact 只能由本人逐条 `private_export` 并计入 `included_private`。历史显示仍只走 `revision` scope，不能把出站门槛反向用于回溯隐藏公开历史。
 - **INV-24 恢复不洗白**：`record.restoreRevision` 只能本人调用；恢复只写内容，**不改变记录隐私**，新修订隐私取当前记录；目标修订的保护等级高于当前记录时返回 `privacy_locked`；必须保留目标来源指针；代理调用一律 `not_authorized`，不得泄露目标是否存在。
 - **INV-25 跨 subject 一致**：§9.7 列出的每一条跨表引用在写入时必须满足 subject 一致；FK 通过不等于 subject 通过；迁移后不变量查询必须为 0 行。该校验未实现前，Q-30 是 G3 阻塞。
 - **INV-26 身份来自会话**：所有写命令的 `actor_id` 必须从已认证会话/宿主上下文解析，请求体中的 `actor_id`/`subject_id` 只作对照；`demo_unverified` 不得写入生产 subject，`local_profile` 不得代理，proxy 必须 `host_authenticated` 且有覆盖该命令 kind+日期的有效 grant。
 - **INV-27 缓存按 subject 隔离**：任何读模型/预览缓存键必须含 `subject_id`、`viewer_actor_id`、`data_version`、`read_model_version`（及授权 scope 版本）；缺任一键不得复用；授权/隐私变化必须递增 `data_version`。
-- **INV-28 来源链可解析**：`source_document → import_run → import_candidate → record` 的每一环都必须可解析、同 subject，且 `candidate.document_id = import_run.document_id`、`record.origin_candidate_id` 与 `candidate.adopted_record_id` 互指；任一缺失/悬空/跨 subject/不一致，按 `source_locked=true` 受保护，候选不可采纳、记录不可 `releaseSourceLink` 或降为 `not_private`；写入返回 `source_unresolved`/`cross_subject_reference`，不得把悬空当“无来源”或回退到 `not_private`。来源解析必须落到 `no_file/resolved/unresolved` 三态：只有完全没有 document/candidate 指针且 `source_kind='manual'`（新写入显式声明；迁移只在该记录所有修订（含历史）的 `fileId` 键缺失或为 null 且 `original`/来源无原件痕迹时映射 manual）才是 `no_file`；任何指针存在但行缺失、跨 subject、候选/run/document 不一致或互指不成立都是 `unresolved`，必须按 `unknown` 保护并 `needs_review`；无指针但 `original` 非空或来源含“原件：/原件已移除”的同样按 `unresolved` 保护（`source_kind='document'`），不得洗成手工；`source_document_id IS NULL` 本身不证明手工无来源。
+- **INV-28 来源链可解析且不猜历史**：`source_document → import_run → import_candidate → record` 的每一环都必须可解析、同 subject，且 `candidate.document_id = import_run.document_id`、`record.origin_candidate_id` 与 `candidate.adopted_record_id` 互指；任一缺失/悬空/跨 subject/不一致，按 `source_locked=true` 受保护，候选不可采纳、记录不可 `releaseSourceLink` 或降为 `not_private`；写入返回 `source_unresolved`/`cross_subject_reference`，不得把悬空当“无来源”或回退到 `not_private`。来源解析固定五态：只有完全没有 document/candidate 指针且当前 `source_kind='manual'`、且当前与历史均无原件痕迹才是 `no_file`；任何真实指针存在但行缺失、跨 subject、候选/run/document 不一致或互指不成立都是 `unresolved`，必须按 `unknown` 保护并 `needs_review`；**历史 `fileId` 键缺失/NULL 是常态，不得回填**，其“原件：文件名”文本落 `legacy_text`（**记录当前**隐私至少 `unknown`、`needs_review=1`；历史修订自身隐私仍只看该项 `private`），移除后的“原件已移除”落 `removed_irrecoverable`（同样记录当前 unknown+needs_review，不伪造墓碑），两者都不是 `resolved`，也不得标成 `document` 再判悬空；`source_document_id IS NULL` 本身不证明手工无来源。
 - **INV-29 版本与产物一致**：每批事实/隐私/来源/授权/产物状态变化只在同一事务递增一次 `subject.data_version`；受影响 artifact 同时置 `quarantined`/`stale` 并写 `status_data_version=新版本`；不允许版本已变而 artifact 仍 `ready`，也不允许只隔离产物不递增版本；下载每次重判，旧 `status` 与路径不构成放行证据。
 - **INV-30 历史编号与当前自检**：`revision_no` 从 1 连续递增、不跳号不重复；历史视图只含 1..N（老→新），当前内容恒为 `N+1 = MAX(revision_no)` 且不再重复成一条历史；任何写入、读取、迁移都必须自检“渲染的当前字段 = 第 N+1 版修订”，失配按 `needs_review` 失败关闭，不得回退到历史最后一项；非本人视图只对可见集重排显示序号，不得暗示隐藏修订。
 - **INV-31 `link_state` 不是隐私**：`link_state` 只能是 `unverified/verified/missing/removed`，没有 `active`；它只表示最近一次会话核对结果，不得改变 `privacy_state`/`privacy_epoch`/`privacy_state_seq`。新挂只允许 `unverified/verified`；`missing`/`removed` 不可新挂且不得自动复活；`verified` 不等于可跨会话打开，`removed` 不等于隐私归零。
 - **INV-32 云解析无 consent 无 run**：`method='cloud'` 的 `import.start` 必须在创建 run、上传字节、创建候选之前通过 `cloud_parse` consent 校验（self、未撤回、document/subject 匹配）；缺失即 `consent_required` 且零副作用（无 run、无上传、无候选、无 `tmp/` 正文）。迁移无法证明 consent 的 cloud run 整批 `ROLLBACK`/`consent_unresolved`，不得补造 consent 行或改写状态。
 - **INV-33 作者未知不伪造**：`record.author_state` 只有 `known/unknown`；`known` 时 `author_actor_id` 必须指向同 subject 的有效 actor，proxy 作者必须同时有覆盖该记录的 `on_behalf_grant_id`；`unknown` 时两列必须为 NULL。迁移/导入没有作者证据时写 `unknown`，不得默认 `subject_actor_id`、不得用 `system` 冒充作者；`unknown` 不得被当成“本人亲笔”，也不得被代记者当作可读自己条目的依据。
+- **INV-34 历史文本不是文件指针**：`record_revision.source_document_id` 只接受该版记录中显式非空 `fileId` 解析出的同 subject document；`history[]` 对象没有 `fileId` 键是常态，**键缺失与 NULL 同等对待，必须保持 NULL**。历史来源文本（含“原件：文件名”）只落 `source_text` + `source_kind='legacy_text'`，不得因文本形状、当前记录指针、文件名相似、日期/顺序或 `fileLinked=true` 回填具体 document，也不得把历史文本标成 `document` 后判“悬空”。`source_chain()` 只并入当前/历史中真实非空的指针，不把 `legacy_text` 当指针。
+- **INV-35 移除不可恢复不伪造**：原型移除原件会删除 `files[]` 项并擦除当前/历史来源中的自动文件名，没有墓碑；迁移对这类记录只能写 `source_kind='removed_irrecoverable'`、`source_document_id=NULL`、保留 `source_text` 原文、**记录当前隐私**至少 `unknown`、`needs_review=1`；历史修订自身隐私仍只看该项 `private`。不得创建 `source_document` 行、`removed_at/by`、`link_state='removed'`、`display_name`/`byte_size`/`registered_at`，不得从残留文本猜文件名，不得声称“可恢复/可解除”。重新登记新原件后按新挂规则解析，旧指针不复活。
+- **INV-36 未知日期保留原文**：`occurred_precision='unknown'` 时 `occurred_date` 必须为 NULL；原文非空必须写 `occurred_raw` 并 `needs_review=1`，原文为空则 `occurred_raw=NULL` 但仍保留 `needs_review=1` 的“日期未知”语义。不得按形状补日/月、不得用今天/文件时间/导入时间/治疗时长/顺序反推；用户确认“确实记不清”才清 `needs_review`，`occurred_date` 仍为 NULL。
 
 ---
 
@@ -327,27 +349,41 @@ candidate_source_ok(record_id) =
             d.subject_id = record.subject_id
   )
 
-# 来源三态：唯一分类。no_file 表示“从未指向任何原件/候选，且本人明确声明手工”；
-# “所有来源指针”指当前与历史修订的 source_document_id、record.origin_candidate_id
+# 来源五态：唯一分类。no_file 表示“从未指向任何原件/候选，且本人明确声明手工”；
+# legacy_text 表示“只有文本型原件来源，历史上从未保存 fileId”（原型 history[] 的常态）；
+# removed_irrecoverable 表示“原件登记已被删除、只剩‘原件已移除’文本，无墓碑可恢复”；
+# unresolved 只表示“真实指针存在却解析不完整/跨主体/不一致”，不得用于历史文本或已移除登记。
+# “所有来源指针”指当前与历史修订的真实 source_document_id、record.origin_candidate_id
 # 及其候选的 import_id/document_id；只看当前修订会漏掉历史链。
-# 新写入走 no_file 必须显式 source_kind='manual'；迁移只在“无任何指针且无原件痕迹”时用；
-# 无指针但保留“曾有原件”痕迹的（original 非空，或 source 以“原件：/原件已移除”开头）
-# 必须落 unresolved + source_kind='document'，不得因 fileId 为 null/键缺失就洗成手工来源。
+# 新写入走 no_file 必须显式 source_kind='manual'；迁移只在“无任何指针且无任何原件痕迹”时用。
+# 历史 fileId 键缺失/NULL 是常态，一律不回填；其“原件：文件名”文本落 legacy_text，
+# “原件已移除”落 removed_irrecoverable；两者都保留 source_text、记录当前隐私至少 unknown、needs_review=1
+# （历史修订自身隐私仍只看该项 private），
+# 但都不是 unresolved、不伪造 source_document 行或墓碑，也不得洗成 manual/resolved。
 resolve_source(record_id) =
-  IF 所有来源指针均为 NULL/缺失
-     AND 当前修订 source_kind='manual'
-     AND 没有任何修订（含历史）source_kind='document'        -> 'no_file'
-  IF 所有来源指针均为 NULL/缺失（不满足上一分支）           -> 'unresolved'
-  IF ∃ 指针无法解析：document 行缺失、subject 不同、
-     候选行缺失、import_run 缺失、candidate.document_id != run.document_id、
-     任一修订 source_kind='document' 却无 document 指针、
-     record.origin_candidate_id 与 candidate.adopted_record_id 不互指
-                                                          -> 'unresolved'
-  -> 'resolved'
+  IF ∃ 真实来源指针（当前/历史 source_document_id、origin_candidate_id 或候选的 document_id）:
+    IF 所有指针可解析且同 subject、候选/run/document 互指成立 -> 'resolved'
+    IF ∃ 指针无法解析：document 行缺失、subject 不同、
+       候选行缺失、import_run 缺失、candidate.document_id != run.document_id、
+       record.origin_candidate_id 与 candidate.adopted_record_id 不互指
+                                                             -> 'unresolved'
+  IF 无任何真实指针
+     AND（当前/任一历史 source_kind='removed_irrecoverable'
+          或 source_text 含“原件已移除”）                        -> 'removed_irrecoverable'
+  IF 无任何真实指针
+     AND（当前/任一历史 source_kind='legacy_text'
+          或 original 非空
+          或 source_text 含“原件：”）                            -> 'legacy_text'
+  IF 无任何真实指针
+     AND 当前 source_kind='manual'
+     AND 没有任何修订 source_kind IN ('document','legacy_text','removed_irrecoverable')
+                                                                  -> 'no_file'
+  IF 无任何真实指针（当前 source_kind='document' 但无指针）        -> 'unresolved'
+  -> 'unresolved'
 
 source_floor(record_id, d) =
   resolve_source(record_id) = 'no_file'                   -> 'not_private'
-  resolve_source(record_id) = 'unresolved'                -> 'unknown'
+  resolve_source(record_id) IN ('legacy_text','removed_irrecoverable','unresolved') -> 'unknown'
   d IS NULL 且 resolve_source <> 'no_file'（调用方漏传 document）-> 'unknown'
   d 引用了不可解析的 document_id / 跨 subject              -> 'unknown'
   d.privacy_state='private'                               -> 'private'
@@ -357,10 +393,11 @@ source_floor(record_id, d) =
 # link_state 不进入本函数：missing/removed 只限制“可新挂”，不把已知 not_private+ever=0 改成受保护
 
 source_chain(record_id) =
-  { 当前修订的 source_document_id（若有） }
-  ∪ { 该 record 所有历史修订的 source_document_id（若有） }
+  { 当前修订的真实非空 source_document_id }
+  ∪ { 该 record 所有历史修订的真实非空 source_document_id }
   ∪ { record.origin_candidate_id 对应候选的 document_id（若有） }
   ∪ { 该候选所属 import_run.document_id（若有） }
+# legacy_text / removed_irrecoverable 没有可解析指针，不并入链；其保护由 source_floor 承担
 
 release_active(record_id, d) =
   d.privacy_state = 'not_private'
@@ -426,7 +463,7 @@ output_allowed(purpose, record_id, revision_no, viewer) =
 - **artifact 同意按条且每次重判**：`output_allowed('artifact.download', ...)` 对每个 `included_private=1` 条目分别求值，`private_export` 必须匹配该条 `(record_id, revision_no)`；一条同意不得覆盖产物中的多个受保护条目，也不得跨下载复用。构建时同理：缺任一条同意即整批失败。
 - **改公开的判定**：`record.setPrivacy(not_private)` 只看 `source_locked(record_id)`，不看当前修订自身状态（因为当前状态正是要改的对象）。当前链干净时，`private → not_private` 允许；链上有当前私密/未知原件或未解除 sticky，返回 `privacy_locked`。**`record.correct` 完全不得变更隐私**：它不读、不写 `privacy_state`/`privacy_origin`，也不因 `source_locked=false` 获得改隐私的能力；请求若携带隐私字段，或合并结果与当前隐私不同，一律返回 `privacy_changed`，要求改用 `record.setPrivacy`。若更正同时更换 `source_document_id` 且新来源会按 §4.7 抬高保护，`record.correct` 必须返回 `privacy_locked`，改由本人 `record.attachSource` 处理，不得借内容更正把公开记录挂到受保护来源。`record.restoreRevision` 同理只恢复内容、不改变当前隐私；目标保护等级高于当前时按 §5.1 的“不洗白”规则返回 `privacy_locked`。
 - **候选派生**：候选在创建时按 §6.2 派生三态，不从记录“继承”一个可能被改过的当前值；`record` 从候选继承，采纳不得降低。候选没有“逐条 release”路径，因为 release 是 record 级；曾私密原件产生的候选只能是 `unknown`，采纳后再按 record 级解除。候选/run/document 任一悬空、跨 subject 或 document 不一致时，按 `candidate_source_ok=false` 处理，候选 `unknown`+`needs_review` 且不可采纳。
-- **来源三态（`no_file/resolved/unresolved`）**：`resolve_source()` 是写入、读模型与迁移共用的唯一分类。`no_file` 只在完全没有 document/candidate 指针**且当前修订显式 `source_kind='manual'`** 时成立（迁移中表现为该记录所有修订的 `fileId` 键缺失或显式 null 且无原件痕迹），它是“手工录入/无原件”，**不强制 `unknown`、不标 `needs_review`**，`source_floor='not_private'`，记录自身隐私与代理下限仍照常生效；`source_text` 必须保留。`resolved` 表示指针完整且同 subject，但仍需看原件隐私与 `link_state`（见下条）。`unresolved` 表示指针存在却解析不完整（行缺失、跨 subject、候选/run/document 不一致、互指不成立），或**指针已丢但仍有原件痕迹**（`source_kind='document'` 且无指针），一律按 `unknown` 保护、`source_locked=true`、`needs_review`，禁止采纳、release、改公开，返回 `source_unresolved`/`cross_subject_reference`。**不得只凭 `source_document_id IS NULL` 判 `no_file`**：删指针不能把悬空链洗成手工来源；反之，从未登记文件的手工记录也不能被当成 `unresolved`。
+- **来源五态（`no_file/resolved/legacy_text/removed_irrecoverable/unresolved`）**：`resolve_source()` 是写入、读模型与迁移共用的唯一分类。`no_file` 只在完全没有 document/candidate 指针、当前修订显式 `source_kind='manual'`、且当前与历史都无任何原件痕迹时成立，它是“手工录入/无原件”，**不强制 `unknown`、不标 `needs_review`**，`source_floor='not_private'`，记录自身隐私与代理下限仍照常生效；`source_text` 必须保留。`resolved` 表示真实指针完整且同 subject，但仍需看原件隐私与 `link_state`。`legacy_text` 表示无指针但留下文本型原件来源（`original` 非空或来源含“原件：文件名”），**历史 `fileId` 键缺失/NULL 是常态，不得回填**；保留原文、**记录当前隐私**至少 `unknown`、`needs_review=1`（历史修订自身隐私仍只看该项 `private`），不伪造 `source_document`、不标 `unresolved`。`removed_irrecoverable` 表示原件登记已从 `files[]` 删除、只剩“原件已移除”文本；同样保留原文、**记录当前隐私**至少 `unknown`、`needs_review=1`，**不伪造墓碑/`removed_at`/文件名**。`unresolved` 只表示真实指针存在却解析不完整（行缺失、跨 subject、候选/run/document 不一致、互指不成立），或当前 `source_kind='document'` 却无指针；一律按 `unknown` 保护、`source_locked=true`、`needs_review`，禁止采纳、release、改公开。**不得只凭 `source_document_id IS NULL` 判 `no_file`**：删指针不能把悬空链洗成手工来源；历史文本与已移除登记也不是悬空。
 - **`link_state` 四态（`unverified/verified/missing/removed`）**：只表示最近一次会话核对结果，不是隐私状态、不是“现在可达”的承诺，**没有 `active`**。新挂来源只允许 `unverified/verified`；`missing` 返回 `document_missing`、`removed` 返回 `document_removed`，不得自动复活或复用已移除登记。`link_state` 不改变 `privacy_state`/`epoch`/`seq`：`missing/removed` 且隐私已知 `not_private`、`ever=0` 时不因链接状态本身变成受保护（`removed` 只把对外投影置 NULL）；隐私未知或曾私密未 release 时仍按 `unknown`。`verified` 也不能解除任何保护。
 - **原件锁定**：`source_document` 当前为 `private/unknown`，或来源解析 `unresolved`，或 `link_state='removed'` 且当前状态不可判定时，链上记录按受保护；已知 `not_private` 且 `ever=0` 的原件移除只清关联投影，不改变记录自身隐私。`removed` 不是“隐私归零”。
 - **取消私密不自动公开（sticky）**：`privacy_ever_private` 只在原件进入 `private` 时置 1（含首次登记/迁移即 `private`），之后即使改回 `not_private` 也不清零；`privacy_epoch` 的初值是 0，**每次进入 `private`（含首次注册/迁移即私密）严格 +1**；已是 `private` 时重复提交不递增；改回 `not_private`/`unknown` 不回退。链上记录仍按受保护，直到本人对该 `(record, document, 当前 epoch, 当前 state_seq)` 显式 `record.releaseSourceLink`。`unknown → not_private` 不算“取消私密”，`privacy_ever_private` 不变；若从未 private（ever=0），只需当前状态锁解除即可，不需要 release；若曾 private（ever=1），仍需按当前 epoch 与 seq 逐条 release。release 只清该条的 sticky 锁，不改记录隐私、不批量、不回溯隐藏历史；释放后用户仍需单独把记录改为 `not_private`。
@@ -475,8 +512,10 @@ output_allowed(purpose, record_id, revision_no, viewer) =
 | 修订缺 `privacy_state` 或为 NULL | 拒绝写入；读取时按 `unknown` → 受保护 |
 | `privacy_state` 值不在枚举内（旧库/损坏） | 不猜；按受保护，标 `needs_review`，写审计 |
 | 记录来源链上任一环为 private/unknown、缺失/悬空、跨 subject、候选/run/document 不一致、曾为 private 且该 `(record, document, 当前 epoch, 当前 state_seq)` 无有效 release，或已移除且状态不可判定 | 按受保护锁定；不得显示为公开。已知 `not_private` 的原件移除只清关联投影，不改变记录自身隐私。要改公开，先逐条 `releaseSourceLink`，再单独改记录隐私；链 unresolved 时 release 一律 `privacy_locked` |
-| 来源解析为 `no_file`（该记录当前与历史修订都无 document/candidate 指针**且 `source_kind='manual'`**；迁移仅该记录所有修订的 `fileId` 键缺失或为 null 且 `original`/来源无原件痕迹时映射 manual，新写入须显式声明） | 不是 `unresolved`：不因“没有文件”标 `needs_review` 或强制 `unknown`；`source_floor='not_private'`，记录自身隐私/代理下限仍生效；保留 `source_text`，显示“手工录入/无原件”。`source_document_id IS NULL` 本身不证明手工 |
-| 来源解析为 `unresolved`（指针存在但行缺失/跨 subject/候选-run-doc 不一致/互指不成立，或指针已丢但 `original`/来源显示曾有原件） | 按 `unknown` 受保护、`source_locked=true`、`needs_review`；禁止采纳/`releaseSourceLink`/`setPrivacy(not_private)`；返回 `source_unresolved`/`cross_subject_reference`；不得写成“无来源”或 `not_private` |
+| 来源解析为 `no_file`（该记录当前与历史修订都无真实 document/candidate 指针、当前 `source_kind='manual'`、且无任何原件痕迹；新写入须显式声明） | 不是 `unresolved`：不因“没有文件”标 `needs_review` 或强制 `unknown`；`source_floor='not_private'`，记录自身隐私/代理下限仍生效；保留 `source_text`，显示“手工录入/无原件”。`source_document_id IS NULL` 本身不证明手工 |
+| 来源解析为 `legacy_text`（无指针，但 `original` 非空或来源文本含“原件：文件名”；典型为历史修订） | 保留 `source_text` 原文；`source_document_id=NULL`；**记录当前**隐私至少 `unknown`、`needs_review=1`；**不猜测回填、不标 `unresolved`、不伪造 document 行**；界面提示“历史来源只有文本，可重新登记原件后建立新关联”，旧修订不追改（历史修订自身隐私仍只看该项 `private`） |
+| 来源解析为 `removed_irrecoverable`（无指针，文件项已删除，来源为“原件已移除”） | 保留原文；`source_document_id=NULL`；**记录当前**隐私至少 `unknown`、`needs_review=1`；**不创建墓碑行、`removed_at/by`、`display_name`/`byte_size`/`registered_at`**；重新登记产生新 document，旧指针不复活、旧修订不改 |
+| 来源解析为 `unresolved`（真实指针存在但行缺失/跨 subject/候选-run-doc 不一致/互指不成立，或当前 `source_kind='document'` 却无指针） | 按 `unknown` 受保护、`source_locked=true`、`needs_review`；禁止采纳/`releaseSourceLink`/`setPrivacy(not_private)`；返回 `source_unresolved`/`cross_subject_reference`；不得写成“无来源”或 `not_private` |
 | `link_state='missing'` 或 `'removed'` | 只表示核对失败/已移除，不是隐私状态；不可新挂（`document_missing`/`document_removed`）、不得自动复活；隐私已知 `not_private` 且 `ever=0` 时不因链接状态本身变成受保护，隐私未知/曾私密未 release 仍按 `unknown`；`removed` 只把对外投影置 NULL，不删行/不改历史 |
 | 历史修订自身 `not_private`，但当前记录或来源链受保护 | 历史正文按 `protected(rev,'revision')` 显示；不因当前记录/来源链回溯隐藏。只有该历史修订自身 `private/unknown` 才默认只回元数据（仅本人） |
 | 导出/AI/artifact 选中项的修订自身公开，但当前记录或来源链受保护，或反之 | 按 `output_protected(record_id, revision_no)` 视为受保护：AI 一律排除；导出/artifact 只允许本人逐条 `private_export`，并记 `included_private=1`；不得只用 current record 或只用 selected revision 单边判定 |
@@ -529,13 +568,15 @@ output_allowed(purpose, record_id, revision_no, viewer) =
 
 **触发**：`record.create`、`record.attachSource`、`candidate.adopt` 以及任何在新修订中写入/更换 `source_document_id` 的迁移修复，都必须先解析来源，再把保护写进新修订。`record.correct` 只能挂不会抬高保护的来源；`record.restoreRevision` 只复制目标来源，不另挂来源。
 
-**来源解析（三态，唯一分类，X-03）**：调用 §4.1 `resolve_source()`，本节不另定义第二套判定。
+**来源解析（五态，唯一分类，Y-01/Y-03）**：调用 §4.1 `resolve_source()`，本节不另定义第二套判定。
 
-- `no_file`：完全没有 document/candidate 指针。运行时要走这条路径，必须显式 `source_kind='manual'`、`source_document_id=NULL`，保留用户填写的 `source_text`；迁移中只有该记录**所有修订（含历史）**的 `fileId` 键不存在**或为 null**、且 `original` 为空、`source` 不含“原件：/原件已移除”时才能落此态，并写 `source_kind='manual'`；任一历史修订保留原件痕迹的必须落 `unresolved`。`no_file` **不是** `unresolved`：不强制 `unknown`、不标 `needs_review`，`source_floor='not_private'`；记录自身 `unknown/private` 与代理下限仍生效。`source_document_id IS NULL` 单独不足以证明手工。
+- `no_file`：完全没有真实 document/candidate 指针，当前显式 `source_kind='manual'`，且当前与历史都无原件痕迹。运行时要走这条路径，必须显式 `source_kind='manual'`、`source_document_id=NULL`，保留用户填写的 `source_text`；迁移中只有**无任何指针且无任何痕迹**时才能落此态。`no_file` **不是** `unresolved`：不强制 `unknown`、不标 `needs_review`，`source_floor='not_private'`；记录自身 `unknown/private` 与代理下限仍生效。`source_document_id IS NULL` 单独不足以证明手工。
 - `resolved`：document 行存在、同 subject，且若有候选链则候选/run/document 全部存在、同 subject、`candidate.document_id = run.document_id`、`adopted_record_id` 与 `origin_candidate_id` 互指。`resolved` 只证明引用完整；能否新挂还看 `link_state`，保护下限还看原件隐私与 sticky。
-- `unresolved`：任何指针存在却解析不完整——document 行缺失（悬空）、跨 subject、候选/run 缺失、run 与候选 document 不一致、互指只写一侧；**或指针已丢但保留原件痕迹**（`fileId` null/键缺失而 `original` 非空或 `source` 含“原件：/原件已移除”，`source_kind='document'`）。新建议题返回 `source_unresolved`/`cross_subject_reference`，不得落库；候选置 `unknown`+`needs_review`、不可采纳；已有记录 `source_locked=true` 按 `unknown` 受保护，不得 release 或降为 `not_private`。**不得把悬空/跨 subject 当成“没有来源”改走 manual，也不得用 NULL 指针洗白；反之也不得把原本手工、从未有原件的记录标成 unresolved。**
+- `legacy_text`：**只用于迁移/导入既存文本，不允许新挂**。无真实指针，但 `original` 非空或来源含“原件：文件名”；`history[]` 没有 `fileId` 键是常态。写 `source_document_id=NULL`、`source_kind='legacy_text'`、保留 `source_text` 原文，**记录当前隐私**至少 `unknown`、`needs_review=1`（历史修订自身隐私仍只看该项 `private`）；**不得猜测回填、不得标 `unresolved`、不得伪造 document**。用户可重新登记原件后走 `record.attachSource` 建立新关联，旧修订不改。
+- `removed_irrecoverable`：**只用于迁移/导入既存文本，不允许新挂**。无真实指针，文件项已被删除，来源为“原件已移除”；写 `source_document_id=NULL`、`source_kind='removed_irrecoverable'`、保留原文，**记录当前隐私**至少 `unknown`、`needs_review=1`（历史修订自身隐私仍只看该项 `private`）；**不创建墓碑/`removed_at/by`/文件名/大小/登记时间**。重新登记是新 document，旧指针不复活。
+- `unresolved`：**只表示真实指针存在却解析不完整**——document 行缺失（悬空）、跨 subject、候选/run 缺失、run 与候选 document 不一致、互指只写一侧，或当前 `source_kind='document'` 却无指针。新建议题返回 `source_unresolved`/`cross_subject_reference`，不得落库；候选置 `unknown`+`needs_review`、不可采纳；已有记录 `source_locked=true` 按 `unknown` 受保护，不得 release 或降为 `not_private`。**不得把悬空/跨 subject 当成“没有来源”改走 manual，也不得把历史文本/已移除登记标成 unresolved。**
 
-**`source_kind` 的最小语义**：至少区分 `manual`（本人明确声明无原件）与 `document`（来自/曾关联原件）。`manual` 不得携带 `source_document_id`（DB CHECK），`document` 而无指针一律按 `unresolved` 读取；两者都不是隐私状态，不能用来绕过 `source_locked` 或 `link_state` 限制。迁移按 `original`/`source` 的原件痕迹写入，不得把痕迹当结构外键，也不得丢弃 `source_text`。
+**`source_kind` 的最小语义**：区分 `manual`（本人明确声明无原件）、`document`（有真实可解析或悬空指针）、`legacy_text`（只有文本型原件来源，历史常态）、`removed_irrecoverable`（原件登记已删除、不可恢复）。`manual` 不得携带 `source_document_id`；`document` 而无指针一律按 `unresolved` 读取；`legacy_text`/`removed_irrecoverable` 必须 `source_document_id=NULL` 且不得进入 `source_chain()`。这些都是来源分类，不是隐私状态，不能用来绕过 `source_locked`/`link_state` 限制。迁移按 `original`/`source` 的原件痕迹写入，不得把痕迹当结构外键，也不得丢弃 `source_text`。
 
 **挂接资格与保护（`link_state` 四态，X-02）**：
 
@@ -545,6 +586,8 @@ output_allowed(purpose, record_id, revision_no, viewer) =
 | `verified` | 最近一次会话核对成功，已更新 `last_verified_at` | 允许 | 同上；`verified` 不解除任何锁定、不代表跨会话可打开 |
 | `missing` | 最近一次核对失败（找不到/大小或哈希不符），登记行保留 | 拒绝：`document_missing` | 隐私可判定则按当前状态；不可判定→`unknown` |
 | `removed` | 用户显式移除登记，`removed_at/by` 有值，原文件不删 | 拒绝：`document_removed`；不得自动复活 | 已知 `not_private` 且 `ever=0` 不因移除本身受保护（只把对外投影置 NULL）；`unknown` 或 `ever=1` 未 release → `unknown` |
+
+> **`removed` 行只适用于未来软删实现，不是原型既存事实。** 原型在移除时直接删除 `files[]` 项、无 `removed_at/by`、无 `link_state`，来源文本被清成“原件已移除”；这类既存数据必须按 `removed_irrecoverable` 迁移（D-32/INV-35），不得补出 `removed` 行或依赖上表恢复原文件名/大小/登记时间。
 
 `link_state` 不改变 `privacy_state`/`privacy_epoch`/`privacy_state_seq`，也不进入 `source_floor`；任何 `active` 值都是非法枚举，按失败关闭处理，不得猜成 `verified`。
 
@@ -700,9 +743,13 @@ attach_state(current, d) = strongest(current, source_floor(record_id, d))
 - 记录只通过 `source_document_id` 做**出处/审计关联**，不是“可取回的文件引用”；不内嵌 `original:{title,text}`。原型里的 `original` 是合成演示副本，生产不得沿用，也不得把 `source_document_id` 当文件路径直接 `open()`。
 - 同一 `display_name + byte_size` 可重复登记；UI 提示“可能同一文件”，是否合并由用户确认，不自动合并。
 - 未重新选择/未核对时 `link_state='unverified'`；用户重新选择并核对成功才置 `verified` 并更新 `last_verified_at`；核对失败置 `missing`。不得把“登记过”当成“现在能重新打开”，也不得把 `verified` 当成跨会话有效。
-- 移除登记：`link_state='removed'`、`removed_at`、`removed_by_actor_id`；`display_name`/`byte_size`/`registered_at` 保留（审计需要），磁盘上的用户原文件不删除。`source_document` 行不物理删除。
-- **移除只改关联投影，不改历史**：`record_revision.source_document_id` 保留原值（历史修订不可变）；读模型在 `link_state='removed'` 时把对外 `sourceDocumentId` 投影为 NULL（即 SPEC 所说 `fileId`/`original` 置空），界面显示“原件已移除”/“无原件”。不把文件名从历史里抹掉，也不删除用户手工填写的 `source_text`。
-- 移除前若存在已采纳记录：界面必须提示影响条数并让用户确认；确认只影响投影，不删除记录。若原件被标为私密，移除后记录仍按受保护处理（§4.1 来源链在状态不可判定时按保护）。
+> **以下三条是未来软删设计，未实现、未被原型验证，不是既存事实。** 原型在移除时直接删除 `files[]` 项，没有 `source_document` 行、`removed_at/by` 或 `link_state='removed'`；不得据此认为旧库可恢复原文件名/大小/登记时间。既存数据按 D-32/INV-35 落 `removed_irrecoverable`，不得伪造墓碑。
+>
+> 若未来实现软删：移除登记置 `link_state='removed'`、`removed_at`、`removed_by_actor_id`；`display_name`/`byte_size`/`registered_at` 保留（审计需要），磁盘上的用户原文件不删除，`source_document` 行不物理删除。
+>
+> 若未来实现软删：`record_revision.source_document_id` 保留原值（历史修订不可变）；读模型在 `link_state='removed'` 时把对外 `sourceDocumentId` 投影为 NULL，界面显示“原件已移除”/“无原件”；不删除用户手工填写的 `source_text`。**原型实际行为不同**：它把当前与历史来源中的自动文件名 `scrub` 成“原件已移除”，原文件名不可恢复；这是既存事实，未来软删不能反向补写。
+>
+> 若未来实现软删：移除前若存在已采纳记录，界面必须提示影响条数并让用户确认；确认只影响投影，不删除记录。若原件曾为私密，移除后记录仍按受保护处理（§4.1 来源链在状态不可判定时按保护）。
 
 ### 6.2 解析与候选
 
@@ -940,7 +987,10 @@ CREATE TABLE record_revision (
   report_raw           TEXT,
   body_system          TEXT,
   text                 TEXT,
-  source_kind          TEXT,
+  source_kind          TEXT NOT NULL
+                       CHECK (source_kind IN ('manual','document','legacy_text','removed_irrecoverable')),
+                       -- manual/legacy_text/removed_irrecoverable 必须 source_document_id IS NULL；
+                       -- document 才允许指针，且无指针即按 unresolved 读取（§4.1）
   source_text          TEXT,
   source_document_id   TEXT REFERENCES source_document(document_id) ON DELETE RESTRICT,
   privacy_state        TEXT NOT NULL
@@ -1225,9 +1275,9 @@ END;
 | `reviewDate` | `review_date/precision/raw` | 医嘱专用；缺失即未知 |
 | `reportDate`/`reportDatePrecision` | `report_date/precision/raw` | 检查/检验专用；缺失即未知 |
 | `private` 布尔 | `privacy_state` | `true→private`、`false→not_private`、缺失→`unknown` |
-| `history[]` | `record_revision` | 对象按已知字段映射；未知键放 `details_json.legacy` 并标 `needs_review`，单条超 8 KiB 拒绝迁移转人工；字符串不解析成结构，存为 `legacy_import` 修订、隐私 `unknown`、正文原样保留。**顺序按数组原序（老→新）：`history[i]` → `revision_no=i+1`；当前内容 → `revision_no=len(history)+1`。不得把当前写成 1、历史写成 2..N+1，也不得按日期重排。** |
-| `source` | `source_text` + `source_kind` | 不把“原件：文件名”当结构化外键；有 `fileId` 才建 link。**手工来源必须保留**：迁移不得因“无法解析成文件”而丢弃或覆盖 `source` 文本；无法识别时原样进 `source_text` 并标 `needs_review` |
-| `fileId` | `source_document_id` | **该记录所有修订（含历史）均无可用指针且无原件痕迹（`fileId` 键缺失或为 null，`original` 为空，`source` 不以“原件：/原件已移除”开头，且无候选互指）→ `no_file`**：`source_document_id=NULL`、`source_kind='manual'`、保留 `source_text`，不强制 `unknown`、不标 `needs_review`；**`fileId` 有值但目标行不存在/跨 subject，或 `fileId` 为 null/键缺失但 `original` 非空或 `source` 显示“原件：/原件已移除” → `unresolved`**：置空且记录至少 `unknown` + `needs_review`，`source_kind='document'`，不得伪造 `source_document`，不得洗成手工；两类必须靠原件证据区分，不能只看 `fileId` 是否为空 |
+| `history[]` | `record_revision` | 对象按已知字段映射；未知键放 `details_json.legacy` 并标 `needs_review`，单条超 8 KiB 拒绝迁移转人工；字符串不解析成结构，存为 `legacy_import` 修订、隐私 `unknown`、正文原样保留。**历史对象没有 `fileId` 是常态**：只映射该对象实际存在的字段，`source_document_id=NULL`，来源文本按痕迹落 `source_kind='legacy_text'` 或 `'removed_irrecoverable'`，不得从当前记录或文件名回填。**顺序按数组原序（老→新）：`history[i]` → `revision_no=i+1`；当前内容 → `revision_no=len(history)+1`。不得把当前写成 1、历史写成 2..N+1，也不得按日期重排。** |
+| `source` | `source_text` + `source_kind` | 不把“原件：文件名”当结构化外键；只有该版存在显式非空 `fileId` 且解析成功才建 link。**手工来源必须保留**：迁移不得因“无法解析成文件”而丢弃或覆盖 `source` 文本；无法识别时原样进 `source_text`。无指针但含“原件：文件名”→`legacy_text`；含“原件已移除”→`removed_irrecoverable`；两者均 `needs_review`，不得当 `document` 判悬空 |
+| `fileId` | `source_document_id` | **只接受当版显式非空 `fileId`**：目标行存在、同 subject → `resolved`；有值但目标行不存在/跨 subject → `unresolved`（`source_document_id=NULL`、`source_kind='document'`、至少 `unknown`+`needs_review`，不得伪造行）。**`fileId` 键缺失或 NULL → `NULL`，不得用当前记录 `fileId`、文件名相似、日期/顺序或 `fileLinked=true` 回填**；若来源/`original` 有“原件：文件名”痕迹→`legacy_text`（至少 unknown+needs_review），若为“原件已移除”→`removed_irrecoverable`（至少 unknown+needs_review，不伪造墓碑），完全无痕迹且当前显式 manual→`no_file` |
 | `original:{title,text}` | 不迁移为事实 | 原型内嵌副本，不是工作台原件；**不复制进数据根**。若它是唯一副本且无磁盘文件，先让用户选择“在原位置登记为原件”或“转为 `note` 记录”，不得静默丢弃；生产只存 `source_document_id` |
 | `pathwayDetail.{imaging,ae,support}` | 不自动迁移 | 演示注释，不是已确认事实；如真实存在，拆成独立 `check`/`symptom`/`note` 记录并带来源 |
 | `department`/`site` | `details_json` 或 `body_system` | 仅展示属性；不参与诊断/分型 |
@@ -1248,10 +1298,12 @@ END;
 | 记录当前 `private: true` | `private` | `migration_default` | `ok` | 记录自身私密 |
 | 记录当前 `private: false` | `not_private` | `migration_default` | `ok` | 仅在来源链也不受保护时成立 |
 | 记录当前缺失 / `null` / 非 JSON 布尔（字符串 `"true"`、数字 `1` 等） | `unknown` | `legacy_unknown` | `needs_review` | 不按形状猜 |
-| 记录 `fileId` 指向的原件为 `private` | `private`（取记录自身与原件中更强的一档） | 自身 `private=true` 时 `migration_default`，否则 `inherited_document` | `ok` | 对齐 SPEC“原件私密时已生成记录同步私密” |
-| 记录 `fileId` 指向的原件为 `unknown` | `unknown` | `inherited_document` | `needs_review` | 原件行不可判定 |
-| 记录所有修订均无可用 `fileId`（键缺失或 null）、`original` 为空且 `source` 无原件痕迹，且无候选互指（从未登记文件） | 保持记录自身状态（缺失→`unknown`）；`source_floor='not_private'` | `migration_default`（缺失时 `legacy_unknown`） | `ok`；仅隐私缺失时 `needs_review` | `no_file`：`source_document_id=NULL`、`source_kind='manual'`、保留 `source_text`；不因“没有文件”强制 unknown；若之后写入了候选互指，必须重算来源保护 |
-| 记录 `fileId` 有值但目标原件不存在/不同 subject，或 `fileId` 为 null/键缺失但 `original`/`source` 显示曾有原件（`unresolved`） | `source_document_id=NULL`；记录至少 `unknown` | `legacy_unknown` | `needs_review` | 不伪造 `source_document`；`source_kind='document'`；不得当成 `no_file`/手工来源 |
+| 记录当前 `fileId` 有值、目标原件存在且同 subject，原件为 `private` | `private`（取记录自身与原件中更强的一档） | 自身 `private=true` 时 `migration_default`，否则 `inherited_document` | `ok` | 仅对**真实可解析指针**成立；历史无 `fileId` 不影响当前指针 |
+| 记录当前 `fileId` 有值、目标原件存在且同 subject，原件为 `unknown` | `unknown` | `inherited_document` | `needs_review` | 原件行不可判定 |
+| 当前与历史均无真实 `fileId`、`original` 为空且来源无“原件：/原件已移除”痕迹，且无候选互指（从未登记文件） | 保持记录自身状态（缺失→`unknown`）；`source_floor='not_private'` | `migration_default`（缺失时 `legacy_unknown`） | `ok`；仅隐私缺失时 `needs_review` | `no_file`：`source_document_id=NULL`、`source_kind='manual'`、保留 `source_text`；不因“没有文件”强制 unknown |
+| 当版 `fileId` 有值但目标原件不存在/不同 subject，或当前 `source_kind='document'` 却无指针 | `source_document_id=NULL`；记录至少 `unknown` | `legacy_unknown` | `needs_review` | `unresolved`：不伪造 `source_document`；`source_kind='document'`；不得当成 `no_file`/手工来源 |
+| 无真实指针，但 `original` 非空或来源含“原件：文件名”；典型为历史修订（`history[]` 无 `fileId`） | 至少 `unknown`（记录自身 `private` 保持 `private`） | `legacy_import` | `needs_review` | `source_document_id=NULL`、`source_kind='legacy_text'`、保留 `source_text`；**不得猜测回填**、不得标 `unresolved`、不得伪造 document |
+| 无真实指针，来源为“原件已移除”，且 `files[]` 中对应文件项已不存在（原型移除后的既存状态） | 至少 `unknown`（记录自身 `private` 保持 `private`） | `legacy_unknown` | `needs_review` | `source_document_id=NULL`、`source_kind='removed_irrecoverable'`、保留原文；**不创建墓碑/`removed_at/by`/`display_name`/`byte_size`/`registered_at`** |
 | `history[]` 单项 `private: true/false` | `private/not_private` | `legacy_import` | `ok` | **只看该历史项自身，不继承记录当前值** |
 | `history[]` 单项缺失/非布尔 | `unknown` | `legacy_unknown` | `needs_review` | 正文原样保留 |
 | `files[]` 项 `private: true` | `private` | `migration_default` | `ok` | `privacy_ever_private=1`、`privacy_epoch=1` |
@@ -1311,26 +1363,55 @@ migrate_v1(payloads, ctx, adoption_mode='unknown'):
   # 2) 记录：每条 record 生成独立 record_id，每个修订生成独立 revision_id。
   #    resolve_author: 仅当 payload 有 authorActorId/onBehalfGrantId 且能同 subject 校验时 known；
   #    否则 -> ("unknown", NULL, NULL)。不得默认 ctx.subject_actor_id，也不得用迁移 actor 冒充作者。
-  #    历史修订的来源指针必须同样落库（source_chain 覆盖历史），分类规则与当前修订一致。
-  resolve_ref_fields(x):
+  #    历史对象从未保存 fileId：只映射当版显式存在的字段，绝不回填。
+  #    来源分类只作用于来源；历史修订隐私仍只看该项自身（§4.3 按条历史）。
+  removed_marker(s) = contains(s, "原件已移除")
+  origin_marker(s) = starts(s, "原件：") and not removed_marker(s)
+  classify_ref(x, is_history):
       has_ref = ("fileId" in x) and (x.fileId != NULL)
-      doc_id = has_ref ? resolve_same_subject(file_map, x.fileId) : NULL
-      trace = (x.original != NULL) or origin_marker(x.source)   # “原件：/原件已移除”
-      kind = (has_ref or trace) ? "document" : "manual"
-      return (doc_id, kind)
+      if has_ref:
+          d = resolve_same_subject(file_map, x.fileId)
+          if d == NULL:
+              return (NULL, "document", "unresolved")   # 真实指针悬空/跨主体
+          return (d, "document", "resolved")
+      if removed_marker(x.source):
+          return (NULL, "removed_irrecoverable", "removed_irrecoverable")
+      if (x.original != NULL) or origin_marker(x.source):
+          return (NULL, "legacy_text", "legacy_text")
+      # 历史无 fileId 键、无 original、来源也不是“原件：” -> 文本来源
+      return (NULL, "manual", "no_file")
+
   for r in payloads.records, 按数组顺序逐条:
       rec_id = new_stable_id("rec", r.id)
-      has_file_ref = ("fileId" in r) and (r.fileId != NULL)
-      doc_id = has_file_ref ? resolve_same_subject(file_map, r.fileId) : NULL
-      has_origin_trace = (r.original != NULL) or origin_marker(r.source)  # “原件：/原件已移除”
       history = r.history ? r.history : []    # 老→新，按原序，不排序
-      # 聚合当前及全部历史来源；悬空、跨主体或曾有原件但指针丢失均 unresolved。
-      resolution = resolve_legacy_source_chain(r, history, file_map)
-      # 无任何指针和原件痕迹才 no_file；所有指针均可解析且同主体才 resolved。
-      st, origin, val = derive_record_privacy(r.private, doc_id)
+      cur_doc, cur_kind, cur_state = classify_ref(r, False)
+      h_fields = [classify_ref(h, True) for h in history]
+      h_states = [x[2] for x in h_fields]
+      # 当前有效指针优先；历史文本只记录、不反推、不把当前 resolved 拉成 unresolved。
+      if cur_state == "unresolved" or "unresolved" in h_states:
+          resolution = "unresolved"
+      elif cur_state == "resolved":
+          resolution = "resolved"
+      elif cur_state == "removed_irrecoverable" or "removed_irrecoverable" in h_states:
+          resolution = "removed_irrecoverable"
+      elif cur_state == "legacy_text" or "legacy_text" in h_states:
+          resolution = "legacy_text"
+      elif "resolved" in h_states:
+          resolution = "unresolved"   # 历史有解析指针而当前无：数据不一致，失败关闭
+      else:
+          resolution = "no_file"
+      st, origin, val = derive_record_privacy(r.private, cur_doc)
+      if resolution in ("legacy_text", "removed_irrecoverable"):
+          st = strongest(st, "unknown")
+          if st != "private":
+              origin = "legacy_import"
+          val = "needs_review"
       if resolution == "unresolved":
-          st, origin, val = "unknown", "legacy_unknown", "needs_review"
-      rec_source_kind = (has_file_ref or has_origin_trace) ? "document" : "manual"
+          st = strongest(st, "unknown")          # 不把已 private 降级
+          if st != "private":
+              origin = "legacy_unknown"
+          val = "needs_review"
+      rec_source_kind = cur_kind
       aes, a_id, grant_id = resolve_author(r)
       INSERT record(record_id=rec_id, subject_id=ctx.subject_id,
         kind=map_kind(r.kind), author_state=aes, author_actor_id=a_id,
@@ -1342,29 +1423,49 @@ migrate_v1(payloads, ctx, adoption_mode='unknown'):
       for i, h in enumerate(history):         # 历史：1..N（老→新）
           rev_no = i + 1
           h_rev = new_stable_id("rev", r.id, rev_no)
-          h_doc, h_kind = resolve_ref_fields(h)   # h_doc 为 NULL 且 h_kind='document' 即“指针已丢”
-          h_st, h_origin, h_val = derive_history_privacy(h.private)  # 隐私只看该项自身，来源不改写
+          h_doc, h_kind, h_state = classify_ref(h, True)
+          h_st, h_origin, h_val = derive_history_privacy(h.private)  # 隐私只看该项自身
+          if h_state == "unresolved":
+              h_st = strongest(h_st, "unknown")   # 仅防御未来带坏 fileId 的导出；不降 private
+              h_val = "needs_review"
+          elif h_state in ("legacy_text", "removed_irrecoverable"):
+              h_val = "needs_review"                    # 来源待核，但不改写该版隐私
+          h_prec = precision_or_unknown(h.datePrecision)
+          h_date = (h_prec == "unknown") ? NULL : parse_date(h.date, h_prec)
+          if h_prec != "unknown" and h_date == NULL:
+              h_prec = "unknown"                  # 非法日期：精度降为 unknown，原文保留
+          h_needs = (h_prec == "unknown") or (h_date == NULL and nonempty(h.date))
           INSERT record_revision(
             revision_id=h_rev, record_id=rec_id, revision_no=rev_no,
-            occurred_*, privacy_state=h_st, privacy_origin=h_origin,
-            validation_state=h_val, source_document_id=h_doc, source_text=h.source,
-            source_kind=h_kind, change_kind="legacy_import",
+            occurred_date=h_date, occurred_precision=h_prec, occurred_raw=(nonempty(h.date) ? h.date : NULL),
+            occurred_validation=(h_needs ? "needs_review" : "ok"),
+            end_*, privacy_state=h_st, privacy_origin=h_origin,
+            validation_state=(h_needs ? "needs_review" : h_val), source_document_id=h_doc,
+            source_text=(h.source or ""), source_kind=h_kind, change_kind="legacy_import",
             created_by_actor_id=ctx.migration_actor_id, created_at=coalesce_utc(h.created_at, ts),
             details_json=<原样 + 未知键>)       # 不得复用任何已有 revision_id/rec_id 作为新行 ID
 
       # 当前修订：N+1，内容取 record 自身，不取 history 最后一项。
       cur_no = n + 1
       rev_cur = new_stable_id("rev", r.id, cur_no)
+      occ_prec = precision_or_unknown(r.datePrecision)
+      occ_date = (occ_prec == "unknown") ? NULL : parse_date(r.date, occ_prec)
+      if occ_prec != "unknown" and occ_date == NULL:
+          occ_prec = "unknown"                    # 非法日期：精度降为 unknown，原文保留
+      occ_needs = (occ_prec == "unknown") or (occ_date == NULL and nonempty(r.date))
       INSERT record_revision(
         revision_id=rev_cur, record_id=rec_id, revision_no=cur_no,
-        occurred_date=parse_date(r.date), occurred_precision=precision_or_unknown(r.datePrecision),
-        occurred_raw=r.date, end_*=<from r.endDate/ongoing>,
-        privacy_state=st, privacy_origin=origin, validation_state=val,
-        source_document_id=doc_id, source_text=r.source,
+        occurred_date=occ_date, occurred_precision=occ_prec, occurred_raw=(nonempty(r.date) ? r.date : NULL),
+        occurred_validation=(occ_needs ? "needs_review" : "ok"),
+        end_*=<from r.endDate/ongoing>,
+        privacy_state=st, privacy_origin=origin,
+        validation_state=(occ_needs ? "needs_review" : val),
+        source_document_id=cur_doc, source_text=(r.source or ""),
         source_kind=rec_source_kind,
         change_kind="legacy_import", created_by_actor_id=ctx.migration_actor_id,
         created_at=coalesce_utc(r.created_at, ts), details_json=<8KiB 内原样>)
-      # 缺精度 -> unknown + needs_review；非法日期 -> raw 保留 + needs_review；
+      # 缺精度 -> date=NULL + precision=unknown + raw 保留 + needs_review；
+      # 非法日期 -> date=NULL + precision=unknown + raw 保留 + needs_review；
       # 未知键放 details_json.legacy；字符串不解析成结构。
       # 自检：cur_no == MAX(revision_no) == n+1；编号连续 1..n+1 无重复；
       #      当前字段逐项等于 r 的当前字段（失配 -> ROLLBACK revision_self_check_failed）
@@ -1436,8 +1537,11 @@ migrate_v1(payloads, ctx, adoption_mode='unknown'):
   assert author_state="unknown" 的记录两列作者字段均为 NULL；known 的作者同 subject、proxy 有 grant
   assert 无 method="cloud" 且 consent_id IS NULL 的 run；无 unresolved 来源被写成 not_private
   assert 每个 no_file 记录 source_kind="manual" 且 source_document_id IS NULL（source_text 保留）
-  assert 无指针但 original/来源含“原件：/原件已移除”的记录 source_kind="document" 且至少 unknown+needs_review（不得落 no_file）
-  assert 任一副本（含历史修订）source_kind="document" 且 source_document_id IS NULL 的记录，resolve_source='unresolved' 且至少 unknown+needs_review
+  assert 无指针但 original/来源含“原件：文件名”的记录 source_kind="legacy_text"、source_document_id IS NULL、至少 unknown+needs_review（不得落 no_file/unresolved/document）
+  assert 无指针且来源为“原件已移除”、files 项已不存在的记录 source_kind="removed_irrecoverable"、source_document_id IS NULL、至少 unknown+needs_review；未新增 source_document 行/removed_at/removed_by
+  assert 每个历史修订（无当版显式 fileId）source_document_id IS NULL，source_kind ∈ {manual,legacy_text,removed_irrecoverable}；不得回填当前 fileId
+  assert 任一副本 source_kind="document" 且 source_document_id IS NULL 的记录，resolve_source='unresolved' 且至少 unknown+needs_review
+  assert 任一 occurred_precision="unknown" 的修订 occurred_date IS NULL 且 occurred_raw 保留、needs_review；日期与精度组合合法
   assert 不存在“当前修订 not_private 但 resolve_source 受保护（private/unknown/ever 未 release）”的记录；
          互指写入后若出现，必须追加 privacy 修订或整批 ROLLBACK
   assert 旧 ID 不复用、每行 ID 唯一
@@ -1533,14 +1637,14 @@ G3 记录应逐项写“已定/阻塞/未来”，不能把未来事项写成“
 | V-23 | 件级隐私传播原子且**不降级**：一次事务只对当前 `not_private` 记录追加隐私修订，已受保护记录不改写、不把 `private` 降为 `unknown`；候选按“原状态与新状态较强者”更新；产物置 `quarantined` 并写 `status_data_version=新 data_version`；`data_version` 整批 +1；失败全回滚 | 注入中途失败，断言无半传播、`data_version` 未增、artifact 状态未变；成功时当前 `not_private` 记录计数与修订一致；已 `private` 候选在 document→unknown 后仍 `private`；已受保护记录状态不变；含受影响记录的 artifact `status='quarantined'` 且版本同事务 | 未执行 |
 | V-24 | 代理视图不含受保护记录的存在性、计数、占位、元数据 | 以 proxy 拉看板/时间线/导出候选，断言受保护项=0 且无 `hidden_count`；响应与“不存在”不可区分 | 未执行 |
 | V-25 | AI 上下文零私密/未知：任何 AI 请求载荷不含受保护记录或其摘要，且只含当前修订 | 拦截 AI 请求体扫描；构造“当前公开、选中旧私密修订”断言拒绝；构造全私密库断言上下文为空；无 `ai_context` consent 时拒绝 | 未执行 |
-| V-26 | 移除文档不删原件、不删已采纳记录、不改写历史来源；备份不声称含原件 | 移除后原件仍在、记录与 `source_document` 行仍在、`link_state='removed'`；备份清单无原件文件 | 未执行 |
+| V-26 | **未来软删设计，不是原型既存行为**：若实现软删，移除文档不删磁盘原件、不删已采纳记录、不改写历史来源，`source_document` 行保留并置 `link_state='removed'`，备份不声称含原件 | 该断言只能在未来软删实现上执行；原型既存数据没有 `removed` 行/`removed_at/by`，不得用本项声称原型已验证。原型移除后的不可恢复事实按 V-54～V-57 验 | 未来设计；未实现；**不得作为原型既存证据** |
 | V-27 | 版本恢复：`record.restoreRevision` 新增修订不删历史；**只恢复内容、不恢复/降低隐私、不得洗白**；self-only；代理拒绝且不泄露目标；恢复后来源指针保留；库恢复校验 ledger 连续 | 恢复后修订数 +1、旧修订仍在、当前隐私不变；请求带 `privacy_state` 断言 `privacy_changed`；目标私密/未知而当前 `not_private` 断言 `privacy_locked`；proxy 调用断言 `not_authorized` 且无存在性差异；新修订 `restored_from_revision_id` 正确且 `source_document_id` 未被清空；篡改 ledger 缺口断言拒绝启动 | 未执行 |
 | V-28 | 9.3 DDL 明确标注非完整合同；示例字段不被当作 G3 已覆盖 | 人工核对 §9.3 省略清单；G3 记录引用完整脚本而非示例 | 本文件已标注；G3 待签（不依赖建库） |
 | V-29 | 来源链继承：当前/历史修订或候选 run 引用受保护原件时，`protected(...,'record')` 在链解除前始终为真；采纳不洗白；移除原件登记不解除；原件取消私密后仍靠 sticky 受保护；`protected(...,'revision')` 不因此隐藏公开历史 | fixture：原件 private → 候选 private → 采纳后记录 protected；把当前修订 `source_document_id` 置空后仍 protected；`document.remove` 后仍 protected；原件改回 not_private 后记录仍 protected；同一记录的公开历史修订仍 `revision` scope 可见；`protected(...,'record')` 与读模型结果一致 | 未执行 |
 | V-30 | 原件只靠会话句柄重开：库内无路径/句柄；`import.start` 无会话句柄即 `source_handle_unavailable`；无 `present` 状态 | 扫描 schema 确认无 path/handle 列；刷新后未重选文件调 `import.start` 断言失败；重选后成功；localStorage/IndexedDB 无句柄 | 未执行 |
 | V-31 | 所有日期/瞬时列定长 ASCII 字节：`length` 与 `length(hex())` 同时匹配；`details_json` 按字节 ≤8 KiB；`created_at` 为 UTC `...Z` | 对每个日期列注入全角数字、组合字符、尾随空格、`2026-02-30T...`、`2026-13-01T...`、`24:00:00`；断言 CHECK 拒绝；`details_json` 用多字节内容断言按字节计 | 部分：仅 §11.1 的 `created_at` 骨架；未覆盖所有日期列，未在宿主执行 |
 | V-32 | `created_at` 的 NULL/24:00 修复不能被旧 CHECK 误述：`2026-13-01` 必须拒绝，`2026-02-30` 由归一化不等拒绝而不是 NULL 放行，`24:00` 必须拒绝 | 同一 fixture 分别插入旧 CHECK 与新 CHECK；断言旧表接受 `2026-13-01`/`24:00`、新表全部拒绝；`2024-02-29` 接受、`2026-02-29` 拒绝 | 部分：§11.1 骨架含对应断言，本次未保留执行输出，未在宿主执行 |
-| V-33 | 迁移隐私与结构初始化：true/false/缺失/非布尔分别落 private/not_private/unknown；`history[]` 逐项不继承当前私密；`files[]` 写 ever/epoch/**seq**，unknown 必须 0/0/0；**`history[i]` 按老→新写 `revision_no=i+1`，当前内容写 `N+1` 且不重复进历史**；历史修订的 `fileId`/`source` 同样落 `source_document_id`/`source_kind`（隐私仍只看该项 `private`），不得丢历史指针；**来源三态**：`fileId` 键缺失或 null 且 `original` 为空、`source` 无“原件：/原件已移除”→`no_file` + `source_kind='manual'`；有值但悬空/跨主体，或 `fileId` 为空但保留原件痕迹→`unresolved` + `source_kind='document'` + 至少 unknown+needs_review；**作者**：无证据→`author_state='unknown'` + 两列 NULL，不得默认本人；**云 run**：无 consent 整批 `ROLLBACK`/`consent_unresolved`，不补造 | 用原型形状 fixture 跑 §10.4 伪代码/等价实现；断言 `history` 缺失项 unknown、公开项保留、当前私有项不传播到历史；断言历史编号连续、当前 = `MAX` 且字段 = payload；`fileId` 键缺失/null 且无原件痕迹的记录 `source_document_id IS NULL`、`source_kind='manual'` 且不因缺文件强制 unknown；悬空记录至少 unknown+needs_review；`fileId` 为空但 `original`/来源含原件痕迹的记录断言 `unresolved`+`source_kind='document'`+`needs_review`，不得落 manual；`files` unknown 的 ever/epoch/seq 均为 0；`import_candidate` 行数=payload 候选数且 `import_id` 非空；跨 subject 候选被拒；cloud run 缺 consent 断言无 run/无候选且整批回滚 | **未验证**：伪代码无实现、真实旧库未取得；不得把伪代码当 SQL |
+| V-33 | 迁移隐私与结构初始化（按原型形状）：true/false/缺失/非布尔分别落 private/not_private/unknown；`history[]` 逐项不继承当前私密；`files[]` 写 ever/epoch/**seq**，unknown 必须 0/0/0；**`history[i]` 按老→新写 `revision_no=i+1`，当前内容写 `N+1` 且不重复进历史**；**历史修订的 `fileId` 键缺失/NULL 是常态：`source_document_id` 必须 NULL，不得用当前 `fileId`/文件名/`fileLinked=true` 回填；其“原件：文件名”只落 `source_kind='legacy_text'`，移除后文本只落 `source_kind='removed_irrecoverable'`，两者均不进 `source_chain`**；**来源五态**：当前无真实指针且当前/历史无原件痕迹→`no_file`+`manual`；当前显式 `fileId` 悬空/跨主体→`unresolved`+`document`+至少 unknown+needs_review；当前无指针但有 `original`/“原件：文件名”→`legacy_text`+至少 unknown+needs_review；当前无指针且来源“原件已移除”、文件项已删→`removed_irrecoverable`+至少 unknown+needs_review，不伪造墓碑；**未知日期**：precision unknown 或非法日期→`occurred_date=NULL`、`occurred_raw` 保留、`needs_review=1`；**作者**：无证据→`author_state='unknown'` + 两列 NULL，不得默认本人；**云 run**：无 consent 整批 `ROLLBACK`/`consent_unresolved`，不补造 | 用原型形状 fixture 跑 §10.4 伪代码/等价实现；断言 `history` 缺失项 unknown、公开项保留、当前私有项不传播到历史；断言历史编号连续、当前 = `MAX` 且字段 = payload；**每个历史修订断言 `source_document_id IS NULL`，`source_kind ∈ {'manual','legacy_text','removed_irrecoverable'}`，且当前记录 `fileId` 存在也不得被回填**；`fileId` 键缺失/null 且无原件痕迹的记录 `source_document_id IS NULL`、`source_kind='manual'` 且不因缺文件强制 unknown；悬空真实指针至少 unknown+needs_review；当前无指针但 `original`/来源含“原件：文件名”断言 `legacy_text`、NULL、needs_review，不得落 `unresolved`/manual；来源“原件已移除”且文件项已删断言 `removed_irrecoverable`、NULL、needs_review，且 `source_document` 行数不增加、无 `removed_at/by`；未知/非法日期断言 date NULL、raw 保留、needs_review；`files` unknown 的 ever/epoch/seq 均为 0；`import_candidate` 行数=payload 候选数且 `import_id` 非空；跨 subject 候选被拒；cloud run 缺 consent 断言无 run/无候选且整批回滚 | **未验证**：伪代码无实现、真实旧库未取得；不得把伪代码当 SQL |
 | V-34 | sticky 逐条解除：release 只清 `(record, document, 当前 epoch, 当前 state_seq)`；旧 epoch/旧 seq 失效；`unknown` 往返后旧 release 失效；release 不改记录隐私；proxy 无此能力；未实现前整套流程是 G3 阻塞 | fixture：doc private→not_private(ever=1) 仍 protected；release 后 `source_locked` 才可能为 false；doc 再 private（epoch+1）后旧 release 不生效；`not_private→unknown→not_private`（seq 递增）后旧 release 不生效，必须重新 release；同 `(record,doc,epoch,seq)` 重复 release 被拒；release 后记录仍 `not_private`，需单独 `setPrivacy` | **部分且不可当证据**：§11.1 旧 release/epoch 断言曾观察过；draft.6 新增的 `privacy_state_seq`/`document_state_seq` 断言本次未执行；命令/UI/迁移/端到端均无证据；G3 阻塞 |
 | V-35 | 出站双 scope：AI/导出/artifact 必需同时校验选中 revision 与 current record；任一侧受保护即拒绝；AI 只发当前修订 | fixture：记录当前公开但选中旧私密修订 → AI/导出/artifact 全部拒绝；当前受保护但选中旧公开修订 → 同样拒绝；AI 载荷只含 current `revision_no`，不含修订号列表/来源 ID | 未执行 |
 | V-36 | artifact 构建/下载隔离：构建时记录双 scope `included_private`；下载时重判并重算 `contains_private`；构建后被保护置 `quarantined`；每个私密条目各自需新的匹配 `private_export`；proxy 不可下载含私密产物 | 构建后把记录转 private，断言 artifact `quarantined` 且下载拒绝；同一 `private_export` 第二次下载断言 `consent_required`；含两条私密项的产物只签一条同意，断言 `consent_required`；proxy 下载含私密条目断言 `not_authorized`；回执无记录 ID | 未执行 |
@@ -1558,9 +1662,13 @@ G3 记录应逐项写“已定/阻塞/未来”，不能把未来事项写成“
 | V-48 | 迁移采纳关系不猜：显式双向链接且同 subject → `adoption_state='resolved'` 并写互指；缺失/一侧/冲突 → 默认 `unknown` 模式候选 `pending`+`adoption_state='unknown'`+两列 NULL+不可采纳，报告逐条原因；显式 `strict_reject` 整批 `ROLLBACK`、不写 ledger；禁止文本/顺序/日期推断与伪造 ID | 用四类 fixture：双向一致、仅 record 一侧、仅 candidate 一侧、两列指向不同对象；断言 resolved 互指、默认模式写入 unknown 且 `candidate.adopt` 返回 `adoption_unresolved`、显式 strict 整批回滚且候选/记录为 0；文本相同但无链接的 fixture 不得被判定 adopted；报告计数与 legacy 键可核对 | 未执行；G3 阻塞（Q-31） |
 | V-49 | 历史编号与当前自检：`revision_no` 连续无重复，历史 1..N（老→新）、当前 N+1=`MAX`；写入/读取/迁移都自检“当前字段 = 第 N+1 版修订”；失配 `revision_self_check_failed`/`needs_review`，不回退历史最后一项；非本人只对可见集重排显示序号 | 用 3 条历史 + 1 当前 fixture：断言编号 1..3 与 4；按旧“当前=1、历史=2..4”写法的实现被抓；篡改当前字段与第 4 版不一致，断言读取失败关闭且不显示历史末项；非本人响应无规范编号、无断号、无空位 | 未执行 |
 | V-50 | `link_state` 四态语义：无 `active`；`unverified/verified` 可新挂，`missing/removed` 被拒（`document_missing`/`document_removed`）且不自动复活；四态均不改 `privacy_state`/`epoch`/`seq`；`removed` 且已知 `not_private`+`ever=0` 不因移除受保护，`unknown`/曾私密未 release 仍受保护 | 四态 fixture 分别 attach：missing/removed 断言失败；插入 `active` 断言非法枚举；removed 的公开记录断言仍可读；removed 的 unknown/曾私密记录断言仍受保护；verified 后隐私字段不变、`last_verified_at` 更新 | 未执行 |
-| V-51 | 来源三态：`no_file`（无任何来源指针——含历史修订——且 `source_kind='manual'`；迁移 `fileId` 键缺失/null 且任一修订均无原件痕迹、新写入显式声明）不强制 unknown、不标 needs_review；`resolved` 需行存在同 subject 且候选链一致；`unresolved`（悬空/跨主体/不一致/互指不成立/任一副本 `source_kind='document'` 但无指针/指针已丢但保留原件痕迹）→ unknown+source_locked+needs_review，禁止 adopt/release/setPrivacy(not_private)；`source_document_id IS NULL` 不等于手工 | 手工无来源记录断言 `no_file`、`source_kind='manual'`、非 needs_review；删指针的悬空链断言仍 `unresolved` 受保护；`fileId` 为 null 但 `original`/来源含“原件：/原件已移除”的记录断言 unresolved+document+needs_review，不得判 manual；跨 subject 断言 `cross_subject_reference`；resolved 文档 attach 成功；NULL 指针但 `origin_candidate_id` 存在的记录不得判 `no_file` | 未执行 |
+| V-51 | **来源五态**：`no_file`（当前与历史均无真实来源指针、当前显式 `manual`、且无任何原件痕迹；迁移 `fileId` 键缺失/null 且任一修订均无原件痕迹、新写入显式声明）不强制 unknown、不标 needs_review；`resolved` 需当前/当版真实指针存在、行同 subject 且候选链一致；`legacy_text`（无指针但 `original` 非空或来源含“原件：文件名”；历史常态）必须 NULL、至少 unknown+needs_review，**不得判 unresolved/document，不得回填**；`removed_irrecoverable`（无指针且来源“原件已移除”、文件项已删）必须 NULL、至少 unknown+needs_review，不建墓碑；`unresolved` **只**指真实指针悬空/跨主体/候选-run-doc 不一致/互指不成立，或当前 `source_kind='document'` 却无指针；`source_document_id IS NULL` 不等于手工 | 手工无来源记录断言 `no_file`、`source_kind='manual'`、非 needs_review；删指针的悬空真实链断言仍 `unresolved` 受保护；历史无 `fileId` 的 fixture 断言 NULL+legacy_text/manual，当前 `fileId` 存在也不得回填；`fileId` 为 null 但 `original`/来源含“原件：文件名”的记录断言 `legacy_text`+NULL+needs_review，不得判 unresolved 或 document；“原件已移除”且 files 项不存在断言 `removed_irrecoverable`+NULL+needs_review 且无 `removed_at/by`/`display_name`；跨 subject 断言 `cross_subject_reference`；resolved 文档 attach 成功；NULL 指针但 `origin_candidate_id` 存在的记录不得判 `no_file` | 未执行；历史回填零容忍，任何把当前 `fileId` 写入历史修订的实现直接失败 |
 | V-52 | 云解析无 consent 失败关闭：`import.start` 在建 run/上传/建候选前校验 `cloud_parse` consent（self、未撤回、document/subject 匹配）；缺失 `consent_required` 且无 run/无上传/无候选/无 `tmp/`；`method='cloud'` 的 `import_run.consent_id` NOT NULL；迁移 cloud run 无 consent 整批回滚 `consent_unresolved`，不补造 | 无 consent 调 `import.start` 断言 `consent_required` 且 run/候选计数为 0、无上传调用；撤回 consent 后同断言；直接插入 cloud run 缺 consent 断言 CHECK 失败；迁移 fixture 含无 consent cloud run 断言 `ROLLBACK`、无 consent 行、报告 `consent_unresolved` | 未执行 |
 | V-53 | 作者未知不伪造：`author_state ∈ {known,unknown}`；unknown 两列 NULL、UI“作者未知”；known self/proxy 约束；迁移无作者证据一律 unknown，不得默认 `ctx.subject_actor_id`/`system`；`own_entries` 不把 unknown 当自己写的 | 旧 payload 无作者字段迁移后全部 `unknown` 且两列 NULL；有明确作者/代理 grant 的记录 known 且一致；篡改 unknown 记录填 self 断言约束失败；proxy `own_entries` 不含 unknown 作者记录；读模型/回执不把 unknown 显示成本人 | 未执行 |
+| V-54 | **历史修订从未保存 `fileId`，禁止猜测回填**：fixture 的当前记录有 `fileId='f1'`，`history[]` 项只有 `date/datePrecision/text/source/private`（血管含 `fileLinked:true`），无 `fileId`、无 `original`；迁移后每个历史修订 `source_document_id IS NULL`，来源文本落 `source_kind='legacy_text'`，不得指向 f1 或凭 `fileLinked=true` 新建/猜测 document；`source_chain()` 只含当前真实指针；当前 f1 被删除时历史仍为 NULL+`legacy_text`，不得改判 `unresolved` | 用原型形状 fixture 跑 §10.4；逐条断言历史 `source_document_id IS NULL`、`source_kind='legacy_text'`、`source_text` 原文未变；断言 `source_chain()` 无历史项；构造“当前 fileId 悬空 + 历史有原件文本”：当前 `unresolved`、历史仍 NULL+`legacy_text`，不得把历史文本当悬空；断言 `source_document` 行数不因历史增加 | **未执行**（无迁移实现、无真实旧库） |
+| V-55 | **缺日期精度/非法日期保留原文且不伪造日期**：`datePrecision='unknown'`（含 `date='2019 年初'`、`date=''`）→ `occurred_date=NULL`、`occurred_precision='unknown'`、`occurred_raw` 精确保留原文、`occurred_validation='needs_review'`；`date='2026-02-30'`/全角/带空格等非法值即使声明 `day` 也降为 `precision='unknown'`、date NULL、raw 保留、needs_review；`2026-07`+`month` 保持 `YYYY-MM`，不得补 `-01`；不得用今天/文件时间/导入时间/治疗时长/排序需要反推 | fixture 覆盖 unknown+非空原文、unknown+空原文、非法公历日、全角数字、月份精度、合法日；逐条断言 date/precision/raw/validation 四元组；断言任何日期均非“今天/导入时刻”；断言排序键在 unknown 时为 NULL 且不参与排序；断言只有本人显式“确认记不清”才能清 needs_review，且日期仍 NULL | **未执行**（无迁移实现、无 UI 确认流程） |
+| V-56 | **移除原件后不可恢复且不伪造墓碑**：原型移除会删 `files[]` 项、当前 `fileId/original` 置空、当前与历史来源 scrub 成“原件已移除”（带备注变体不 scrub）；fixture 无对应文件行时，迁移只能写 `source_kind='removed_irrecoverable'`、`source_document_id=NULL`、`source_text` 保留、记录当前至少 `unknown`、`needs_review=1`；不得创建 `source_document`/`removed_at/by`/`link_state='removed'`/`display_name`/`byte_size`/`registered_at`，不得从残留文本猜文件名或声称可恢复 | 用“文件项已删 + 记录 source='原件已移除' + 历史同类文本”的 fixture 跑迁移；断言 `source_document` 行数不增加、无 `removed_at/by`/`link_state='removed'`、`source_text` 逐字保留；断言记录当前隐私 ≥ `unknown`、needs_review；断言手工来源（如“本人抄录”）不被改写；重新登记新原件后走 `attachSource` 建新链，旧修订指针仍 NULL、不复活 | **未执行**（无迁移实现、无真实旧库） |
+| V-57 | **既存事实与未来设计隔离**：迁移只按原型既存事实处理，不把 §6.1 未来软删设计（保留行/`display_name`/`removed_at`/可恢复）当作输入能力；报告必须分别计数 `legacy_text`、`removed_irrecoverable`、`no_file`、`resolved`、`unresolved`，且 `removed_irrecoverable` 提示“具体原件不可恢复、可重新登记”，不得显示“已软删/可恢复/原文件名” | 运行迁移报告；断言五态计数之和=记录数（按记录口径）且各类计数可复核；扫描输出/UI 文案不得出现伪造的原文件名、大小、登记时间或“可恢复”承诺；断言未启用未来软删 DDL 路径；断言 §6.1 引用块仍标注“未来设计、未实现、未被原型验证” | **未执行**；本项同时是文档口径检查，不替代 V-54～V-56 |
 
 ### 11.1 本机可复现 SQLite 验证（2026-11-03）
 
@@ -1632,7 +1740,7 @@ console.log('SQLite core regression: PASS');
 - `record_revision` 的日期 CHECK 对 `2026-02-30` 拒绝、对 `2026-02` 接受、对 `2026-13` 拒绝；
 - `privacy_state='unknown'` 不得被任何默认读模型当成 `not_private`。
 
-这些检查必须在 M5 的测试库重新执行，并把结果附在 G3/M5 记录中；仅“文档写了”或“骨架跑通”不算通过。**V-33 的迁移隐私/编号/来源三态/作者/consent 初始化、V-43～V-53 的来源/采纳/恢复/保护写入/版本隔离/链状态/作者状态均没有可执行实现或测试，状态保持“未验证/未执行”。**
+这些检查必须在 M5 的测试库重新执行，并把结果附在 G3/M5 记录中；仅“文档写了”或“骨架跑通”不算通过。**V-33 的迁移隐私/编号/来源五态（含历史无 fileId、legacy_text、removed_irrecoverable）/作者/consent 初始化、V-43～V-57 的来源/采纳/恢复/保护写入/版本隔离/链状态/作者状态/原型事实专项均没有可执行实现或测试，状态保持“未验证/未执行”。**
 
 ---
 
@@ -1691,18 +1799,18 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 - [ ] **身份与授权前置**：确认 actor 只从会话/宿主解析、请求体身份被忽略；确认 `demo_unverified` 只能写 demo subject；确认 proxy 需 `host_authenticated` + 有效 grant 且 scope 覆盖 kind/日期；确认 consent/setPrivacy/release 仅 self；确认拒绝不区分无权限/不存在（V-40）。
 - [ ] **缓存隔离**：确认缓存键含 `subject_id + data_version + read_model_version + viewer_actor_id + 授权 scope 版本`；确认本人/代理、跨 subject 缓存不互用；确认授权变化递增 `data_version`（V-41）。
 - [ ] **unknown 往返**：确认 `privacy_state_seq` 在每次实际状态变化时递增、同值不增；确认 release 绑定签发 seq，`private→not_private→release→unknown→not_private` 后旧 release 失效、必须重新逐条 release；确认迁移 seq 初值（private=1，其他=0）（V-34/V-42）。
-- [ ] **历史**：确认 `record_revision` 全量快照、只增不改、当前=max=N+1、历史编号 1..N（老→新）连续、当前内容不重复进历史；确认写入/读取/迁移都自检“当前字段 = 第 N+1 版”，失配失败关闭（V-49）；确认受保护历史默认只回元数据（**仅本人视图**；非本人 0 正文且 0 元数据）、按条判断不回溯、打印不输出正文与元数据。
-- [ ] **日期**：确认 day/month/unknown + raw；确认不补日期、不展开月份、非法旧值标待核；确认年份边界（或改）；确认日期/瞬时字段按**定长 ASCII 字节**校验（V-31）。
+- [ ] **历史**：确认 `record_revision` 全量快照、只增不改、当前=max=N+1、历史编号 1..N（老→新）连续、当前内容不重复进历史；确认写入/读取/迁移都自检“当前字段 = 第 N+1 版”，失配失败关闭（V-49）；**确认历史修订从未保存 `fileId`，迁移不得用当前 `fileId`、文件名相似、日期/顺序或 `fileLinked=true` 回填；历史来源文本按痕迹只落 `legacy_text`（普通“原件：文件名”）或 `removed_irrecoverable`（已移除），且不进 `source_chain`（V-54）**；确认受保护历史默认只回元数据（**仅本人视图**；非本人 0 正文且 0 元数据）、按条判断不回溯、打印不输出正文与元数据。
+- [ ] **日期**：确认 day/month/unknown + raw；**确认 precision=unknown（含空原文）时 `occurred_date=NULL`、`occurred_raw` 保留、`needs_review=1`，非法日期降为 unknown 且同样保留原文；不得按形状补日/月、月份不补 `-01`、不得用今天/文件时间/导入时间/治疗时长反推；只有本人显式确认“确实记不清”才清 needs_review，日期仍 NULL（V-55）**；确认年份边界（或改）；确认日期/瞬时字段按**定长 ASCII 字节**校验（V-31）。
 - [ ] **事实类型**：确认第 5.3 节 10 个 kind 与页面映射；确认 observation/event 不再平行建表；确认“副作用/感受”是否新增 kind（Q-06）。
 - [ ] **导入**：确认候选生命周期、采纳事务、丢弃清空正文、私密继承、云解析 consent 的失败关闭顺序（建 run/上传/建候选**之前**校验；缺失 `consent_required` 且零副作用；迁移无 consent 的 cloud run 整批拒绝，不补造，V-52）与“不声称云端已删”；确认**整份解析全文默认不另存**（候选 `proposed_text` 除外，中间产物只走会话 `tmp/`）、`manifests` 只存元数据；确认**撤回解析不删已采纳记录与来源指针**（V-14）。
-- [ ] **原件**：确认**不复制原件、只登记元数据**、`source_document_id` 只是出处/审计关联、重开需**会话文件句柄**（不持久化）；确认 `link_state` 只有 `unverified/verified/missing/removed`（无 `active`）、只表示最近会话核对、不是隐私状态，新挂只允许前两者、`missing/removed` 不得自动复活，且不因移除把已知 `not_private+ever=0` 改为受保护（V-50）；确认无 `present`、无持久 `parsed/`；确认 Q-17 的“未来是否允许持久解析/复制原件”仍是未来事项。
+- [ ] **原件**：确认**不复制原件、只登记元数据**、`source_document_id` 只是出处/审计关联、重开需**会话文件句柄**（不持久化）；确认 `link_state` 只有 `unverified/verified/missing/removed`（无 `active`）、只表示最近会话核对、不是隐私状态，新挂只允许前两者、`missing/removed` 不得自动复活，且不因移除把已知 `not_private+ever=0` 改为受保护（V-50）；**确认“移除只置 `removed`、保留行/文件名、可恢复”只是未来软删设计，原型既存行为是直接删 `files[]` 项、擦除当前/历史文件名、无墓碑、刷新即失；迁移不得伪造 `source_document`/`removed_at/by`/`display_name`/`byte_size`，只能落 `removed_irrecoverable` 并如实提示不可恢复（V-56/V-57）**；确认无 `present`、无持久 `parsed/`；确认 Q-17 的“未来是否允许持久解析/复制原件”仍是未来事项。
 - [ ] **数据目录**：确认显式选择、marker、**仅受管理文件用相对路径**、根边界、目录布局（含会话 `tmp/`）、备份不含 `tmp/`、卸载不删除。
 - [ ] **持久化**：确认 SQLite 为默认候选；确认每连接 `foreign_keys=ON`、`BEGIN IMMEDIATE`、无级联删除；在 Q-08 取得宿主运行时证据前不建生产库。
 - [ ] **并发与幂等**：确认 `command_receipt` 复合主键 `(subject_id, actor_id, request_id)`、最小化（不存受保护 ID/正文）与三者同时匹配的作用域、`expected_data_version`、三路合并，以及 `revision_conflict`/`stale_revision`/`stale_data_version` 的优先级（V-20/V-21）；确认 §9.6 锁序只是草案、未经压测。
 - [ ] **AI**：确认**本版** AI 永不接收私密/未知、无逐条例外、无 override；确认 **Q-10 的“未来逐条授权”仍是未决政策**，不得由 G3 勾选或配置打开（V-25）。
-- [ ] **迁移**：确认 `schema_version=1`、迁移 ledger 连续唯一、备份/失败回滚、expand/contract；确认**单事务为默认、重建表是显式非原子例外**且 Q-29 未设计前不进入生产；确认重建时 `foreign_keys=OFF` 在事务外、`foreign_key_check` 在 COMMIT 前、`ROLLBACK` 不留孤儿、提交后 `ON` 并复核；确认原型映射与 §10.4 隐私初始化（true/false/缺失/非布尔、`history[]` 逐项、`files[]` unknown 为 0/0/0、`fileId` 缺失/null 且无原件痕迹、`created_at`）**只有伪代码，不含可执行 SQL，未实现、未验证**；确认候选/run 逐条 INSERT、两表来源非空、`adoption_state`/互指/报告按 §10.4；确认默认 `unknown`（候选不可采纳）、`strict_reject` 显式整批回滚（V-44/V-48）；确认历史编号 `history[i]→i+1`、当前 `N+1` 且迁移后自检（V-49）；确认来源三态 `no_file/resolved/unresolved`、`fileId` 键缺失/null 与“曾有原件但指针已丢”分开处理（V-33/V-51）；确认无作者证据时 `author_state='unknown'`、两列 NULL，不默认本人（V-53）；确认 cloud run 无 consent 整批 `ROLLBACK`/`consent_unresolved`（V-52）。**Q-27/Q-28/Q-29/Q-30/Q-31 均为 G3 阻塞；Q-33 为迁移阻塞。**
+- [ ] **迁移**：确认 `schema_version=1`、迁移 ledger 连续唯一、备份/失败回滚、expand/contract；确认**单事务为默认、重建表是显式非原子例外**且 Q-29 未设计前不进入生产；确认重建时 `foreign_keys=OFF` 在事务外、`foreign_key_check` 在 COMMIT 前、`ROLLBACK` 不留孤儿、提交后 `ON` 并复核；确认原型映射与 §10.4 隐私初始化（true/false/缺失/非布尔、`history[]` 逐项且**历史无 `fileId` 不回填**、`files[]` unknown 为 0/0/0、`fileId` 缺失/null 且无原件痕迹、`created_at`）**只有伪代码，不含可执行 SQL，未实现、未验证**；确认候选/run 逐条 INSERT、两表来源非空、`adoption_state`/互指/报告按 §10.4；确认默认 `unknown`（候选不可采纳）、`strict_reject` 显式整批回滚（V-44/V-48）；确认历史编号 `history[i]→i+1`、当前 `N+1` 且迁移后自检（V-49）；**确认来源五态 `no_file/resolved/legacy_text/removed_irrecoverable/unresolved`：历史无 `fileId` 是常态、按来源痕迹落 `legacy_text` 或 `removed_irrecoverable` 且 NULL，不得回填；无指针但保留原件文本→`legacy_text`，移除后→`removed_irrecoverable`，两者均不进 `source_chain` 且不得判 `unresolved`；只有真实指针悬空/跨主体/不一致才 `unresolved`（V-33/V-51/V-54）**；确认未知日期 `date=NULL`+raw+needs_review（V-55）；确认移除后不伪造墓碑（V-56/V-57）；确认无作者证据时 `author_state='unknown'`、两列 NULL，不默认本人（V-53）；确认 cloud run 无 consent 整批 `ROLLBACK`/`consent_unresolved`（V-52）。**Q-27/Q-28/Q-29/Q-30/Q-31 均为 G3 阻塞；Q-33 为迁移阻塞。**
 - [ ] **版本恢复**：确认记录级恢复以新修订写入、不删历史、**只恢复内容、不恢复/降低隐私、不得洗白**、self-only、来源指针保留；库级恢复走 10.3 校验；确认恢复后回执失效**尚未设计，Q-28 为 G3 阻塞**（V-27/V-37）。
-- [ ] **验证**：确认第 11 节 V-01～V-53 为 M5 验收项，而不是“开发自测即可”；§11.1 只保留**可重跑骨架**（`created_at` CHECK、外键重建回滚、三列回执主键、sticky/release/epoch），**不是**“批量断言全部通过”，也不覆盖命令层、迁移、代理授权、跨 subject 或宿主 Q-08；不得把骨架当端到端证据。本版新增 V-35～V-42、V-43～V-48 与 V-49～V-53 全部为**未执行**，不得写成已通过；V-48 另受 Q-31 阻塞，V-53/Q-32、V-52/Q-33 的旧数据证据仍未取得。
+- [ ] **验证**：确认第 11 节 V-01～V-57 为 M5 验收项，而不是“开发自测即可”；§11.1 只保留**可重跑骨架**（`created_at` CHECK、外键重建回滚、三列回执主键、sticky/release/epoch），**不是**“批量断言全部通过”，也不覆盖命令层、迁移、代理授权、跨 subject 或宿主 Q-08；不得把骨架当端到端证据。本版新增 V-35～V-42、V-43～V-48、V-49～V-53 与 V-54～V-57 全部为**未执行**，不得写成已通过；V-54～V-57 是原型事实专项（历史无 fileId、未知日期、移除不可恢复、既存/未来隔离），同样无实现、无真实旧库；V-48 另受 Q-31 阻塞，V-53/Q-32、V-52/Q-33 的旧数据证据仍未取得。
 - [ ] **DDL**：确认第 9.3 节只是示意、其省略清单已逐项对完整脚本验收；不把示例字段数当合同；确认字节/ASCII 检查只示例了部分列（V-28/V-31）。
 - [ ] **未决项**：Q-01～Q-33 中仍标未决的每项有负责人/结论（Q-03 已定，不再作为二选一）；**Q-27/Q-28/Q-29/Q-30/Q-31 已明确列入 G3 阻塞，不得写成“不阻塞 v1”**；Q-33 为迁移阻塞（不改变运行时合同），Q-32 默认 `unknown` 且不阻塞本版；未来事项仅保留 Q-10 未来例外、Q-17 放宽、P-04 备选、Q-02/Q-23/Q-19/Q-14 等，逐条标注“不阻塞 v1”，不得以“后续再说”混进阻塞清单，也不得把未设计写成已完成。
 
@@ -1723,6 +1831,7 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 | v0.1.0-draft.6 | 2026-11-03 | 按安全复核（U-01～U-10）修订：① 出站统一 `output_protected(selected revision, current record)`，AI 只发当前修订，导出/artifact 构建与每次下载双 scope 校验；artifact 构建后被保护置 `quarantined`，`contains_private=1` 每次下载需新 `private_export`；② `record.restoreRevision` 改 self-only、恢复不改当前隐私、目标保护等级高于当前即 `privacy_locked`、复制来源并新增 `restored_from_revision_id`；③ 新增 §9.7 跨 subject 引用清单、写入校验与迁移后不变量，Q-30 列为 G3 阻塞；④ 候选来源缺失/不一致/跨 subject 失败关闭为 `source_unresolved`，仅本人可显式转 manual；⑤ proxy adopt 强制 `unknown`+`needs_review`+`privacy_origin='proxy_default'` 并校验 grant，新增 §3.5 身份与授权前置，命令表加“允许调用者”；⑥ 缓存键加 `subject_id` 与授权 scope 版本；⑦ 传播只改当前 `not_private` 记录、候选不降级、artifact 隔离；⑧ 新增 `privacy_state_seq`，release 绑定 `document_state_seq`，`unknown` 往返旧 release 失效；⑨ 删除 §10.4 残留 `UPDATE import_candidate` 伪 SQL，改为逐条 INSERT `import_run`/`import_candidate`；⑩ 新增 V-35～V-42（全部未执行），更新 V-23/V-25/V-27/V-33/V-34；新增 INV-23～27、D-22～24、U-01～U-10；**未声称任何实现/迁移/验收已完成** | **待 G3**；Q-27/Q-28/Q-29/Q-30 阻塞；未建库/未迁真实旧库/未在 Desktop 宿主执行；迁移只有伪代码，无可执行 SQL；新增验收全部“未执行” |
 | v0.1.0-draft.7 | 2026-11-03 | 按五问复核（W-01～W-05）修订：① 来源链加入 `candidate_source_ok`，候选/run/document 悬空、跨 subject、`candidate.document_id != run.document_id`、`adopted_record_id`/`origin_candidate_id` 不互指一律失败关闭，`source_locked=true`，不可采纳/解除/降公开（V-43）；② `import_run`/`import_candidate` 统一 `subject_id`/`document_id` 非空与复合引用，候选 doc=run doc，迁移缺失整批拒绝（V-44）；③ 新增 `import_candidate.adoption_state` 与 §10.4 采纳解析：只有双向显式一致才写互指，默认 `unknown` 模式候选 `pending`+两列 NULL+不可采纳并报告，显式 `strict_reject` 整批 `ROLLBACK`，禁止文本/顺序/日期推断（Q-31/V-48）；④ `record.restoreRevision` 在 `BEGIN IMMEDIATE` 内重读 `current/target/privacy/source_chain`，先校验 `expected_data_version`/`expected_current_revision_no`，再做保护判定，artifact 同事务 stale（V-45）；⑤ 新增 §4.7：create/attachSource/adopt 新挂受保护来源必须**写入** `private`/`unknown`，显式公开 `privacy_locked`，attachSource 只升不降、仅 self，修正 INV-06 与读时过滤矛盾（V-46）；⑥ `data_version` 每批只 +1，artifact `status`/`contains_private`/`status_data_version` 同事务更新，下载逐条重判（V-47）；新增 D-25/26、INV-28/29；**V-43～V-48 全部未执行；Q-27～Q-31 阻塞；未实现/未迁移/未在宿主执行** | **待 G3**；Q-27/Q-28/Q-29/Q-30/Q-31 阻塞；未建库/未迁真实旧库/未在 Desktop 宿主执行；迁移只有伪代码，无可执行 SQL；新增验收全部“未执行” |
 | v0.1.0-draft.8 | 2026-11-03 | 按六项复核（X-01～X-06）修订：① 历史编号固定为老→新 1..N、当前 N+1，迁移伪代码改为 `history[i]→i+1`、当前 `len+1`，写入/读取/迁移自检“当前字段 = 第 N+1 版”（D-27/INV-30/§5.1/V-33/V-49）；② 删除不存在的 `link_state='active'`，明确四态、可新挂白名单与“link_state 不改隐私”，`missing/removed` 拒绝新挂、不自动复活，也不把已知 `not_private+ever=0` 记录变成受保护（D-28/INV-31/§4.7/§6.1/V-50）；③ 来源解析统一 `no_file/resolved/unresolved`，悬空/跨主体/不一致→`unresolved→unknown`，手工无来源→`no_file` 且不强制 unknown，`fileId` 键缺失/null 与“曾有原件但指针已丢”分开（D-29/INV-28/§4.1/§4.5/§10.4/V-33/V-51）；④ 云解析无 consent 失败关闭：建 run/上传/候选前校验、缺失零副作用、`method='cloud'` 的 `consent_id` NOT NULL、迁移无 consent 整批回滚（D-30/INV-32/§6.2/§9.2/§9.4/V-52）；⑤ 新增 `record.author_state`，unknown 时两列 NULL、UI“作者未知”，迁移不再默认写本人（D-31/INV-08/INV-33/§3.2/§9.2/§10.4/V-53）；⑥ 重写 V-33、新增 V-49～V-53 全部未执行；新增 Q-32/Q-33 | **待 G3**；Q-27～Q-31 阻塞；未建库/未迁真实旧库/未在宿主执行；迁移只有伪代码，无可执行 SQL；V-33/V-49～V-53 均“未验证/未执行” |
+| v0.1.0-draft.9 | 2026-11-03 | 按原型实测（Y-01～Y-04）修订：① **历史修订从未保存 `fileId`**：`history[]` 只有日期/正文/`source`/`private`（血管 `fileLinked` bool），迁移一律 `source_document_id=NULL`，不得用当前 `fileId`/文件名/日期顺序/`fileLinked=true` 回填；新增 D-32/INV-34（§0.7/Y-01/§10.4/V-54）；② **未知日期**：`datePrecision='unknown'`（含空原文）或非法日期 → `occurred_date=NULL`、`occurred_raw` 保留、`needs_review=1`，不补日/月、不反推，确认记不清后才清待核（Y-02/§5.2/§10.4/V-55）；③ **移除原件不可恢复**：原型直接删 `files[]` 项、清 `fileId/original`、scrub 当前/历史来源，无墓碑、无 `removed_at/by`、刷新即失；迁移只能落 `source_kind='removed_irrecoverable'`，禁止伪造 document/墓碑/文件名（D-29 五态/INV-35/§6.1/§10.4/V-56）；④ **来源解析扩为五态** `no_file/resolved/legacy_text/removed_irrecoverable/unresolved`：历史文本是 `legacy_text` 不是悬空，移除后是 `removed_irrecoverable` 不是软删，只有真实指针损坏才 `unresolved`；`source_chain` 只收真实指针（D-29/INV-22/INV-28/§4.1/§4.5/§4.7/§10.4/V-51）；⑤ **区分原型既存事实与未来设计**：§6.1 软删三条明确标注未来设计、未实现、未被原型验证，不得反向补写（Y-04/§6.1/§9.2/V-26/V-57）；⑥ 重写 §10.4 映射/隐私初始化/伪代码，新增 V-54～V-57；全部验收仍未执行，G3 未签 | **待 G3，未签**；Q-27～Q-31 仍阻塞；未建库/未迁真实旧库/未在宿主执行；迁移仍只有伪代码，无可执行 SQL；V-54～V-57 均“未执行” |
 
 ---
 
@@ -1737,9 +1846,10 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 - 没有实现 §4.1 `protected_revision`/`protected_record`、§4.6 传播、§9.6 锁序、回执最小化或会话文件句柄；它们只是合同草案，未编码、未测并发、未压测；
 - 没有实现 `record.releaseSourceLink`、`source_link_release` 表、UI、迁移回填或端到端测试；**sticky 的逐条解除只有合同，整套流程是 G3 阻塞**，不能因为文档写了命令名就当成可用功能；
 - 没有在 DSH Desktop 宿主执行任何迁移/DDL；§9.3 的日期/字节检查只在 `node:sqlite` 3.53.4 内存库做过语法/CHECK 冒烟，§11.1 只保留可重跑骨架（不是批量断言结果），宿主 `Z` 后缀/`T` 分隔符/JSON1/部分索引兼容性仍未核验（Q-08）；
-- 没有实现 §10.4 迁移伪代码，也没有留下任何可执行迁移 SQL；没有在真实旧库执行迁移，真实旧库需 M5 授权与去标识后才可验证（V-33 保持“未验证”）；没有实现 `adoption_state`、`resolve_adoption`、`strict_reject`/`unknown` 模式、候选/run 非空拒绝或互指自检，**迁移采纳关系未实现、未迁移、未测试（Q-31/V-48 阻塞）**；历史编号/当前自检、来源三态、作者 unknown、cloud consent 的迁移分支同样未实现（V-33/V-49～V-53），无 consent 的旧 cloud run 无证据时整批拒绝（Q-33）；
-- 没有实现历史编号“老→新 1..N、当前 N+1”的写入/读取/迁移自检，也没有实现 `record.author_state`、`link_state` 四态校验、来源三态 `resolve_source` 或云解析 consent 的前置失败关闭；V-49～V-53 全部“未执行”，不得把合同当可用功能；
+- 没有实现 §10.4 迁移伪代码，也没有留下任何可执行迁移 SQL；没有在真实旧库执行迁移，真实旧库需 M5 授权与去标识后才可验证（V-33 保持“未验证”）；没有实现 `adoption_state`、`resolve_adoption`、`strict_reject`/`unknown` 模式、候选/run 非空拒绝或互指自检，**迁移采纳关系未实现、未迁移、未测试（Q-31/V-48 阻塞）**；历史编号/当前自检、**来源五态（含历史无 `fileId`→`legacy_text`、移除→`removed_irrecoverable`）**、作者 unknown、cloud consent 的迁移分支同样未实现（V-33/V-49～V-53/V-54/V-56），无 consent 的旧 cloud run 无证据时整批拒绝（Q-33）；
+- 没有实现历史编号“老→新 1..N、当前 N+1”的写入/读取/迁移自检，也没有实现 `record.author_state`、`link_state` 四态校验、来源五态 `resolve_source` 或云解析 consent 的前置失败关闭；V-49～V-57 全部“未执行”，不得把合同当可用功能；
+- **没有运行任何迁移来验证“历史无 fileId 不回填”“unknown 日期=NULL+raw+needs_review”“移除原件后无墓碑/文件名不可恢复”**；这些结论来自对 `prototypes/v0.2/index.html` 的只读代码核对（Y-01～Y-04），V-54～V-56 仍是待执行验收，不是已通过结果；
 - 没有验证备份恢复后的回执失效（Q-28）或重建表崩溃恢复（Q-29）；两项均明确标为 **G3 阻塞**，未设计前不得进入生产发布；
 - 没有实现 §3.5 身份/授权前置、`output_protected` 双 scope、§9.7 跨 subject 校验、`privacy_state_seq`/`document_state_seq`、`candidate_source_ok` 来源链解析、§4.7 `source_floor`/`attach_state`/`record.attachSource`、§5.1 恢复事务重读/版本前置、或 `data_version` 与 artifact `status_data_version` 同事务；这些只是合同与验收项，V-35～V-53 全部“未执行”；
-- 没有修复任何已发布代码或数据库；本文件只是 draft.8 合同文本，不能当作漏洞已修复的证据；
+- 没有修复任何已发布代码或数据库；本文件只是 draft.9 合同文本，不能当作漏洞已修复的证据；
 - 没有把 G2 当成 G3；本文件仍需签认。
