@@ -28,7 +28,7 @@ test('跨科时间线按选择并列同日记录并分别回源', async t => {
     check(document.querySelector('#dialog-body').textContent.includes('眼科合成原件') && !document.querySelector('#dialog-body').textContent.includes('口腔科合成原件'),'眼科来源');
     document.querySelector('#dialog').close();
     document.querySelector('[data-timeline-source="1"]').click();
-    check(document.querySelector('#dialog-body').textContent.includes('无原件'),'缺失原件');
+    check(!document.querySelector('#dialog-body').textContent.includes('无原件'),'非资料类型不显示缺失原件');
     document.querySelector('#dialog').close();
     select(4,false);check(!document.querySelector('#timeline-results').textContent.includes('口腔科示例记录'),'取消选择');
     select(3,true);check(document.querySelector('#timeline-results').textContent.includes('下次复诊想问的问题'),'显式选择私密');

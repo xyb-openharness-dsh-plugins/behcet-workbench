@@ -347,19 +347,76 @@ async function runS03(ctx) {
 
 async function runS04(ctx) {
   const driver = ctx.driver;
-  await ctx.check('manual', '手工步骤：新增资料原文', async () => {
-    await openAddDialog(driver, '手工补一条', '手工补一条');
-    await driver.fill('#entry-date', '2026-11-01');
-    await driver.fill('#entry-text', TEXTS.S04);
-    await saveDialog(driver, '[data-action="save"]');
-    const record = await recordByText(driver, TEXTS.S04);
-    must(record, '新增记录未进入页面状态');
-    return `保存普通文字记录（kind=${record.kind}）`;
+  const source = '合成血管报告抄录 · 走查';
+  await ctx.check('manual', '手工步骤：打开血管资料表单', async () => {
+    ctx.s04Baseline = await driver.eval(
+      "state.records.filter((item) => item.kind === '血管资料' || item.kind === '血管').length",
+    );
+    const title = await openAddDialog(driver, '录入一条血管资料', '录入血管资料');
+    const form = await driver.eval(`(() => ({
+      hasText: !!document.querySelector('#v-text'),
+      hasSource: !!document.querySelector('#v-source'),
+      privateDefault: document.querySelector('#v-private')?.checked === true,
+      examPrecision: document.querySelector('#v-exam-precision')?.value,
+      reportPrecision: document.querySelector('#v-report-precision')?.value,
+    }))()`);
+    must(form.hasText && form.hasSource, '血管资料表单缺少原文或来源字段');
+    must(form.privateDefault, '新增血管资料未默认勾选私密');
+    must(form.examPrecision === 'unknown', `检查日期默认精度为 ${form.examPrecision}，未保持未知`);
+    must(form.reportPrecision === 'unknown', `报告日期默认精度为 ${form.reportPrecision}，未保持未知`);
+    return `点击「录入一条血管资料」→「${title}」；原文/来源可填，默认私密，检查与报告日期默认未知`;
   });
-  await ctx.check('product', '产物：材料 +1 并可回源/标缺失', async () => {
+  await ctx.check('manual', '手工步骤：填写原文、检查日期并保存', async () => {
+    await driver.fill('#v-exam-precision', 'day');
+    await driver.fill('#v-exam-day', '2026-10-20');
+    await driver.fill('#v-text', TEXTS.S04);
+    await driver.fill('#v-source', source);
+    const count = await saveDialog(driver, '[data-action="save-vascular"]');
+    return `保存后记录数 ${count}（检查日期 2026-10-20，报告日期保持未知）`;
+  });
+  await ctx.check('product', '产物：材料 +1、无原件标记与回源', async () => {
     const record = await recordByText(driver, TEXTS.S04);
-    must(!record.original, '新增记录意外带有原件');
-    throw new Error('入口只落到「血管」普通记录页；新增的是文字记录，没有资料上传、候选确认、材料计数或缺失标记');
+    must(record, '新增血管资料未进入页面状态');
+    must(record.kind === '血管资料', `新增记录 kind=${record.kind}`);
+    must(record.date === '2026-10-20' && record.datePrecision === 'day', `检查日期保存为 ${record.date}/${record.datePrecision}`);
+    must(!record.reportDate && record.reportDatePrecision === 'unknown', `未填报告日期却得到 ${record.reportDate}/${record.reportDatePrecision}`);
+    must(record.private === true, '新增血管资料没有按默认私密保存');
+    must(record.fileId == null && !record.original, '未关联原件的记录却带有原件');
+    must(record.source === source, `来源被改写为「${record.source}」`);
+
+    const badge = await driver.text(`[data-no-original-badge="${record.id}"]`);
+    must(badge && badge.includes('无原件'), `记录没有「无原件」标记，实际：${badge}`);
+
+    const stats = await driver.eval(`(() => {
+      const el = document.querySelector('#vascular-page [data-vascular-total]');
+      const items = state.records.filter((item) => item.kind === '血管资料' || item.kind === '血管');
+      return {
+        total: el ? Number(el.dataset.vascularTotal) : null,
+        withOriginal: el ? Number(el.dataset.vascularWithOriginal) : null,
+        withoutOriginal: el ? Number(el.dataset.vascularWithoutOriginal) : null,
+        records: items.length,
+        withoutBadges: document.querySelectorAll('#vascular-page [data-no-original-badge]').length,
+        rowText: (document.querySelector('[data-vascular-row="${record.id}"]') || {}).innerText || '',
+      };
+    })()`);
+    must(stats.total === stats.records, `材料计数 ${stats.total} 与记录数 ${stats.records} 不一致`);
+    must(stats.total === ctx.s04Baseline + 1, `材料计数未 +1：${ctx.s04Baseline} → ${stats.total}`);
+    must(stats.withoutOriginal === stats.withoutBadges, `无原件计数 ${stats.withoutOriginal} 与标记数 ${stats.withoutBadges} 不一致`);
+    must(stats.rowText.includes(source) && stats.rowText.includes('无原件'), '记录行未同时显示来源与无原件标记');
+
+    await driver.click(`[data-vascular-source="${record.id}"]`);
+    await driver.waitFor("document.querySelector('#dialog').open === true", { label: '血管资料回源弹窗' });
+    const title = await driver.text('#dialog-title');
+    must(title === '血管资料回源', `回源弹窗标题为「${title}」`);
+    const body = await dialogText(driver);
+    must(body.includes(TEXTS.S04), '回源弹窗没有显示本人抄录原文');
+    must(body.includes(source), '回源弹窗没有显示来源');
+    must(body.includes('检查日期：2026-10-20'), '回源弹窗没有显示检查日期');
+    must(body.includes('报告日期：日期未知'), '回源弹窗把未知报告日期补造为具体日期');
+    must(body.includes('无原件') && body.includes('原件缺失'), '回源弹窗没有说明原件缺失');
+    await driver.click('#dialog-foot [data-action="cancel"]');
+    await driver.waitFor("document.querySelector('#dialog').open === false", { label: '关闭回源弹窗' });
+    return `血管资料 ${ctx.s04Baseline}→${stats.total}；检查 2026-10-20 / 报告未知；无原件标记 ${stats.withoutOriginal} 条；回源弹窗含原文、来源与缺失说明`;
   });
   await ctx.check('ai', 'AI 默认通道', () => checkAiRequired(driver, '上传资料生成候选 → 逐项确认'));
   await ctx.check('return', '回首页', () => returnHome(driver));
