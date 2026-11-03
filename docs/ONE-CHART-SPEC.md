@@ -1,6 +1,6 @@
 # 小贝宝一图秀项目实例（v0.2 原型盘点）
 
-通用判据见 [16 号规范](16-ONE-CHART-SPEC.md)；需求草案见 [SPEC](SPEC.md)「检验与一图秀」。本表依据 [原型代码](../prototypes/v0.2/index.html) 和 [合成数据](../prototypes/v0.2/demo-data.js) 静态核对，不是验收签认。G2 未确认；已知偏离均未获批准。历史浏览器抽样及范围见 [原型评审](PROTOTYPE-REVIEW.md)，不能替代逐项验收。
+通用判据见 [16 号规范](16-ONE-CHART-SPEC.md)；需求草案见 [SPEC](SPEC.md)「检验与一图秀」。本表依据 [原型代码](../prototypes/v0.2/index.html) 和 [合成数据](../prototypes/v0.2/demo-data.js) 静态核对，不是验收签认。用户于 2026-11-03 确认 G2（范围与现场版本见原型评审）；本表的已知偏离仍须逐项核验，不能据此声称已通过。历史浏览器抽样及范围见 [原型评审](PROTOTYPE-REVIEW.md)，不能替代逐项验收。
 
 ## 项目口径与数据现状
 
