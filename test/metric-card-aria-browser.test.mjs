@@ -12,8 +12,10 @@ const probe = `<script>(async()=>{try{
   const waitFor=async(fn,msg)=>{const end=Date.now()+8000;while(Date.now()<end){if(fn())return;await new Promise(r=>setTimeout(r,20))}throw Error(msg)};
   await waitFor(()=>typeof go==='function'&&typeof flipCard==='function'&&state.records.length>0,'应用未就绪');
   const card=id=>document.querySelector('.mcard[data-card="'+id+'"]');
-  const aria=id=>card(id).getAttribute('aria-label');
-  const flipKey=id=>{const c=card(id);c.focus();c.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))};
+  const toggle=id=>card(id).querySelector(':scope > .mcard-hit');
+  const aria=id=>toggle(id).getAttribute('aria-label');
+  // 原生按钮的 Enter/Space 由浏览器转成 click；这里直接 click 验证状态机，真实键盘另由 CDP 回归覆盖。
+  const flipKey=id=>toggle(id).click();
   go('病情整理','指标检测');
   await waitFor(()=>card('a~0')&&card('c~0')&&card('empty~z'),'A 组指标卡未渲染');
 

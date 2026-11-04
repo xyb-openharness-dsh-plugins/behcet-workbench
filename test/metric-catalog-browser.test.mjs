@@ -41,8 +41,9 @@ test('目录、空卡、看板摘要与一图秀同源', async t => {
     empty.click();
     check(empty.dataset.flipped==='true','空卡不能翻转');
     check(empty.querySelector('.mface.front').hasAttribute('inert'),'翻面后正面未 inert');
-    empty.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));
-    check(empty.dataset.flipped==='false','空卡空格键不能翻回');
+    // 翻转入口现在是卡内的独立原生按钮；键盘 Enter/Space 由浏览器原生转成 click，另见 CDP AX 回归。
+    empty.querySelector(':scope > .mcard-hit').click();
+    check(empty.dataset.flipped==='false','空卡再次激活不能翻回');
     check(empty.querySelector('.mface.back').hasAttribute('inert'),'翻回后背面未 inert');
     check(parseFloat(getComputedStyle(empty).height)===276,'空卡高度不是 276px');
     go('病情一图秀');

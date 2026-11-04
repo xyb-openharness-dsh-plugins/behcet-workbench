@@ -3,6 +3,20 @@
 import { spawn } from 'node:child_process';
 
 export async function runPage(fileUrl, expression, { timeoutMs = 20000, interval = 40, width = 0, height = 900 } = {}) {
+  return runPageWith(fileUrl, async ({ evaluate }) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const value = await evaluate(expression);
+      if (value) return value;
+      await new Promise(res => setTimeout(res, interval));
+    }
+    throw new Error('等待超时：' + expression);
+  }, { width, height });
+}
+
+// 需要直接调用 CDP 域（例如 Accessibility.getFullAXTree 或 Input.dispatchKeyEvent）时用这个入口。
+// task 拿到 sessionId / send / evaluate；send 就是对应的扁平 session 通道。
+export async function runPageWith(fileUrl, task, { width = 0, height = 900 } = {}) {
   const chrome = process.env.CHROMIUM || '/usr/bin/chromium';
   const child = spawn(chrome, [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
@@ -49,14 +63,12 @@ export async function runPage(fileUrl, expression, { timeoutMs = 20000, interval
     await send('Runtime.enable', {}, sessionId);
     if (width) await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, sessionId);
 
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
+    const evaluate = async expression => {
       const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, sessionId);
       if (r.exceptionDetails) throw new Error('页面内异常：' + JSON.stringify(r.exceptionDetails.exception?.description || r.exceptionDetails.text));
-      if (r.result?.value) return r.result.value;
-      await new Promise(res => setTimeout(res, interval));
-    }
-    throw new Error('等待超时：' + expression);
+      return r.result?.value;
+    };
+    return await task({ sessionId, send, evaluate });
   } finally {
     await cleanup();
   }
