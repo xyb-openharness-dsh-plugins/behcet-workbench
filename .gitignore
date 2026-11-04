@@ -11,3 +11,7 @@ output/
 *.sqlite-wal
 *.sqlite-shm
 *.db
+# 原始研究响应可能包含登记联系人信息，需单独审核后再分享。
+research/**/pages/
+research/**/version.json
+research/**/version-after.json
