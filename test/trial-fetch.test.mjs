@@ -209,6 +209,10 @@ async function manifestOf(out) {
   return JSON.parse(await readFile(join(out, 'manifest.json'), 'utf8'))
 }
 
+async function writeManifest(out, manifest) {
+  await writeFile(join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+}
+
 async function jsonlOf(out) {
   const text = await readFile(join(out, 'trials.jsonl'), 'utf8')
   return text
@@ -643,6 +647,31 @@ test('200 且空 studies 但缺 totalCount：INCOMPLETE，不冒充真实零结�
   )
 })
 
+test('后续页 totalCount 非整数：记 INCOMPLETE，诚实快照仍可通过核验', async (t) => {
+  const { out, result } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: {
+      Behçet: {
+        '': page([sampleStudy('NCT00000071')], { totalCount: 2, nextPageToken: 'p2' }),
+        p2: { body: { studies: [sampleStudy('NCT00000072')], totalCount: '2' } },
+      },
+    },
+  })
+
+  const query = result.manifest.queries[0]
+  assert.equal(result.exitCode, 1)
+  assert.equal(query.state, 'INCOMPLETE')
+  assert.equal(query.totalCount, 2)
+  assert.equal(query.pages[1].totalCount, null)
+  assert.ok(query.errors.some((entry) => entry.code === 'total_count_invalid'))
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, true)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, true)
+  assert.deepEqual(verified.errors, [])
+})
+
 test('第二页 HTTP 500：整条查询 FAILED，第一页记录不并入快照', async (t) => {
   const { out, result } = await runCase(t, {
     aliases: ['Behçet'],
@@ -697,6 +726,38 @@ test('同一查询内重复 NCT：INCOMPLETE，不把重复条数当成多条登
   )
   assert.equal(result.manifest.queries[0].preDedupCount, 2)
   assert.equal(result.manifest.queries[0].uniqueRecordCount, 1)
+})
+
+test('重复 NCT 的日期不参与窗口复算，诚实 INCOMPLETE 快照仍可通过核验', async (t) => {
+  // 采集端遇到重复 NCT 会先记错并跳过日期归类；复算必须同语义，否则重复行的
+  // 越界日期会被额外计入，把诚实快照误判为原始证据不一致。
+  const { out, result } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: {
+      Behçet: {
+        '': page(
+          [
+            sampleStudy('NCT00000081', { firstPostDate: '2026-06-01' }),
+            sampleStudy('NCT00000081', { firstPostDate: '2026-01-01' }),
+          ],
+          { totalCount: 2 },
+        ),
+      },
+    },
+  })
+
+  assert.equal(result.exitCode, 1)
+  assert.equal(result.manifest.queries[0].state, 'INCOMPLETE')
+  assert.equal(result.manifest.queries[0].outOfWindowCount, 0)
+  assert.ok(
+    result.manifest.queries[0].errors.some((entry) => entry.code === 'duplicate_nct_id'),
+  )
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, true)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, true)
+  assert.deepEqual(verified.errors, [])
 })
 
 test('超过 maxPages 仍有下一页：停页记 INCOMPLETE，不无限翻页', async (t) => {
@@ -1067,4 +1128,260 @@ test('非字符串 nextPageToken 显式失败，即使计数相符也不能视�
     assert.ok(result.manifest.queries[0].errors.some((error) => error.code === 'response_shape' && /nextPageToken/.test(error.message)))
     assert.equal((await jsonlOf(out)).length, 0)
   }
+})
+
+test('原始证据复算：只改清单的计数、ID、令牌、totalCount 或窗口不能冒充原文', async (t) => {
+  const aliases = ['Behçet']
+  const pages = [
+    page([sampleStudy('NCT00000201'), sampleStudy('NCT00000202')], {
+      totalCount: 3,
+      nextPageToken: 'page-2-token',
+    }),
+    page([sampleStudy('NCT00000203')], { totalCount: 3 }),
+  ]
+  const { out } = await runCase(t, { aliases, routes: aliasRoutes(aliases, pages) })
+
+  const clean = await verifySnapshotHashes(out)
+  assert.equal(clean.ok, true)
+  assert.equal(clean.filesConsistent, true)
+  assert.equal(clean.evidenceConsistent, true)
+  assert.equal(clean.status.claimed, 'COMPLETE')
+  assert.equal(clean.status.verified, true)
+  assert.equal(clean.checked.rawStudyRecords, 3)
+  assert.equal(clean.checked.jsonlRecords, 3)
+
+  const manifest = await manifestOf(out)
+  manifest.queries[0].preDedupCount = 2
+  manifest.queries[0].recordIds = ['NCT00000201', 'NCT00000202', 'NCT00000299']
+  manifest.queries[0].outOfWindowCount = 1
+  manifest.queries[0].pages[0].nextPageToken = 'forged-token'
+  manifest.queries[0].pages[0].totalCount = 99
+  manifest.queries[0].windowStart = '2026-01-01'
+  await writeManifest(out, manifest)
+
+  const tampered = await verifySnapshotHashes(out)
+  assert.equal(tampered.ok, false)
+  assert.equal(tampered.filesConsistent, true) // 原文文件与清单哈希都未改
+  assert.equal(tampered.evidenceConsistent, false)
+  assert.equal(tampered.status.claimed, 'COMPLETE')
+  assert.equal(tampered.status.verified, false)
+  assert.ok(tampered.errors.some((message) => /raw study count 3 != preDedupCount 2/.test(message)))
+  assert.ok(tampered.errors.some((message) => /raw unique NCT IDs do not match recordIds/.test(message)))
+  assert.ok(tampered.errors.some((message) => /raw nextPageToken "page-2-token" != manifest "forged-token"/.test(message)))
+  assert.ok(tampered.errors.some((message) => /raw totalCount 3 != manifest 99/.test(message)))
+  assert.ok(tampered.errors.some((message) => /raw out-of-window studies 0 != manifest 1/.test(message)))
+  assert.ok(tampered.errors.some((message) => /query window does not match manifest\.window/.test(message)))
+})
+
+test('原始页正文与版本被改写并同步哈希后，复算仍按正文发现，而非信任清单', async (t) => {
+  const aliases = ['Behçet']
+  const pages = [
+    page([sampleStudy('NCT00000201'), sampleStudy('NCT00000202')], {
+      totalCount: 3,
+      nextPageToken: 'page-2-token',
+    }),
+    page([sampleStudy('NCT00000203')], { totalCount: 3 }),
+  ]
+  const { out } = await runCase(t, { aliases, routes: aliasRoutes(aliases, pages) })
+
+  const clean = await verifySnapshotHashes(out)
+  assert.equal(clean.ok, true)
+
+  const manifest = await manifestOf(out)
+  const pageRecord = manifest.queries[0].pages[0]
+  const pagePath = join(out, pageRecord.storedAs)
+  const body = JSON.parse(await readFile(pagePath, 'utf8'))
+  // 同时改正文条数、总数、令牌、NCT 和日期；清单仅同步哈希，不同步任何字段。
+  body.studies.pop()
+  body.totalCount = 99
+  body.nextPageToken = 'forged-raw-token'
+  body.studies[0].protocolSection.identificationModule.nctId = 'NCT00000998'
+  body.studies[0].protocolSection.statusModule.studyFirstPostDateStruct.date = '2025-01-01'
+  const pageBytes = Buffer.from(JSON.stringify(body), 'utf8')
+  await writeFile(pagePath, pageBytes)
+  pageRecord.sha256 = createHash('sha256').update(pageBytes).digest('hex')
+  pageRecord.bytes = pageBytes.length
+
+  const versionRecord = manifest.api.after
+  const versionPath = join(out, versionRecord.storedAs)
+  const versionBody = JSON.parse(await readFile(versionPath, 'utf8'))
+  versionBody.apiVersion = '2.0.6'
+  const versionBytes = Buffer.from(JSON.stringify(versionBody), 'utf8')
+  await writeFile(versionPath, versionBytes)
+  versionRecord.sha256 = createHash('sha256').update(versionBytes).digest('hex')
+  versionRecord.bytes = versionBytes.length
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  // 文件与清单哈希一致，失败只能来自正文复算。
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, false)
+  assert.equal(verified.status.claimed, 'COMPLETE')
+  assert.equal(verified.status.verified, false)
+  assert.ok(verified.errors.some((message) => /raw studies 1 != manifest studyCount 2/.test(message)))
+  assert.ok(verified.errors.some((message) => /raw totalCount 99 != manifest 3/.test(message)))
+  assert.ok(
+    verified.errors.some(
+      (message) => /raw nextPageToken "forged-raw-token" != manifest "page-2-token"/.test(message),
+    ),
+  )
+  assert.ok(verified.errors.some((message) => /raw unique NCT IDs do not match recordIds/.test(message)))
+  assert.ok(verified.errors.some((message) => /raw out-of-window studies 1 != manifest 0/.test(message)))
+  assert.ok(
+    verified.errors.some((message) => /api\.after: manifest apiVersion "2\.0\.5" != raw "2\.0\.6"/.test(message)),
+  )
+  assert.ok(verified.errors.some((message) => /api\.apiVersionChanged false != raw comparison true/.test(message)))
+  assert.equal(verified.status.justified, false)
+})
+
+test('日期窗口由原始页复算：如实 INCOMPLETE 可通过，篡改计数或伪造 COMPLETE 失败', async (t) => {
+  const { out, result } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: {
+      Behçet: {
+        '': page([
+          sampleStudy('NCT00000211'),
+          sampleStudy('NCT00000212', { firstPostDate: '2026-01-01' }),
+        ], { totalCount: 2 }),
+      },
+    },
+  })
+  assert.equal(result.manifest.status, 'INCOMPLETE')
+  assert.equal(result.manifest.queries[0].state, 'INCOMPLETE')
+  assert.equal(result.manifest.queries[0].outOfWindowCount, 1)
+
+  const honest = await verifySnapshotHashes(out)
+  assert.equal(honest.ok, true)
+  assert.equal(honest.filesConsistent, true)
+  assert.equal(honest.evidenceConsistent, true)
+  assert.equal(honest.status.claimed, 'INCOMPLETE')
+  assert.equal(honest.status.verified, false)
+  assert.deepEqual(honest.errors, [])
+
+  const manifestText = await readFile(join(out, 'manifest.json'), 'utf8')
+  const manifest = JSON.parse(manifestText)
+  manifest.queries[0].outOfWindowCount = 0
+  await writeManifest(out, manifest)
+  const masked = await verifySnapshotHashes(out)
+  assert.equal(masked.ok, false)
+  assert.equal(masked.filesConsistent, true)
+  assert.equal(masked.evidenceConsistent, false)
+  assert.ok(masked.errors.some((message) => /raw out-of-window studies 1 != manifest 0/.test(message)))
+
+  // 复原诚实清单，只把状态改成 COMPLETE；文件与原始证据仍一致，但状态声明不被支持。
+  await writeFile(join(out, 'manifest.json'), manifestText, 'utf8')
+  const forged = JSON.parse(manifestText)
+  forged.status = 'COMPLETE'
+  await writeManifest(out, forged)
+  const forgedResult = await verifySnapshotHashes(out)
+  assert.equal(forgedResult.ok, false)
+  assert.equal(forgedResult.filesConsistent, true)
+  assert.equal(forgedResult.evidenceConsistent, true)
+  assert.equal(forgedResult.status.claimed, 'COMPLETE')
+  assert.equal(forgedResult.status.verified, false)
+  assert.equal(forgedResult.status.justified, false)
+  assert.ok(forgedResult.errors.some((message) => /does not support COMPLETE/.test(message)))
+})
+
+test('HTTP 500 失败快照保留原始响应时仍可核验，不要求伪装成功', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: {
+      Behçet: {
+        '': { body: { studies: [sampleStudy('NCT00000221')], totalCount: 1 }, status: 500 },
+      },
+    },
+  })
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, true)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, true)
+  assert.equal(verified.status.claimed, 'FAILED')
+  assert.equal(verified.status.verified, false)
+  assert.deepEqual(verified.errors, [])
+  assert.equal(verified.checked.pages, 1)
+  assert.equal(verified.checked.rawStudyRecords, 0)
+  assert.equal(verified.checked.jsonlRecords, 0)
+})
+
+test('版本原文变化后篡改清单的变更标志会被独立复算拒绝', async (t) => {
+  const after = { ...VERSION, dataTimestamp: '2026-11-03T11:00:00' }
+  const { out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000231')]) } },
+    versionBodyAfter: after,
+  })
+
+  const clean = await verifySnapshotHashes(out)
+  assert.equal(clean.ok, true)
+  assert.equal(clean.status.claimed, 'INCOMPLETE')
+  assert.equal(clean.status.verified, false)
+
+  const manifest = await manifestOf(out)
+  assert.equal(manifest.api.dataTimestampChanged, true)
+  assert.equal(manifest.api.collectionStable, false)
+  manifest.api.dataTimestampChanged = false
+  manifest.api.collectionStable = true
+  manifest.sources[0].dataTimestampChanged = false
+  await writeManifest(out, manifest)
+
+  const tampered = await verifySnapshotHashes(out)
+  assert.equal(tampered.ok, false)
+  assert.equal(tampered.filesConsistent, true)
+  assert.equal(tampered.evidenceConsistent, false)
+  assert.ok(tampered.errors.some((message) => /api\.dataTimestampChanged false != raw comparison true/.test(message)))
+  assert.ok(tampered.errors.some((message) => /clinicaltrials\.gov source dataTimestampChanged/.test(message)))
+})
+
+test('不同查询不得把原始页复用为同一文件', async (t) => {
+  const aliases = ['Behçet', 'Behcet']
+  const { out } = await runCase(t, {
+    aliases,
+    routes: aliasRoutes(aliases, [page([sampleStudy('NCT00000241')])]),
+  })
+
+  const manifest = await manifestOf(out)
+  const firstStoredAs = manifest.queries[0].pages[0].storedAs
+  manifest.queries[1].pages[0].storedAs = firstStoredAs
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, false)
+  assert.ok(verified.errors.some((message) => /raw page .* is reused by .* page 1/.test(message)))
+  assert.ok(verified.errors.some((message) => /does not match this query\/page/.test(message)))
+  assert.ok(verified.errors.some((message) => /unexpected raw file under pages\//.test(message)))
+})
+
+test('同步修改 JSONL 和清单哈希后，原始查询并集仍能发现缺记录', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: {
+      Behçet: { '': page([sampleStudy('NCT00000251'), sampleStudy('NCT00000252')]) },
+    },
+  })
+
+  const jsonlPath = join(out, 'trials.jsonl')
+  const original = await readFile(jsonlPath, 'utf8')
+  const lines = original.split(/\r?\n/).filter((line) => line.trim())
+  assert.equal(lines.length, 2)
+  const shortened = `${lines.slice(1).join('\n')}\n`
+  await writeFile(jsonlPath, shortened, 'utf8')
+
+  const bytes = await readFile(jsonlPath)
+  const manifest = await manifestOf(out)
+  manifest.recordCount = 1
+  manifest.counts.jsonlRecords = 1
+  manifest.files['trials.jsonl'].sha256 = createHash('sha256').update(bytes).digest('hex')
+  manifest.files['trials.jsonl'].bytes = bytes.length
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, true) // JSONL 的清单哈希已经同步，不是哈希失败
+  assert.equal(verified.evidenceConsistent, false)
+  assert.equal(verified.checked.jsonlRecords, 1)
+  assert.ok(verified.errors.some((message) => /successful query raw NCT union .* != JSONL recordIds/.test(message)))
 })

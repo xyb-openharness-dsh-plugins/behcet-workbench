@@ -32,8 +32,10 @@
  * `trials.sqlite` 的 `trials`、`source_statuses` 表与
  * `scripts/check-trial-snapshot.mjs` 的字段约定一致，因此测试可以用该检查器做结构复核。
  * **该检查器只核对 manifest.files 里列出的 JSONL/SQLite，不读取 `pages/` 原始响应。**
- * 原始分页、版本文件、令牌链和逐页哈希由本文件导出的 `verifySnapshotHashes()` 重算，
- * 测试直接调用它；不能把现有 checker 的 PASS 当成原始响应已核验。
+ * 原始分页、版本文件、令牌链和逐页哈希由本文件导出的 `verifySnapshotHashes()` 重算；
+ * 该函数还会解析原始响应，复算每页条数、`totalCount`、`nextPageToken` 链、唯一 NCT
+ * 集合、日期窗口和版本变更标志，并把成功查询的原始 NCT 并集与 JSONL 对照。测试直接
+ * 调用它；不能把现有 checker 的 PASS 当成原始响应已核验。
  *
  * ## 安全边界与并发
  * `--out` 必填，且目标目录必须不存在或为空：脚本不会覆盖已有快照，也没有默认生产库
@@ -540,6 +542,12 @@ async function collectAliasQuery({
       ? body.nextPageToken
       : null
 
+    if (Object.hasOwn(body, 'totalCount') && !Number.isInteger(body.totalCount)) {
+      // 首页非整数会被下面的 total_count_missing 捕获；后续页若静默当作“缺省”，
+      // 查询可能被误判 SUCCESS，随后核验端才发现原文不可读。这里显式记为不完整。
+      pushError(query, 'total_count_invalid', `page ${page}: totalCount must be an integer when present`)
+    }
+
     if (page === 1) {
       totalCount = pageRecord.totalCount
       query.firstPageTotal = totalCount
@@ -983,11 +991,33 @@ async function listFilesUnder(root, relative) {
 }
 
 /**
- * 复算 manifest 声明的 JSONL/SQLite 哈希，以及 `pages/` 下原始版本响应与分页文件的
+ * 独立复算 manifest 声明的 JSONL/SQLite 哈希，以及 `pages/` 下原始版本响应与分页文件的
  * 哈希、字节数、令牌链和页序。现有 `check-trial-snapshot.mjs` 只检查 manifest.files，
  * **不读取 `pages/`**；需要核验原始响应时必须调用本函数。
  *
- * @returns {{ok: boolean, errors: string[], checked: {files: number, versions: number, pages: number}}}
+ * 除哈希外，本函数会解析原始响应并复算：每页 study 条数、`totalCount`、原始
+ * `nextPageToken` 链、唯一 NCT 集合、`studyFirstPostDate` 窗口、前后版本原文中的
+ * `apiVersion`/`dataTimestamp` 及变更标志，并把成功查询的原始 NCT 并集与 JSONL 对照。
+ * 它不会把清单的自述当成证据：只改 manifest 而不改原文同样会失败。
+ *
+ * 返回值把「文件一致」和「COMPLETE 是否成立」分开：
+ * - `filesConsistent`：清单列出的文件与 `pages/` 原始文件都在、哈希/字节数一致，且
+ *   `pages/` 没有多余文件；
+ * - `evidenceConsistent`：原始响应解析后的计数、令牌链、ID、日期窗口、版本标志与
+ *   JSONL 并集都与清单一致。FAILED/INCOMPLETE 快照如实保留失败证据时，这一层仍可为
+ *   true，便于诊断，不要求快照本身成功；
+ * - `status.verified`：仅当清单声称 `COMPLETE`，且文件、证据、查询、版本与退出码都
+ *   支持该声明时才为 true；`status.claimed` 始终回显清单状态。
+ * `ok` 只在文件与证据一致且没有把未闭合证据标成 `COMPLETE` 时为 true。
+ *
+ * @returns {{
+ *   ok: boolean,
+ *   filesConsistent: boolean,
+ *   evidenceConsistent: boolean,
+ *   status: {claimed: string|null, verified: boolean, justified: boolean|null},
+ *   errors: string[],
+ *   checked: {files: number, versions: number, pages: number, queries: number, rawStudyRecords: number, jsonlRecords: number}
+ * }}
  */
 export async function verifySnapshotHashes(outDir) {
   return verifySnapshotEvidence(outDir, false)
@@ -996,138 +1026,569 @@ export async function verifySnapshotHashes(outDir) {
 async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
   const root = resolve(outDir)
   const errors = []
-  const checked = { files: 0, versions: 0, pages: 0 }
+  const completionErrors = []
+  const checked = {
+    files: 0,
+    versions: 0,
+    pages: 0,
+    queries: 0,
+    rawStudyRecords: 0,
+    jsonlRecords: 0,
+  }
+  let filesConsistent = true
+  let evidenceConsistent = true
+  const fileError = (message) => {
+    filesConsistent = false
+    errors.push(message)
+  }
+  const evidenceError = (message) => {
+    evidenceConsistent = false
+    errors.push(message)
+  }
+  const completionError = (message) => {
+    completionErrors.push(message)
+    errors.push(message)
+  }
+
   let manifest
   try {
     manifest = candidate ?? JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'))
   } catch (error) {
-    return { ok: false, errors: [`cannot read manifest.json: ${error.message}`], checked }
+    return {
+      ok: false,
+      filesConsistent: false,
+      evidenceConsistent: false,
+      status: { claimed: null, verified: false, justified: null },
+      errors: [`cannot read manifest.json: ${error.message}`],
+      checked,
+    }
   }
 
+  const claimedStatus = typeof manifest.status === 'string' ? manifest.status : null
   if (!allowPending && (manifest.status === 'PENDING' || !manifest.integrity?.rawFiles)) {
-    errors.push('manifest is pending raw evidence verification')
+    completionError('manifest is pending raw evidence verification')
+  }
+  if (!['COMPLETE', 'PARTIAL', 'INCOMPLETE', 'FAILED', 'PENDING'].includes(claimedStatus)) {
+    completionError(`manifest has unknown status ${JSON.stringify(manifest.status)}`)
   }
 
   const manifestFiles = manifest.files && typeof manifest.files === 'object' ? manifest.files : {}
-  if (!Object.keys(manifestFiles).length) errors.push('manifest.files is empty')
+  const fileBytes = new Map()
+  if (!Object.keys(manifestFiles).length) fileError('manifest.files is empty')
   for (const name of Object.keys(manifestFiles)) {
     if (!/^[A-Za-z0-9._-]+$/.test(name)) {
-      errors.push(`manifest filename is not a plain file name: ${JSON.stringify(name)}`)
+      fileError(`manifest filename is not a plain file name: ${JSON.stringify(name)}`)
       continue
     }
-    const absolute = safeSnapshotPath(root, name, `manifest.files[${name}]`, errors)
+    const pathErrors = []
+    const absolute = safeSnapshotPath(root, name, `manifest.files[${name}]`, pathErrors)
+    for (const message of pathErrors) fileError(message)
     if (!absolute) continue
     let bytes
     try {
       bytes = await readFile(absolute)
     } catch (error) {
-      errors.push(`cannot read ${name}: ${error.message}`)
+      fileError(`cannot read ${name}: ${error.message}`)
       continue
     }
+    fileBytes.set(name, bytes)
     const expected = manifestFiles[name] ?? {}
-    if (expected.sha256 !== sha256(bytes)) errors.push(`SHA-256 mismatch for ${name}`)
-    if (expected.bytes !== bytes.length) errors.push(`byte length mismatch for ${name}`)
+    if (expected.sha256 !== sha256(bytes)) fileError(`SHA-256 mismatch for ${name}`)
+    if (expected.bytes !== bytes.length) fileError(`byte length mismatch for ${name}`)
     checked.files += 1
   }
 
   const expectedPageFiles = new Set()
+  const versionEvidence = new Map()
   for (const [label, version] of [
     ['api.version', manifest.api?.version],
     ['api.after', manifest.api?.after],
   ]) {
-    if (!version) continue
-    if (!version.storedAs) {
-      if (version.state === 'OK') errors.push(`${label}: state OK but no stored raw response`)
+    if (!version) {
+      versionEvidence.set(label, { state: null, apiVersion: null, dataTimestamp: null })
       continue
     }
-    const absolute = safeSnapshotPath(root, version.storedAs, `${label}.storedAs`, errors)
-    if (!absolute) continue
+    if (!version.storedAs) {
+      if (version.state === 'OK') evidenceError(`${label}: state OK but no stored raw response`)
+      versionEvidence.set(label, {
+        state: version.state ?? null,
+        apiVersion: null,
+        dataTimestamp: null,
+      })
+      continue
+    }
+    const pathErrors = []
+    const absolute = safeSnapshotPath(root, version.storedAs, `${label}.storedAs`, pathErrors)
+    for (const message of pathErrors) fileError(message)
+    if (!absolute) {
+      versionEvidence.set(label, {
+        state: version.state ?? null,
+        apiVersion: null,
+        dataTimestamp: null,
+      })
+      continue
+    }
     expectedPageFiles.add(version.storedAs)
     let bytes
     try {
       bytes = await readFile(absolute)
     } catch (error) {
-      errors.push(`${label}: cannot read ${version.storedAs}: ${error.message}`)
+      fileError(`${label}: cannot read ${version.storedAs}: ${error.message}`)
+      versionEvidence.set(label, {
+        state: version.state ?? null,
+        apiVersion: null,
+        dataTimestamp: null,
+      })
       continue
     }
-    if (version.sha256 !== sha256(bytes)) errors.push(`${label}: SHA-256 mismatch`)
-    if (version.bytes !== bytes.length) errors.push(`${label}: byte length mismatch`)
+    if (version.sha256 !== sha256(bytes)) fileError(`${label}: SHA-256 mismatch`)
+    if (version.bytes !== bytes.length) fileError(`${label}: byte length mismatch`)
     checked.versions += 1
+
+    let parsed = null
+    let parseError = null
+    try {
+      parsed = JSON.parse(bytes.toString('utf8'))
+    } catch (error) {
+      parseError = error
+    }
+    if (!parseError && (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))) {
+      parseError = new Error('raw response is not a JSON object')
+    }
+    const rawApiVersion = parsed && typeof parsed === 'object' ? textOrNull(parsed.apiVersion) : null
+    const rawDataTimestamp = parsed && typeof parsed === 'object' ? textOrNull(parsed.dataTimestamp) : null
+    if (version.state === 'OK') {
+      if (parseError) {
+        evidenceError(`${label}: raw version response is not usable JSON: ${parseError.message}`)
+      }
+      if (version.apiVersion !== rawApiVersion) {
+        evidenceError(`${label}: manifest apiVersion ${JSON.stringify(version.apiVersion)} != raw ${JSON.stringify(rawApiVersion)}`)
+      }
+      if (version.dataTimestamp !== rawDataTimestamp) {
+        evidenceError(`${label}: manifest dataTimestamp ${JSON.stringify(version.dataTimestamp)} != raw ${JSON.stringify(rawDataTimestamp)}`)
+      }
+      if (!rawApiVersion || !rawDataTimestamp) {
+        evidenceError(`${label}: state OK but raw response lacks apiVersion/dataTimestamp`)
+      }
+    } else if (version.state === 'INCOMPLETE') {
+      if (parseError) {
+        evidenceError(`${label}: state INCOMPLETE but raw response is not usable JSON: ${parseError.message}`)
+      }
+      if (version.apiVersion !== rawApiVersion || version.dataTimestamp !== rawDataTimestamp) {
+        evidenceError(`${label}: state INCOMPLETE but parsed version fields do not match the manifest`)
+      }
+      if (rawApiVersion && rawDataTimestamp) {
+        evidenceError(`${label}: state INCOMPLETE but raw response contains both apiVersion and dataTimestamp`)
+      }
+    }
+    versionEvidence.set(label, {
+      state: version.state ?? null,
+      apiVersion: rawApiVersion,
+      dataTimestamp: rawDataTimestamp,
+    })
   }
 
-  for (const query of Array.isArray(manifest.queries) ? manifest.queries : []) {
+  const beforeVersion = versionEvidence.get('api.version') ?? {
+    state: null,
+    apiVersion: null,
+    dataTimestamp: null,
+  }
+  const afterVersion = versionEvidence.get('api.after') ?? {
+    state: null,
+    apiVersion: null,
+    dataTimestamp: null,
+  }
+  const bothVersionsOk = beforeVersion.state === 'OK' && afterVersion.state === 'OK'
+  const rawTimestampChanged = bothVersionsOk && beforeVersion.dataTimestamp !== afterVersion.dataTimestamp
+  const rawApiVersionChanged = bothVersionsOk && beforeVersion.apiVersion !== afterVersion.apiVersion
+  const rawStable = bothVersionsOk && !rawTimestampChanged && !rawApiVersionChanged
+  const api = manifest.api && typeof manifest.api === 'object' ? manifest.api : {}
+  if (Boolean(api.dataTimestampChanged) !== rawTimestampChanged) {
+    evidenceError(
+      `api.dataTimestampChanged ${Boolean(api.dataTimestampChanged)} != raw comparison ${rawTimestampChanged}`,
+    )
+  }
+  if (Boolean(api.apiVersionChanged) !== rawApiVersionChanged) {
+    evidenceError(
+      `api.apiVersionChanged ${Boolean(api.apiVersionChanged)} != raw comparison ${rawApiVersionChanged}`,
+    )
+  }
+  if (Boolean(api.collectionStable) !== rawStable) {
+    evidenceError(`api.collectionStable ${Boolean(api.collectionStable)} != raw comparison ${rawStable}`)
+  }
+  const ctgSource = Array.isArray(manifest.sources)
+    ? manifest.sources.find((source) => source?.sourceId === SOURCE_ID)
+    : null
+  if (ctgSource) {
+    if (Boolean(ctgSource.dataTimestampChanged) !== rawTimestampChanged) {
+      evidenceError('clinicaltrials.gov source dataTimestampChanged does not match the raw version responses')
+    }
+    if ((ctgSource.apiVersion ?? null) !== beforeVersion.apiVersion) {
+      evidenceError('clinicaltrials.gov source apiVersion does not match the pre-collection raw response')
+    }
+    if ((ctgSource.dataTimestamp ?? null) !== beforeVersion.dataTimestamp) {
+      evidenceError('clinicaltrials.gov source dataTimestamp does not match the pre-collection raw response')
+    }
+    if ((ctgSource.dataTimestampAfter ?? null) !== afterVersion.dataTimestamp) {
+      evidenceError('clinicaltrials.gov source dataTimestampAfter does not match the post-collection raw response')
+    }
+  }
+
+  const window = manifest.window && typeof manifest.window === 'object' ? manifest.window : null
+  let windowUsable = false
+  if (!window || typeof window.start !== 'string' || typeof window.end !== 'string') {
+    evidenceError('manifest.window is missing start/end')
+  } else {
+    try {
+      utcDate(window.start, 'manifest.window.start')
+      utcDate(window.end, 'manifest.window.end')
+      if (window.start > window.end) throw new Error('window.start is after window.end')
+      windowUsable = true
+    } catch (error) {
+      evidenceError(`manifest.window is invalid: ${error.message}`)
+    }
+  }
+
+  const queries = Array.isArray(manifest.queries) ? manifest.queries : []
+  const successfulRawIds = new Map()
+  const pageOwner = new Map()
+  for (const query of queries) {
+    checked.queries += 1
     const pages = Array.isArray(query.pages) ? query.pages : []
     if (Number.isInteger(query.pageCount) && query.pageCount !== pages.length) {
-      errors.push(`${query.queryId}: pageCount ${query.pageCount} != pages ${pages.length}`)
+      evidenceError(`${query.queryId}: pageCount ${query.pageCount} != pages ${pages.length}`)
     }
-    const seenTokens = new Set()
-    let previousNextToken = null
-    let successPageCounts = true
-    for (let index = 0; index < pages.length; index += 1) {
-      const page = pages[index]
-      if (page.page !== index + 1) {
-        errors.push(`${query.queryId}: page out of order at index ${index} (got ${page.page})`)
+    if (window) {
+      if (query.windowStart !== window.start || query.windowEnd !== window.end) {
+        evidenceError(`${query.queryId}: query window does not match manifest.window`)
       }
-      if (index === 0) {
-        if (page.pageToken !== null) errors.push(`${query.queryId}: first pageToken must be null`)
-      } else {
-        if (page.pageToken === null) {
-          errors.push(`${query.queryId}: page ${page.page} has no pageToken`)
-        } else {
-          if (page.pageToken !== previousNextToken) {
-            errors.push(`${query.queryId}: token chain broken at page ${page.page}`)
-          }
-          if (seenTokens.has(page.pageToken)) {
-            errors.push(`${query.queryId}: repeated pageToken at page ${page.page}`)
-          }
-          seenTokens.add(page.pageToken)
+      if (windowUsable) {
+        const expectedRule = `AREA[StudyFirstPostDate]RANGE[${window.start},${window.end}]`
+        if (query.windowRule !== expectedRule) {
+          evidenceError(`${query.queryId}: windowRule does not match manifest.window`)
         }
       }
+    }
+    if (manifest.snapshotDate && query.queryDate !== manifest.snapshotDate) {
+      evidenceError(`${query.queryId}: queryDate does not match manifest.snapshotDate`)
+    }
+    if ((query.dataTimestamp ?? null) !== beforeVersion.dataTimestamp) {
+      evidenceError(`${query.queryId}: dataTimestamp does not match the pre-collection raw version response`)
+    }
+
+    const seenTokens = new Set()
+    let previousManifestNextToken = null
+    let previousRawNextToken = null
+    let previousRawTokenKnown = false
+    let lastRawNextToken = null
+    let successPageCounts = true
+    const rawIds = new Set()
+    let rawStudyCount = 0
+    let rawOutOfWindowCount = 0
+    let rawMissingPostDateCount = 0
+    let rawInvalidPostDateCount = 0
+    let rawMissingNctCount = 0
+    let rawDuplicateNctCount = 0
+    let rawFirstPageTotal = null
+
+    for (let index = 0; index < pages.length; index += 1) {
+      const page = pages[index]
+      const pageLabel = `${query.queryId} page ${page.page}`
+      if (page.page !== index + 1) {
+        evidenceError(`${query.queryId}: page out of order at index ${index} (got ${page.page})`)
+      }
+      if (index === 0) {
+        if (page.pageToken !== null) evidenceError(`${query.queryId}: first pageToken must be null`)
+      } else if (page.pageToken === null) {
+        evidenceError(`${query.queryId}: page ${page.page} has no pageToken`)
+      } else {
+        const expectedToken = previousRawTokenKnown ? previousRawNextToken : previousManifestNextToken
+        if (page.pageToken !== expectedToken) {
+          evidenceError(
+            `${query.queryId}: token chain broken at page ${page.page} (manifest token ${JSON.stringify(page.pageToken)}, raw/manifest previous token ${JSON.stringify(expectedToken)})`,
+          )
+        }
+        if (seenTokens.has(page.pageToken)) {
+          evidenceError(`${query.queryId}: repeated pageToken at page ${page.page}`)
+        }
+        seenTokens.add(page.pageToken)
+      }
       if (!Number.isInteger(page.studyCount)) successPageCounts = false
-      // 令牌链来自 manifest 的页记录，不依赖原始文件能否读取。
-      previousNextToken = page.nextPageToken
+      previousManifestNextToken = page.nextPageToken ?? null
+      previousRawTokenKnown = false
+
       if (!page.storedAs) {
         // 页记录存在但原始响应没落盘（例如 page_store_failed）同样是证据缺口。
-        errors.push(`${query.queryId} page ${page.page}: no stored raw response`)
+        fileError(`${pageLabel}: no stored raw response`)
         continue
       }
-      const absolute = safeSnapshotPath(root, page.storedAs, `${query.queryId} page ${page.page}`, errors)
-      if (!absolute) continue
+      const expectedStoredAs = `pages/${query.queryId}/page-${String(page.page).padStart(4, '0')}.json`
+      if (page.storedAs !== expectedStoredAs) {
+        fileError(
+          `${pageLabel}: storedAs ${JSON.stringify(page.storedAs)} does not match this query/page (${expectedStoredAs})`,
+        )
+      }
+      const reusedBy = pageOwner.get(page.storedAs)
+      if (reusedBy) {
+        fileError(`${pageLabel}: raw page ${page.storedAs} is reused by ${reusedBy}`)
+      } else {
+        pageOwner.set(page.storedAs, pageLabel)
+      }
       expectedPageFiles.add(page.storedAs)
+
+      const pathErrors = []
+      const absolute = safeSnapshotPath(root, page.storedAs, pageLabel, pathErrors)
+      for (const message of pathErrors) fileError(message)
+      if (!absolute) continue
       let bytes
       try {
         bytes = await readFile(absolute)
       } catch (error) {
-        errors.push(`${query.queryId} page ${page.page}: cannot read ${page.storedAs}: ${error.message}`)
+        fileError(`${pageLabel}: cannot read ${page.storedAs}: ${error.message}`)
         continue
       }
-      if (page.sha256 !== sha256(bytes)) {
-        errors.push(`${query.queryId} page ${page.page}: SHA-256 mismatch`)
-      }
-      if (page.bytes !== bytes.length) {
-        errors.push(`${query.queryId} page ${page.page}: byte length mismatch`)
-      }
+      if (page.sha256 !== sha256(bytes)) fileError(`${pageLabel}: SHA-256 mismatch`)
+      if (page.bytes !== bytes.length) fileError(`${pageLabel}: byte length mismatch`)
       checked.pages += 1
-    }
-    if (query.state === 'SUCCESS' || query.state === 'SUCCESS_ZERO') {
-      if (!pages.length) errors.push(`${query.queryId}: success query has no page evidence`)
-      if (previousNextToken !== null) {
-        errors.push(`${query.queryId}: success query's last page still has nextPageToken`)
+
+      // 只有清单声明 HTTP 200 且已记录 studyCount 的页才是“被解析过的研究页”。
+      // 失败页的原文仍做哈希核验并保留，供诊断，不要求其是 studies 响应。
+      const canParseStudiedPage = page.httpStatus === 200 && Number.isInteger(page.studyCount)
+      if (!canParseStudiedPage) {
+        if (query.state === 'SUCCESS' || query.state === 'SUCCESS_ZERO') {
+          successPageCounts = false
+          if (page.httpStatus !== 200) {
+            evidenceError(`${pageLabel}: success query has non-200 page (${page.httpStatus})`)
+          }
+        }
+        continue
       }
-      if (!successPageCounts) errors.push(`${query.queryId}: success query has a page without studyCount`)
+
+      let body
+      try {
+        body = JSON.parse(bytes.toString('utf8'))
+      } catch (error) {
+        evidenceError(`${pageLabel}: raw page is not valid JSON: ${error.message}`)
+        successPageCounts = false
+        continue
+      }
+      if (!body || typeof body !== 'object' || !Array.isArray(body.studies)) {
+        evidenceError(`${pageLabel}: raw page has no studies array`)
+        successPageCounts = false
+        continue
+      }
+
+      if (body.studies.length !== page.studyCount) {
+        evidenceError(`${pageLabel}: raw studies ${body.studies.length} != manifest studyCount ${page.studyCount}`)
+      }
+      rawStudyCount += body.studies.length
+
+      const hasTotalCount = Object.hasOwn(body, 'totalCount')
+      const rawTotalCount = Number.isInteger(body.totalCount) ? body.totalCount : null
+      // SUCCESS 要求每个计数都可读；非成功查询的原文可能本就带畸形 totalCount，
+      // 采集端已用 total_count_invalid 记明，此时清单记 null 是对原文的如实转写。
+      if (
+        hasTotalCount &&
+        rawTotalCount === null &&
+        (query.state === 'SUCCESS' || query.state === 'SUCCESS_ZERO')
+      ) {
+        evidenceError(`${pageLabel}: raw totalCount is not an integer`)
+      }
+      if ((page.totalCount ?? null) !== rawTotalCount) {
+        evidenceError(`${pageLabel}: raw totalCount ${rawTotalCount} != manifest ${page.totalCount}`)
+      }
+      if (index === 0) {
+        rawFirstPageTotal = rawTotalCount
+      } else if (
+        (query.state === 'SUCCESS' || query.state === 'SUCCESS_ZERO') &&
+        rawTotalCount !== null &&
+        rawTotalCount !== query.totalCount
+      ) {
+        evidenceError(`${pageLabel}: later-page raw totalCount ${rawTotalCount} != query totalCount ${query.totalCount}`)
+      }
+
+      let rawNextToken = null
+      if (Object.hasOwn(body, 'nextPageToken')) {
+        if (typeof body.nextPageToken !== 'string') {
+          evidenceError(`${pageLabel}: raw nextPageToken is not a string`)
+          successPageCounts = false
+        } else {
+          rawNextToken = body.nextPageToken ? body.nextPageToken : null
+        }
+      }
+      if ((page.nextPageToken ?? null) !== rawNextToken) {
+        evidenceError(
+          `${pageLabel}: raw nextPageToken ${JSON.stringify(rawNextToken)} != manifest ${JSON.stringify(page.nextPageToken)}`,
+        )
+      }
+      previousRawNextToken = rawNextToken
+      previousRawTokenKnown = true
+      lastRawNextToken = rawNextToken
+
+      for (const study of body.studies) {
+        const nctId = textOrNull(study?.protocolSection?.identificationModule?.nctId)
+        if (!nctId) {
+          rawMissingNctCount += 1
+          continue
+        }
+        if (rawIds.has(nctId)) {
+          rawDuplicateNctCount += 1
+          // 与采集端同语义：重复记录不再做日期归类，否则重复行的越界日期
+          // 会被复算计入，而清单从未计入，诚实快照会被误判为证据不一致。
+          continue
+        }
+        rawIds.add(nctId)
+        if (windowUsable) {
+          const issue = studyPostDateIssue(study, window)
+          if (issue) {
+            if (issue.code === 'study_out_of_window') rawOutOfWindowCount += 1
+            else if (issue.code === 'missing_study_first_post_date') rawMissingPostDateCount += 1
+            else rawInvalidPostDateCount += 1
+          }
+        }
+      }
     }
-    if (pages.length && Number.isInteger(query.totalCount)) {
+
+    const isSuccess = query.state === 'SUCCESS' || query.state === 'SUCCESS_ZERO'
+    if (isSuccess) {
+      if (!pages.length) evidenceError(`${query.queryId}: success query has no page evidence`)
+      if (previousManifestNextToken !== null) {
+        evidenceError(`${query.queryId}: success query's last page still has nextPageToken`)
+      }
+      if (previousRawTokenKnown && lastRawNextToken !== null) {
+        evidenceError(`${query.queryId}: raw last page still has nextPageToken`)
+      }
+      if (!successPageCounts) {
+        evidenceError(`${query.queryId}: success query has a page without parsed study evidence`)
+      }
+      if (!Number.isInteger(rawFirstPageTotal)) {
+        evidenceError(`${query.queryId}: success query's raw first page has no integer totalCount`)
+      }
+      if (rawOutOfWindowCount || rawMissingPostDateCount || rawInvalidPostDateCount) {
+        evidenceError(
+          `${query.queryId}: success query raw date window issues (out=${rawOutOfWindowCount}, missing=${rawMissingPostDateCount}, invalid=${rawInvalidPostDateCount})`,
+        )
+      }
+      if (rawMissingNctCount) {
+        evidenceError(`${query.queryId}: success query has ${rawMissingNctCount} raw studies without NCTId`)
+      }
+      if (rawDuplicateNctCount) {
+        evidenceError(`${query.queryId}: success query has ${rawDuplicateNctCount} duplicate raw NCTId records`)
+      }
+      if (rawStudyCount !== query.totalCount) {
+        evidenceError(`${query.queryId}: raw study count ${rawStudyCount} != totalCount ${query.totalCount}`)
+      }
+      if (rawIds.size !== query.totalCount) {
+        evidenceError(`${query.queryId}: raw unique NCT count ${rawIds.size} != totalCount ${query.totalCount}`)
+      }
+      const derivedState = query.totalCount === 0 ? 'SUCCESS_ZERO' : 'SUCCESS'
+      if (query.state !== derivedState) {
+        evidenceError(`${query.queryId}: state ${query.state} is not supported by raw totals (${derivedState})`)
+      }
+      if (query.totalCount === 0 && (rawStudyCount !== 0 || pages.length !== 1)) {
+        evidenceError(`${query.queryId}: zero totalCount is not backed by exactly one empty page`)
+      }
+    }
+
+    if (Number.isInteger(query.totalCount) && Number.isInteger(rawFirstPageTotal)) {
       if (query.firstPageTotal !== query.totalCount) {
-        errors.push(`${query.queryId}: firstPageTotal ${query.firstPageTotal} != totalCount ${query.totalCount}`)
+        evidenceError(`${query.queryId}: firstPageTotal ${query.firstPageTotal} != totalCount ${query.totalCount}`)
       }
-      if (pages[0].totalCount !== query.totalCount) {
-        errors.push(`${query.queryId}: first page totalCount ${pages[0].totalCount} != query totalCount ${query.totalCount}`)
+      if (rawFirstPageTotal !== query.totalCount) {
+        evidenceError(`${query.queryId}: raw first-page totalCount ${rawFirstPageTotal} != query totalCount ${query.totalCount}`)
       }
     }
-    if (successPageCounts && Number.isInteger(query.preDedupCount)) {
-      const summed = pages.reduce((sum, page) => sum + page.studyCount, 0)
-      if (summed !== query.preDedupCount) {
-        errors.push(`${query.queryId}: page studyCount sum ${summed} != preDedupCount ${query.preDedupCount}`)
+    if (pages.length && (pages[0].totalCount ?? null) !== (query.totalCount ?? null)) {
+      evidenceError(`${query.queryId}: first page totalCount ${pages[0].totalCount} != query totalCount ${query.totalCount}`)
+    }
+    if (query.preDedupCount !== rawStudyCount) {
+      evidenceError(`${query.queryId}: raw study count ${rawStudyCount} != preDedupCount ${query.preDedupCount}`)
+    }
+    if (query.uniqueRecordCount !== rawIds.size) {
+      evidenceError(`${query.queryId}: raw unique NCT count ${rawIds.size} != uniqueRecordCount ${query.uniqueRecordCount}`)
+    }
+    const sortedRawIds = [...rawIds].sort()
+    if (!Array.isArray(query.recordIds) || JSON.stringify(query.recordIds) !== JSON.stringify(sortedRawIds)) {
+      evidenceError(`${query.queryId}: raw unique NCT IDs do not match recordIds`)
+    }
+    if (query.outOfWindowCount !== rawOutOfWindowCount) {
+      evidenceError(`${query.queryId}: raw out-of-window studies ${rawOutOfWindowCount} != manifest ${query.outOfWindowCount}`)
+    }
+    if (query.missingPostDateCount !== rawMissingPostDateCount) {
+      evidenceError(`${query.queryId}: raw missing-date studies ${rawMissingPostDateCount} != manifest ${query.missingPostDateCount}`)
+    }
+    if (query.invalidPostDateCount !== rawInvalidPostDateCount) {
+      evidenceError(`${query.queryId}: raw invalid-date studies ${rawInvalidPostDateCount} != manifest ${query.invalidPostDateCount}`)
+    }
+    checked.rawStudyRecords += rawStudyCount
+    if (isSuccess) successfulRawIds.set(query.queryId, sortedRawIds)
+  }
+
+  const jsonlName = Object.keys(manifestFiles).find((name) => name.endsWith('.jsonl'))
+  let jsonlRows = null
+  if (!jsonlName) {
+    evidenceError('manifest.files does not list a JSONL file')
+  } else {
+    const bytes = fileBytes.get(jsonlName)
+    if (!bytes) {
+      evidenceError(`cannot verify JSONL evidence: ${jsonlName} was not readable`)
+    } else {
+      jsonlRows = []
+      let jsonlValid = true
+      const lines = bytes.toString('utf8').split(/\r?\n/)
+      for (let index = 0; index < lines.length; index += 1) {
+        if (!lines[index].trim()) continue
+        try {
+          jsonlRows.push(JSON.parse(lines[index]))
+        } catch (error) {
+          jsonlValid = false
+          evidenceError(`${jsonlName} line ${index + 1} is not valid JSON: ${error.message}`)
+        }
+      }
+      checked.jsonlRecords = jsonlRows.length
+      if (manifest.recordCount !== jsonlRows.length) {
+        evidenceError(`manifest recordCount ${manifest.recordCount} != JSONL ${jsonlRows.length}`)
+      }
+      if (manifest.counts && manifest.counts.jsonlRecords !== jsonlRows.length) {
+        evidenceError(`manifest.counts.jsonlRecords ${manifest.counts.jsonlRecords} != JSONL ${jsonlRows.length}`)
+      }
+      if (jsonlValid) {
+        const jsonlIds = []
+        const sourcesById = new Map()
+        for (const row of jsonlRows) {
+          if (typeof row?.recordId !== 'string' || !row.recordId) {
+            evidenceError(`${jsonlName} has a record without recordId`)
+            continue
+          }
+          jsonlIds.push(row.recordId)
+        }
+        const expectedUnion = [...new Set([...successfulRawIds.values()].flat())].sort()
+        const jsonlUnion = [...new Set(jsonlIds)].sort()
+        if (jsonlIds.length !== jsonlUnion.length) {
+          evidenceError(`${jsonlName} contains duplicate recordIds`)
+        }
+        if (JSON.stringify(expectedUnion) !== JSON.stringify(jsonlUnion)) {
+          evidenceError(
+            `successful query raw NCT union ${JSON.stringify(expectedUnion)} != JSONL recordIds ${JSON.stringify(jsonlUnion)}`,
+          )
+        }
+        for (const query of queries) {
+          if (query.state !== 'SUCCESS' && query.state !== 'SUCCESS_ZERO') continue
+          for (const nctId of successfulRawIds.get(query.queryId) ?? []) {
+            if (!sourcesById.has(nctId)) sourcesById.set(nctId, new Set())
+            sourcesById.get(nctId).add(query.alias)
+          }
+        }
+        for (const row of jsonlRows) {
+          if (typeof row?.recordId !== 'string') continue
+          const expectedSources = [...(sourcesById.get(row.recordId) ?? [])].sort()
+          const actualSources = Array.isArray(row.mergedSources)
+            ? [...row.mergedSources].sort()
+            : row.mergedSources
+          if (JSON.stringify(expectedSources) !== JSON.stringify(actualSources)) {
+            evidenceError(`${jsonlName} record ${row.recordId}: mergedSources do not match successful raw queries`)
+          }
+        }
       }
     }
   }
@@ -1136,16 +1597,61 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
   try {
     actualPageFiles = await listFilesUnder(root, 'pages')
   } catch (error) {
-    errors.push(`cannot list pages/: ${error.message}`)
+    fileError(`cannot list pages/: ${error.message}`)
   }
   for (const relative of actualPageFiles) {
-    if (!expectedPageFiles.has(relative)) errors.push(`unexpected raw file under pages/: ${relative}`)
+    if (!expectedPageFiles.has(relative)) fileError(`unexpected raw file under pages/: ${relative}`)
   }
   for (const relative of expectedPageFiles) {
-    if (!actualPageFiles.includes(relative)) errors.push(`missing raw file under pages/: ${relative}`)
+    if (!actualPageFiles.includes(relative)) fileError(`missing raw file under pages/: ${relative}`)
   }
 
-  return { ok: errors.length === 0, errors, checked }
+  const completionReasons = []
+  if (claimedStatus === 'COMPLETE') {
+    if (!queries.length) completionReasons.push('manifest claims COMPLETE but has no queries')
+    for (const query of queries) {
+      if (query.state !== 'SUCCESS' && query.state !== 'SUCCESS_ZERO') {
+        completionReasons.push(
+          `${query.queryId ?? 'query'}: state ${JSON.stringify(query.state)} does not support COMPLETE`,
+        )
+      }
+    }
+    if (!ctgSource) {
+      completionReasons.push('manifest claims COMPLETE but has no clinicaltrials.gov source row')
+    } else if (ctgSource.state !== 'SUCCESS' && ctgSource.state !== 'SUCCESS_ZERO') {
+      completionReasons.push(`clinicaltrials.gov source state ${JSON.stringify(ctgSource.state)} does not support COMPLETE`)
+    }
+    if (beforeVersion.state !== 'OK' || afterVersion.state !== 'OK') {
+      completionReasons.push('manifest claims COMPLETE but before/after version evidence is not OK')
+    }
+    if (api.collectionStable !== true) {
+      completionReasons.push('manifest claims COMPLETE but api.collectionStable is not true')
+    }
+    if (!Array.isArray(manifest.errors) || manifest.errors.length) {
+      completionReasons.push('manifest claims COMPLETE but carries errors')
+    }
+    if (manifest.exitCode !== 0) {
+      completionReasons.push(`manifest claims COMPLETE but exitCode is ${JSON.stringify(manifest.exitCode)}`)
+    }
+  }
+  for (const reason of completionReasons) completionError(reason)
+
+  const completionVerified = claimedStatus === 'COMPLETE'
+    && completionReasons.length === 0
+    && filesConsistent
+    && evidenceConsistent
+  return {
+    ok: filesConsistent && evidenceConsistent && completionErrors.length === 0,
+    filesConsistent,
+    evidenceConsistent,
+    status: {
+      claimed: claimedStatus,
+      verified: completionVerified,
+      justified: claimedStatus === 'COMPLETE' ? completionVerified : null,
+    },
+    errors,
+    checked,
+  }
 }
 
 /**

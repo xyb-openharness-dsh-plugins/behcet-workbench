@@ -23,6 +23,10 @@ node scripts/check-install.mjs    # 打印它认了哪个 app、哪个 Harness�
 - **没装 DSH Desktop**：当场停下，把 <https://www.dshdesktop.com/> 给用户（对应平台的安装包），装完**启动一次**（首次启动才生成 Harness 与 `state.json`）再继续。不许拿 dev server、`~/.dsh`、DeepSeek Harness 顶替，也不许把这一步写成“已验证”。
 - **交付措辞**：`check` 绿 / tgz 打出来 / 代码 push **都不等于装上**。只有目标 profile 的 `dependencies` 有本包、`dsh.profile.bundles` 有本包名、重启后列表能打开，才算装机；没跑过就写“未验证”。
 
+## 开发过程中的图片
+
+临时截图、调试图片和生成的中间图用完即删除，不在项目目录或临时目录中累积。验收证据、README 展示图及用户明确要求保留的交付图片按用途保留；删除前确认路径和用途，避免误删。
+
 ## 每次开始
 
 1. 先读 README、当前任务/交接、相关 spec；检查 `git status --short`。保留已有未提交修改。
