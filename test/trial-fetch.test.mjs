@@ -17,7 +17,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -28,9 +28,11 @@ import {
   CHANNELS,
   MAX_QUERY_ERRORS,
   OUTPUT_LOCK_FILE,
+  assertOutputPathAllowed,
   buildStudiesUrl,
   buildWindow,
   evaluateWindowCoverage,
+  findProjectWorktreeRoot,
   parseArgs,
   prepareOutDir,
   runSnapshot,
@@ -273,6 +275,26 @@ async function assertPrivateTree(root) {
       assert.fail(`${full} should be a regular file or directory`)
     }
   }
+}
+
+/**
+ * 临时 Git 工作树。`_private` 是否允许不再靠测试注释，而由真实的 `.gitignore` 和
+ * `git check-ignore` 决定；调用方可在 `gitignore: null` 下测试“未忽略即拒绝”。
+ */
+const gitAvailable = (() => {
+  try {
+    execFileSync('git', ['--version'], { stdio: 'pipe' })
+    return true
+  } catch {
+    return false
+  }
+})()
+
+async function initGitRepo(dir, { gitignore = '_private/\n' } = {}) {
+  await mkdir(dir, { recursive: true })
+  execFileSync('git', ['init', '-q', dir], { stdio: 'pipe' })
+  if (gitignore !== null) await writeFile(join(dir, '.gitignore'), gitignore, 'utf8')
+  return realpath(dir)
 }
 
 test('九个月窗口按 UTC 日历计算，含首尾日期', () => {
@@ -2051,6 +2073,209 @@ test('锁释放只删除本次运行的锁，被覆盖或被重建的锁保留�
   await writeFile(recreatedLock, 'later-run\n', 'utf8')
   assert.equal(await releaseRecreated(), false)
   assert.equal(await readFile(recreatedLock, 'utf8'), 'later-run\n')
+})
+
+test('输出路径按真实路径限制：任何 Git 工作树内只放行已忽略的 _private；符号链接与断链不放行', async (t) => {
+  if (!gitAvailable) return t.skip('git is required to verify the _private ignore rule')
+  const outside = await mkdtemp(join(tmpdir(), 'trial-fetch-path-'))
+  t.after(() => rm(outside, { recursive: true, force: true }))
+  const realRoot = await realpath(root)
+  assert.equal(await findProjectWorktreeRoot(), realRoot)
+
+  assert.equal(
+    await assertOutputPathAllowed(join(outside, 'snapshot')),
+    join(await realpath(outside), 'snapshot'),
+  )
+
+  await assert.rejects(
+    assertOutputPathAllowed(join(realRoot, 'scripts', '.trial-fetch-safety')),
+    (error) => /inside the project Git worktree/.test(error.message)
+      && /_private/.test(error.message),
+  )
+  await assert.rejects(assertOutputPathAllowed(realRoot), /inside the project Git worktree/)
+  await assert.rejects(
+    assertOutputPathAllowed(join(realRoot, '_private-evil', '.trial-fetch-safety')),
+    /inside the project Git worktree/,
+  )
+  await assert.rejects(
+    assertOutputPathAllowed(join(realRoot, '_private', '..', 'scripts', '.trial-fetch-safety')),
+    /inside the project Git worktree/,
+  )
+  assert.equal(
+    await assertOutputPathAllowed(join(realRoot, '_private', '.trial-fetch-safety')),
+    join(realRoot, '_private', '.trial-fetch-safety'),
+  )
+
+  // 临时工作树用于测试 _private 与符号链接；不改动真实仓库的 _private。
+  const fakeRoot = join(outside, 'fake-worktree')
+  await initGitRepo(fakeRoot)
+  const fakeReal = await realpath(fakeRoot)
+  assert.equal(
+    await assertOutputPathAllowed(
+      join(fakeRoot, '_private', '.trial-fetch-safety'),
+      { projectRoot: fakeRoot },
+    ),
+    join(fakeReal, '_private', '.trial-fetch-safety'),
+  )
+  await assert.rejects(
+    assertOutputPathAllowed(join(fakeRoot, 'scripts', '.trial-fetch-safety'), {
+      projectRoot: fakeRoot,
+    }),
+    /inside the project Git worktree/,
+  )
+
+  // 另一个 Git 工作树不是“普通外部目录”，即使带 _private 也不能写入。
+  const otherRoot = await initGitRepo(join(outside, 'other-worktree'))
+  await assert.rejects(
+    assertOutputPathAllowed(join(otherRoot, 'snapshot'), { projectRoot: fakeRoot }),
+    /different Git worktree/,
+  )
+  await assert.rejects(
+    assertOutputPathAllowed(join(otherRoot, '_private', 'snapshot'), { projectRoot: fakeRoot }),
+    /different Git worktree/,
+  )
+
+  // linked worktree/submodule 用 `.git` 文件标记边界，同样不能当作普通目录。
+  const linkedRoot = join(outside, 'linked-worktree')
+  await mkdir(linkedRoot, { recursive: true })
+  await writeFile(join(linkedRoot, '.git'), `gitdir: ${join(otherRoot, '.git', 'worktrees', 'linked')}\n`)
+  await assert.rejects(
+    assertOutputPathAllowed(join(linkedRoot, 'snapshot'), { projectRoot: fakeRoot }),
+    /different Git worktree/,
+  )
+
+  // 自己工作树的 _private 里再嵌一个仓库：最近边界不是本项目根，必须拒绝。
+  const nestedRoot = await initGitRepo(join(fakeRoot, '_private', 'nested'))
+  await assert.rejects(
+    assertOutputPathAllowed(join(nestedRoot, 'snapshot'), { projectRoot: fakeRoot }),
+    /different Git worktree/,
+  )
+
+  // 工作树外的符号链接指向工作树内：必须按真实目标拒绝。
+  await symlink(join(realRoot, 'scripts'), join(outside, 'into-worktree'), 'dir')
+  await assert.rejects(
+    assertOutputPathAllowed(join(outside, 'into-worktree', '.trial-fetch-safety')),
+    /inside the project Git worktree/,
+  )
+
+  // 工作树外的符号链接指向 _private：真实目标在工作树内唯一允许的位置。
+  await symlink(join(fakeRoot, '_private'), join(outside, 'to-private'), 'dir')
+  assert.equal(
+    await assertOutputPathAllowed(
+      join(outside, 'to-private', '.trial-fetch-safety'),
+      { projectRoot: fakeRoot },
+    ),
+    join(fakeReal, '_private', '.trial-fetch-safety'),
+  )
+
+  // 断链无法证明会落在哪里；不能因为目标尚不存在就当作工作树外路径。
+  await symlink(join(outside, 'missing-target'), join(outside, 'broken-link'))
+  await assert.rejects(
+    assertOutputPathAllowed(join(outside, 'broken-link', 'snapshot')),
+    /cannot resolve symbolic link/,
+  )
+})
+
+test('_private 只接受工作树内 .gitignore 的实际忽略，且路径未被 Git 跟踪', async (t) => {
+  if (!gitAvailable) return t.skip('git is required to verify the _private ignore rule')
+  const outside = await mkdtemp(join(tmpdir(), 'trial-fetch-ignore-'))
+  t.after(() => rm(outside, { recursive: true, force: true }))
+
+  const repo = await initGitRepo(join(outside, 'repo'))
+  const repoReal = await realpath(repo)
+  assert.equal(
+    await assertOutputPathAllowed(join(repo, '_private', 'snapshot'), { projectRoot: repo }),
+    join(repoReal, '_private', 'snapshot'),
+  )
+
+  // 没有 .gitignore 时 `_private` 未被忽略；不能凭目录名放行。
+  const unignored = await initGitRepo(join(outside, 'unignored'), { gitignore: null })
+  await assert.rejects(
+    assertOutputPathAllowed(join(unignored, '_private', 'snapshot'), {
+      projectRoot: unignored,
+    }),
+    /not ignored by Git/,
+  )
+
+  // 否定规则重新包含 `_private`：Git 认为未忽略，必须拒绝。
+  const negated = await initGitRepo(join(outside, 'negated'), {
+    gitignore: '_private/\n!_private/\n',
+  })
+  await assert.rejects(
+    assertOutputPathAllowed(join(negated, '_private', 'snapshot'), {
+      projectRoot: negated,
+    }),
+    /not ignored by Git/,
+  )
+
+  // 仅靠 .git/info/exclude（本地私有规则）不算工作树内的 .gitignore；换台机器会失效。
+  const localOnly = await initGitRepo(join(outside, 'local-only'), { gitignore: null })
+  await mkdir(join(localOnly, '.git', 'info'), { recursive: true })
+  await writeFile(join(localOnly, '.git', 'info', 'exclude'), '_private/\n', 'utf8')
+  await assert.rejects(
+    assertOutputPathAllowed(join(localOnly, '_private', 'snapshot'), {
+      projectRoot: localOnly,
+    }),
+    /not a \.gitignore inside the project worktree/,
+  )
+
+  // 即使被忽略，只要路径已被跟踪，写进去仍会改动受版本控制的内容。
+  const tracked = await initGitRepo(join(outside, 'tracked'))
+  await mkdir(join(tracked, '_private'), { recursive: true })
+  await writeFile(join(tracked, '_private', 'tracked.txt'), 'tracked\n', 'utf8')
+  execFileSync('git', ['-C', tracked, 'add', '-f', '_private/tracked.txt'], { stdio: 'pipe' })
+  await assert.rejects(
+    assertOutputPathAllowed(join(tracked, '_private', 'snapshot'), {
+      projectRoot: tracked,
+    }),
+    /tracked by Git/,
+  )
+})
+
+test('工作树内输出在创建目录、加锁和请求前拒绝；检查后替换符号链接会被重新检查', async (t) => {
+  const unsafe = join(root, 'scripts', `.trial-fetch-safety-${process.pid}-${Date.now()}`)
+  t.after(() => rm(unsafe, { recursive: true, force: true }))
+  await assert.rejects(prepareOutDir(unsafe), /inside the project Git worktree/)
+  await assert.rejects(stat(unsafe), { code: 'ENOENT' })
+
+  const outside = await mkdtemp(join(tmpdir(), 'trial-fetch-path-run-'))
+  t.after(() => rm(outside, { recursive: true, force: true }))
+  await symlink(join(root, 'scripts'), join(outside, 'escape'), 'dir')
+  const escaped = join(outside, 'escape', '.trial-fetch-safety')
+  let calls = 0
+  await assert.rejects(
+    runSnapshot({
+      outDir: escaped,
+      endDate: '2026-11-02',
+      aliases: ['Behçet'],
+      fetchImpl: async () => {
+        calls += 1
+        return json(VERSION)
+      },
+      now: () => new Date('2026-11-03T21:05:00Z'),
+    }),
+    /inside the project Git worktree/,
+  )
+  assert.equal(calls, 0)
+  await assert.rejects(stat(escaped), { code: 'ENOENT' })
+
+  // 先检查时符号链接指向安全的外部目录；随后把它换成工作树内目录。
+  // prepareOutDir 必须在建目录/加锁前重新解析并拒绝，不能沿用第一次检查的结果。
+  const safe = join(outside, 'safe')
+  await mkdir(safe)
+  const mutable = join(outside, 'mutable-link')
+  await symlink(safe, mutable, 'dir')
+  assert.equal(
+    await assertOutputPathAllowed(join(mutable, 'snapshot')),
+    join(await realpath(safe), 'snapshot'),
+  )
+  await rm(mutable)
+  await symlink(join(root, 'scripts'), mutable, 'dir')
+  await assert.rejects(
+    prepareOutDir(join(mutable, 'snapshot')),
+    /inside the project Git worktree/,
+  )
+  await assert.rejects(stat(join(root, 'scripts', 'snapshot')), { code: 'ENOENT' })
 })
 
 test('别名子集即使查询全成功也不能认证 COMPLETE；伪造 COMPLETE 仍缺覆盖', async (t) => {

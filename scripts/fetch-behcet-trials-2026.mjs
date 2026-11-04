@@ -60,7 +60,17 @@
  * 路径。新建的快照目录（含 `pages/`）固定为 0700，新建的文件（含锁、临时清单和
  * SQLite）固定为 0600；创建后显式 chmod，不受调用者 umask 影响。调用者已经存在的
  * 目录或文件**不会被递归改权限**：目录已存在就原样沿用，文件必须新建（`wx`），
- * 已存在则拒绝或失败，不会覆盖。写入前在目标目录原子创建 `.trial-fetch.lock`；
+ * 已存在则拒绝或失败，不会覆盖。输出路径不得落在**任何** Git 工作树内：既不能写进
+ * 脚本所在项目的工作树，也不能写进同一仓库的其它 linked worktree、submodule 或别的
+ * Git 仓库。唯一例外是脚本自身工作树中**经 Git 确认已忽略且未跟踪**的 `_private/`
+ * 及其子目录；`_private` 的忽略规则用 `git check-ignore` 核对，规则必须来自工作树内
+ * 的 `.gitignore`，仅有 `.git/info/exclude` 或全局 exclude 不算，无法运行 Git 时拒绝。
+ * 判断前先解析真实路径：工作树外的符号链接若指向工作树内会被拒绝，断链或无法定位
+ * 工作树根目录时同样拒绝；工作树外的临时目录（例如 `os.tmpdir()`）不受影响。
+ * 目录创建、加锁前后会再次核对真实路径，缩窄“检查后被替换符号链接”的窗口。
+ * **但这不是原子保证**：能在检查与写入之间改写父目录的本地进程仍可把后续写入重定向，
+ * 剩余竞态无法用可移植 Node API 消除；输出目录及其父目录的文件系统权限仍需由调用者
+ * 控制。写入前在目标目录原子创建 `.trial-fetch.lock`；
  * 并发运行会因锁失败而拒绝，非空目录会在加锁后再次检查并拒绝，不会改动其中已有
  * 文件。释放锁前核对 inode 与本进程写入的随机令牌，锁被外部删除并重建时不会误删
  * 后来者的锁。进程被强杀可能留下锁文件，需确认没有其他采集在跑后手工删除。正式
@@ -80,10 +90,11 @@
  *   node scripts/fetch-behcet-trials-2026.mjs --out ... --end-date 2026-11-03 --months 9
  * 测试只传 `fetchImpl` 夹具，不访问网络（见 test/trial-fetch.test.mjs）。
  */
+import { spawnSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { chmod, lstat, mkdir, open, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
-import { dirname, join, resolve, sep } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { chmod, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { isDeepStrictEqual } from 'node:util'
 
@@ -102,6 +113,12 @@ export const SNAPSHOT_KIND = 'clinicaltrials-gov-behcet-snapshot'
 /** 一次查询最多保留的非致命错误条数；致命错误不受该上限约束。 */
 export const MAX_QUERY_ERRORS = 25
 export const OUTPUT_LOCK_FILE = '.trial-fetch.lock'
+/**
+ * 工作树内唯一允许写快照的目录。是否真的被忽略不能靠注释或约定：写之前用
+ * `git check-ignore` 核对规则，并确认该路径没有被 Git 跟踪。除此之外，脚本不会向
+ * 任何项目工作树写入内容。
+ */
+export const ALLOWED_WORKTREE_OUTPUT_DIR = '_private'
 /** CTG 的 NCT 登记号形状；只接受 NCT + 8 位数字，避免把任意字符串当登记号。 */
 export const NCT_ID_PATTERN = /^NCT\d{8}$/
 /**
@@ -2586,6 +2603,306 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
 }
 
 /**
+ * 定位当前脚本所在 Git 工作树的根目录。
+ *
+ * 从脚本真实路径向上查找 `.git`（普通仓库中是目录，linked worktree/submodule 中
+ * 是文件）。不用当前工作目录，也不依赖外部 `git` 命令：输出路径的允许范围必须由
+ * 脚本自身位置决定，否则在仓库外运行时会误判。找不到 `.git` 时返回 null，调用方
+ * 必须按“无法安全判断”拒绝写入。
+ */
+export async function findProjectWorktreeRoot(
+  startDir = dirname(fileURLToPath(import.meta.url)),
+) {
+  let current
+  try {
+    current = await realpath(startDir)
+  } catch (error) {
+    throw new Error(`cannot inspect project Git worktree root from ${startDir}: ${error.message}`)
+  }
+  for (;;) {
+    let gitEntry
+    try {
+      gitEntry = await lstat(join(current, '.git'))
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw new Error(
+          `cannot inspect ${join(current, '.git')} while locating the project Git worktree: ${error.message}`,
+        )
+      }
+    }
+    if (gitEntry) return current
+    const parent = dirname(current)
+    if (parent === current) return null
+    current = parent
+  }
+}
+
+/**
+ * 判断 `target` 是否就是 `root` 或位于其下（按路径分量，不做前缀字符串比较）。
+ * 两边都应是已解析的真实路径。
+ */
+function isPathInside(root, target) {
+  const rel = relative(root, target)
+  return rel === ''
+    || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
+}
+
+/**
+ * 从 `target` 向上查找最近的 Git 工作树边界（`.git` 目录、linked worktree 的
+ * `.git` 文件，或 submodule 的 gitfile）。返回工作树根目录；一路到文件系统根
+ * 都没有 `.git` 时返回 null。
+ *
+ * 不能只跟脚本自己的根目录比较：输出路径可能落在同一仓库的另一个 linked
+ * worktree、`_private` 下嵌套的仓库，或临时目录里的另一个 Git 仓库。这些都
+ * 必须按“工作树内”拒绝，而不是当作普通外部目录放行。`.git` 不可读时抛错，
+ * 由调用方拒绝，而不是假设它不存在。
+ */
+async function findContainingGitWorktree(target) {
+  let current = target
+  for (;;) {
+    let gitEntry
+    try {
+      gitEntry = await lstat(join(current, '.git'))
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw new Error(
+          `cannot inspect ${join(current, '.git')} while checking whether the snapshot output is inside a Git worktree: ${error.message}`,
+        )
+      }
+    }
+    if (gitEntry) return current
+    const parent = dirname(current)
+    if (parent === current) return null
+    current = parent
+  }
+}
+
+/**
+ * 把输出路径解析成真实路径，即使目标尚不存在。
+ *
+ * 从完整路径向上找到第一个存在的祖先并用 `realpath` 解析它，再把尚不存在的后缀
+ * 接回去。这样 `/tmp/link/new`（link → 工作树）不会因为 `new` 不存在而被误认为
+ * 工作树外的普通路径。断链、符号链接环或无法解析的祖先一律拒绝：无法证明真实
+ * 目标在哪里时不能继续创建目录或加锁。
+ */
+async function resolveOutputRealPath(outDir) {
+  const absolute = resolve(outDir)
+  const missing = []
+  let current = absolute
+  for (;;) {
+    let info
+    try {
+      info = await lstat(current)
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw new Error(`cannot inspect snapshot output path ${absolute}: ${error.message}`)
+      }
+      const parent = dirname(current)
+      if (parent === current) {
+        throw new Error(`cannot find an existing ancestor for snapshot output path ${absolute}`)
+      }
+      missing.push(basename(current))
+      current = parent
+      continue
+    }
+    if (info.isSymbolicLink()) {
+      let target
+      try {
+        target = await realpath(current)
+      } catch (error) {
+        throw new Error(
+          `refusing to write snapshot output to ${absolute}: cannot resolve symbolic link ${current}: ${error.message}`,
+        )
+      }
+      let targetInfo
+      try {
+        targetInfo = await stat(target)
+      } catch (error) {
+        throw new Error(
+          `refusing to write snapshot output to ${absolute}: cannot inspect symbolic link target ${current}: ${error.message}`,
+        )
+      }
+      if (!targetInfo.isDirectory()) {
+        throw new Error(
+          `refusing to write snapshot output to ${absolute}: symbolic link ${current} does not resolve to a directory`,
+        )
+      }
+      return join(target, ...missing.reverse())
+    }
+    if (!info.isDirectory()) {
+      throw new Error(
+        `refusing to write snapshot output to ${absolute}: ${current} is not a directory`,
+      )
+    }
+    let real
+    try {
+      real = await realpath(current)
+    } catch (error) {
+      throw new Error(
+        `refusing to write snapshot output to ${absolute}: cannot resolve ${current}: ${error.message}`,
+      )
+    }
+    return join(real, ...missing.reverse())
+  }
+}
+
+/** 以工作树根为 cwd 运行 Git，避免受调用者当前目录或 `GIT_DIR` 影响。 */
+function runGit(root, args) {
+  const result = spawnSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+    timeout: 15_000,
+  })
+  if (result.error) {
+    const reason = result.error.code === 'ENOENT'
+      ? 'git executable is not available'
+      : result.error.message
+    return { ...result, error: reason }
+  }
+  return result
+}
+
+/**
+ * 核对 `_private/` 目标确实被**工作树内的 `.gitignore`** 忽略，且没有被 Git 跟踪。
+ *
+ * 只看 `.gitignore` 文本不够：嵌套 `.gitignore`、否定规则、`.git/info/exclude`、
+ * 全局 excludes 都会改变结果。这里让 Git 自己对目标路径做判断，并要求命中的规则
+ * 来源是工作树内真实的 `.gitignore`；只有本地 `.git/info/exclude` 或全局规则时
+ * 换一台机器/新 clone 就不再被忽略，因此拒绝。`--no-index` 让 Git 即使文件被
+ * 强制跟踪也按规则回答，随后再用 `ls-files` 单独拒绝任何已跟踪的 `_private` 内容。
+ *
+ * 这仍是检查时快照：`.gitignore` 可在检查后被改写，Git 也可被替换。无法运行 Git
+ * 时拒绝 `_private`，不猜测忽略规则。
+ */
+async function assertPrivateTargetIsIgnored(root, target, rel) {
+  const gitPath = rel === ALLOWED_WORKTREE_OUTPUT_DIR
+    ? `${ALLOWED_WORKTREE_OUTPUT_DIR}/`
+    : rel.split(sep).join('/')
+  const ignore = runGit(root, ['check-ignore', '-v', '--no-index', '--', gitPath])
+  if (ignore.error) {
+    throw new Error(
+      `refusing to write snapshot output to ${target}: cannot verify that ${gitPath} is ignored by Git (${ignore.error})`,
+    )
+  }
+  if (ignore.status !== 0) {
+    const detail = ignore.status === 1
+      ? `${gitPath} is not ignored by Git`
+      : `git check-ignore exited with status ${ignore.status}: ${(ignore.stderr ?? '').trim() || 'no details'}`
+    throw new Error(
+      `refusing to write snapshot output to ${target}: ${detail}; only a Git-ignored ${ALLOWED_WORKTREE_OUTPUT_DIR}/ directory may be written inside the project worktree`,
+    )
+  }
+  const ruleLine = (ignore.stdout ?? '').split(/\r?\n/).find((line) => line.length > 0)
+  const rule = ruleLine ? /^(.*):(\d+):/.exec(ruleLine) : null
+  if (!rule) {
+    throw new Error(
+      `refusing to write snapshot output to ${target}: cannot parse the Git ignore rule that matched ${gitPath}`,
+    )
+  }
+  const source = isAbsolute(rule[1]) ? rule[1] : resolve(root, rule[1])
+  let sourceReal
+  try {
+    sourceReal = await realpath(source)
+  } catch (error) {
+    throw new Error(
+      `refusing to write snapshot output to ${target}: cannot resolve the .gitignore that ignores ${gitPath} (${source}): ${error.message}`,
+    )
+  }
+  const gitMetadata = join(root, '.git')
+  if (!isPathInside(root, sourceReal)
+    || isPathInside(gitMetadata, sourceReal)
+    || basename(sourceReal) !== '.gitignore') {
+    throw new Error(
+      `refusing to write snapshot output to ${target}: the rule ignoring ${gitPath} comes from ${sourceReal}, not a .gitignore inside the project worktree; a local exclude or global rule is not enough`,
+    )
+  }
+  const tracked = runGit(root, ['ls-files', '-z', '--', ALLOWED_WORKTREE_OUTPUT_DIR])
+  if (tracked.error) {
+    throw new Error(
+      `refusing to write snapshot output to ${target}: cannot verify that ${ALLOWED_WORKTREE_OUTPUT_DIR}/ is untracked by Git (${tracked.error})`,
+    )
+  }
+  if (tracked.status !== 0) {
+    throw new Error(
+      `refusing to write snapshot output to ${target}: git ls-files exited with status ${tracked.status}: ${(tracked.stderr ?? '').trim() || 'no details'}`,
+    )
+  }
+  if ((tracked.stdout ?? '').length > 0) {
+    throw new Error(
+      `refusing to write snapshot output to ${target}: ${ALLOWED_WORKTREE_OUTPUT_DIR}/ contains files tracked by Git, so the ignore rule does not protect them`,
+    )
+  }
+}
+
+/**
+ * 判断输出路径是否允许创建快照。
+ *
+ * 任何 Git 工作树**内**的路径都拒绝，唯一例外是脚本自身工作树中经 Git 确认已忽略
+ * 的 `_private/` 及其子目录；包括仓库根、`scripts/`、`docs/`、`.git/`、同一仓库的
+ * 其它 linked worktree/submodule，以及临时目录里的别的 Git 仓库。工作树**外**的
+ * 路径（例如 `os.tmpdir()` 下的测试目录）允许。比较使用真实路径，因此工作树外的
+ * 符号链接若指向工作树内也会被拒绝；`_private` 内的符号链接若解析到工作树其它位置
+ * 同样被拒绝。无法定位工作树根目录、无法解析符号链接、祖先不是目录或无法确认
+ * Git 忽略规则时，一律拒绝而不是猜一个允许结果。
+ *
+ * `projectRoot` 仅供测试注入一个临时工作树；生产调用不传。
+ */
+export async function assertOutputPathAllowed(outDir, { projectRoot } = {}) {
+  const target = await resolveOutputRealPath(outDir)
+  let root
+  if (projectRoot === undefined) {
+    root = await findProjectWorktreeRoot()
+    if (!root) {
+      throw new Error(
+        `refusing to write snapshot output to ${target}: cannot determine the project Git worktree root, so the path cannot be checked safely`,
+      )
+    }
+  } else {
+    try {
+      root = await realpath(projectRoot)
+    } catch (error) {
+      throw new Error(
+        `refusing to write snapshot output to ${target}: cannot resolve project worktree root ${projectRoot}: ${error.message}`,
+      )
+    }
+  }
+  const containing = await findContainingGitWorktree(target)
+  if (isPathInside(root, target)) {
+    if (containing !== root) {
+      // 目标在项目根下，但最近的 `.git` 是另一个工作树（嵌套仓库/子模块），或
+      // 项目根的 `.git` 在两次检查之间消失。两种都不能继续。
+      if (containing) {
+        throw new Error(
+          `refusing to write snapshot output to ${target}: it is inside a different Git worktree `
+          + `${containing}, not the project worktree ${root}`,
+        )
+      }
+      throw new Error(
+        `refusing to write snapshot output to ${target}: cannot confirm that the project Git worktree `
+        + `${root} still contains this path; its .git entry is no longer visible`,
+      )
+    }
+    const rel = relative(root, target)
+    if (rel !== ALLOWED_WORKTREE_OUTPUT_DIR
+      && !rel.startsWith(`${ALLOWED_WORKTREE_OUTPUT_DIR}${sep}`)) {
+      throw new Error(
+        `refusing to write snapshot output to ${target}: it is inside the project Git worktree `
+        + `${root}; only the ignored ${ALLOWED_WORKTREE_OUTPUT_DIR}/ directory may be written there`,
+      )
+    }
+    await assertPrivateTargetIsIgnored(root, target, rel)
+    return target
+  }
+  if (containing) {
+    throw new Error(
+      `refusing to write snapshot output to ${target}: it is inside a different Git worktree `
+      + `${containing}; snapshots may not be written into any Git worktree`,
+    )
+  }
+  return target
+}
+
+/**
  * 逐级创建缺失目录，只把**本次新建**的目录收紧到 0700。
  *
  * 不能直接 `chmod -R`：目标目录可能位于调用者已有的目录中，递归改权限会波及无关
@@ -2649,8 +2966,30 @@ async function writePrivateFile(filePath, data, encoding = 'utf8') {
  * `rm` 会在锁被外部删除并重建后误删另一个运行的锁，让两个采集同时写同一目录。
  */
 export async function prepareOutDir(outDir) {
-  await ensurePrivateDirectory(outDir)
-  const lockPath = join(outDir, OUTPUT_LOCK_FILE)
+  // 先按真实路径检查允许范围，再创建任何目录/锁：检查失败时工作树内不会留下空目录
+  // 或锁文件，也不会因为先建目录而改变调用者的目录权限。
+  const expectedTarget = await assertOutputPathAllowed(outDir)
+  // 用已经解析过的真实路径建目录，而不是再走一遍调用者给的路径：即使原路径上的
+  // 符号链接刚被换掉，也不会把新目录建到它现在指向的位置。
+  await ensurePrivateDirectory(expectedTarget)
+  // 但仍要确认调用者给的路径仍解析到同一个目标，因为后续采集写入仍使用该路径。
+  // 建目录与第一次检查之间若有人替换了符号链接，这里会在加锁、写数据前发现。
+  let realAfterCreate
+  try {
+    realAfterCreate = await realpath(outDir)
+  } catch (error) {
+    throw new Error(
+      `refusing to use snapshot output directory ${outDir}: cannot resolve it after creation: ${error.message}`,
+    )
+  }
+  const checkedAfterCreate = await assertOutputPathAllowed(outDir)
+  if (realAfterCreate !== expectedTarget || checkedAfterCreate !== expectedTarget) {
+    throw new Error(
+      `refusing to use snapshot output directory ${outDir}: it changed during creation `
+      + `(expected ${expectedTarget}, now ${realAfterCreate}); a symbolic link may have been replaced`,
+    )
+  }
+  const lockPath = join(expectedTarget, OUTPUT_LOCK_FILE)
   let handle
   try {
     handle = await open(lockPath, 'wx', SNAPSHOT_FILE_MODE)
@@ -2669,6 +3008,16 @@ export async function prepareOutDir(outDir) {
     lockStat = await handle.stat()
     // open 的 mode 会受 umask 削弱；锁文件也必须是 0600，不能只在正常 umask 下碰巧成立。
     await handle.chmod(SNAPSHOT_FILE_MODE)
+    // 加锁后再核对一次。若父目录在“建目录 → 加锁”之间被换成指向工作树的符号链接，
+    // 锁文件可能已经写错位置；此处在写快照内容前拒绝并删除本次创建的锁。
+    const realAfterLock = await realpath(outDir)
+    const checkedAfterLock = await assertOutputPathAllowed(outDir)
+    if (realAfterLock !== expectedTarget || checkedAfterLock !== expectedTarget) {
+      throw new Error(
+        `refusing to use snapshot output directory ${outDir}: it changed while acquiring the lock `
+        + `(expected ${expectedTarget}, now ${realAfterLock}); a symbolic link may have been replaced`,
+      )
+    }
     await handle.writeFile(`${lockToken}\n`, 'utf8')
   } catch (error) {
     try {
@@ -2710,7 +3059,7 @@ export async function prepareOutDir(outDir) {
     }
   }
   try {
-    const entries = await readdir(outDir)
+    const entries = await readdir(expectedTarget)
     const remaining = entries.filter((name) => name !== OUTPUT_LOCK_FILE)
     if (remaining.length) {
       throw new Error(
@@ -3243,9 +3592,14 @@ export function parseArgs(argv) {
 function printHelp() {
   console.log(`Usage: node scripts/fetch-behcet-trials-2026.mjs --out <new-directory> [options]
 
-  --out <dir>              必填。必须不存在或为空；建议使用仓库外受控目录。
-                           原始响应可能包含联系方式，请勿提交；新建目录 0700、文件 0600。
-                           已有空目录权限保持不变，请自行确认其访问权限。
+  --out <dir>              必填。必须不存在或为空。
+                           不得位于任何 Git 工作树内（包括其它 worktree、submodule 和
+                           别的仓库），唯一例外是脚本所在工作树中经 Git 确认已忽略且
+                           未跟踪的 _private/ 及其子目录；按真实路径判断，符号链接指向
+                           工作树内同样拒绝。建议使用仓库外受控目录。原始响应可能包含
+                           联系方式，请勿提交；新建目录 0700、文件 0600。已有空目录权限
+                           保持不变，请自行确认。检查后父目录被替换的竞态无法完全消除，
+                           输出目录及其父目录的权限仍需调用者控制。
   --end-date <YYYY-MM-DD>  窗口结束日（含）。默认运行当天（UTC）。
   --months <n>             1..12，默认 9；>9 必须给 --expansion-reason。
   --expansion-reason <s>   仅记录扩窗理由，不代表已获批准。
