@@ -1,11 +1,11 @@
 # 数据模型与迁移合同（草案）
 
 > 文档：`docs/DATA-MODEL-DRAFT.md`  
-> 版本：`v0.1.0-draft.12`
-> 日期：2026-11-03  
-> 状态：**只读分析后的原创草案；未冻结；待 G3 签认**；0 患者访谈、0 临床审核；G2 只确认原型范围，不能继承为 G3。draft.12 处置独立审查 F-01～F-10（见 §0.10）：`no_file` 不再被当作“从未关联”的安全证据，旧数据一律保守 `unknown`+`needs_review` 且逐条可追溯；区分“运行时单候选失败关闭”与“迁移整批回滚”；`needs_review` 明确为多原因复合状态；`occurred` 统一走 `occurred_triple`；`ongoing` 与结束日冲突必须拒绝或保留原值待核并满足 CHECK；键与 kind 冲突显式化；历史分类强制 `classify_ref(h, is_history=True)`；归一化 ID 先查碰撞并失败关闭；record/candidate 互指只写一次且双向自检；零 ID/空 ID 在任何位置一致判为无效。**2026-11-03 二次修订（G-01～G-06，见 §0.11）**：采纳互指必须在来源分类前全量预解析，不可判定即整批失败关闭并在写入后复核；`unknown_privacy` 进入 `review_reasons` 且合并不丢；非法 `created_at` 原文进 `legacy.created_at_raw` 并记 `legacy_created_at_invalid`；`end_date_conflict` 只落 `details_json.legacy`；合并后整个 `details_json` 超 8192 UTF-8 字节整批回滚、不截断；冲突键与值原样存 `legacy`。**未建库、未跑迁移、未做宿主验证、未写业务代码**；G3 未签。
+> 版本：`v0.1.0-draft.13`
+> 日期：2026-11-04<br>
+> 状态：**只读分析后的原创草案；未冻结；待 G3 签认**；0 患者访谈、0 临床审核；G2 只确认原型范围，不能继承为 G3。draft.12 处置独立审查 F-01～F-10（见 §0.10）：`no_file` 不再被当作“从未关联”的安全证据，旧数据一律保守 `unknown`+`needs_review` 且逐条可追溯；区分“运行时单候选失败关闭”与“迁移整批回滚”；`needs_review` 明确为多原因复合状态；`occurred` 统一走 `occurred_triple`；`ongoing` 与结束日冲突必须拒绝或保留原值待核并满足 CHECK；键与 kind 冲突显式化；历史分类强制 `classify_ref(h, is_history=True)`；归一化 ID 先查碰撞并失败关闭；record/candidate 互指只写一次且双向自检；零 ID/空 ID 在任何位置一致判为无效。**2026-11-03 二次修订（G-01～G-06，见 §0.11）**：采纳互指必须在来源分类前全量预解析，不可判定即整批失败关闭并在写入后复核；`unknown_privacy` 进入 `review_reasons` 且合并不丢；非法 `created_at` 原文进 `legacy.created_at_raw` 并记 `legacy_created_at_invalid`；`end_date_conflict` 只落 `details_json.legacy`；合并后整个 `details_json` 超 8192 UTF-8 字节整批回滚、不截断；冲突键与值原样存 `legacy`。**2026-11-04 §9.3 DDL 独立内存负向实验（见 §11.2）**：修正 `end`/`review`/`report` 的 `unknown` 分支缺少 `*_precision IS NOT NULL` 造成的三值逻辑放行，并把 `source_kind`/`source_document_id` 一致性纳入本片段 CHECK；仍为草案，**未建库、未跑迁移、未做宿主验证、未写业务代码**；G3 未签。
 >
-> 依据：2026-11-03 用户 G2 确认、`docs/SPEC.md`、`docs/SCENARIOS.md`、`docs/UI-DESIGN.md`、`docs/INTERACTION-DESIGN.md`、`docs/04-DATA.md`、`docs/14-HTML-AND-DATA-CONTRACT.md`、2026-11-03 独立审查 R-01～R-14（见 §0.1）、draft.3 复核 S-01～S-10（见 §0.2）、T-01～T-12（见 §0.3）、本轮安全审查 U-01～U-10（见 §0.4）、本轮五问复核 W-01～W-05（见 §0.5）、draft.8 六项复核 X-01～X-06（见 §0.6）、draft.9 四项原型事实复核 Y-01～Y-04（见 §0.7；draft.11 增补 Y-05）、draft.10 四项形状复核 Z-01～Z-04（见 §0.8）、draft.11 断开来源复核 AA-01～AA-06（见 §0.9）、draft.12 独立审查 F-01～F-10（见 §0.10）、draft.12 二次修订 G-01～G-06（见 §0.11），以及 `prototypes/v0.2/` 的实际实现。
+> 依据：2026-11-03 用户 G2 确认、`docs/SPEC.md`、`docs/SCENARIOS.md`、`docs/UI-DESIGN.md`、`docs/INTERACTION-DESIGN.md`、`docs/04-DATA.md`、`docs/14-HTML-AND-DATA-CONTRACT.md`、2026-11-03 独立审查 R-01～R-14（见 §0.1）、draft.3 复核 S-01～S-10（见 §0.2）、T-01～T-12（见 §0.3）、本轮安全审查 U-01～U-10（见 §0.4）、本轮五问复核 W-01～W-05（见 §0.5）、draft.8 六项复核 X-01～X-06（见 §0.6）、draft.9 四项原型事实复核 Y-01～Y-04（见 §0.7；draft.11 增补 Y-05）、draft.10 四项形状复核 Z-01～Z-04（见 §0.8）、draft.11 断开来源复核 AA-01～AA-06（见 §0.9）、draft.12 独立审查 F-01～F-10（见 §0.10）、draft.12 二次修订 G-01～G-06（见 §0.11）、2026-11-04 §9.3 DDL 负向实验（见 §11.2），以及 `prototypes/v0.2/` 的实际实现。
 > 边界：本文件**不创建生产数据库、不建表、不写迁移脚本、不修改其他文件**。G3 签认前不得据此建库；G3 之后也只能先建测试库并跑完本文件第 11 节的可验证约束。**本版最优先的修订是向 `docs/SPEC.md` 对齐**：原件不复制、不缓存，登记只是出处关联；移除/撤回不静默删手工来源；代记者看不到私密元数据；AI 本版禁止接收私密或隐私未知内容，未来例外仍属未决。与 SPEC 冲突时以 SPEC 为准，本文件回改，不用“数据模型更完整”覆盖已确认规格。  
 > 前几轮已写入的复核要点（draft.6/7，保留）：① Q-27/Q-28/Q-29/Q-30/Q-31 **全部明确标为 G3 阻塞**；② 清除 §10.4 残留的 `UPDATE import_candidate` 伪 SQL，改为逐条 INSERT `import_run`/`import_candidate` 的伪代码，并明确“任何人不得从旧版本复制执行”；③ `record.correct` **完全不得改变隐私**，隐私只能走 `record.setPrivacy`；④ 统一 `privacy_epoch`（进入 `private` 才 +1）并新增 `privacy_state_seq`（任何隐私状态变化 +1），用后者使 `unknown` 往返后的旧 release 自动失效；⑤ 非本人连受保护历史的元数据、修订号、计数和空位都不可见；⑥ 明确 `unknown` 原件的唯一解锁路径；⑦ `command_receipt` 主键 `(subject_id, actor_id, request_id)`；⑧ 迁移 `unknown` 不预置 ever/epoch；⑨ 传播写入原件新状态且**不降级**已有的 `private`；⑩ 删除不可复现的批量断言结果表，只保留可重跑骨架；V-33 改为未验证。**本轮新增：出站（导出/AI/产物）必须同时校验“选中的那一版修订”与“当前记录”，不能只看其一；恢复历史只能本人且不得洗白；跨 subject 引用全部校验并把 Q-30 列为 G3 阻塞；缺失候选来源失败关闭；代理采纳候选强制 `unknown` 并校验全部写入的身份/授权范围；缓存键必须含 `subject_id`；迁移伪代码不含可执行 SQL。**
 >
@@ -1094,7 +1094,8 @@ actor 1──* command_receipt
 
 - 其余全部表（`workspace`、`subject`、`actor`、`access_grant`、`grant_scope`、`grant_read_entry`、`consent_event`、`source_document`、`source_link_release`、`import_run`、`import_candidate`、`record`、`artifact`、`artifact_item`、`audit_event`、`command_receipt`、`schema_migration`、`ui_preference`）的 DDL；
 - 全部索引与唯一约束（除示例中的 `UNIQUE`）、部分索引、排序规则；
-- `record` 的 `kind`/`subject`/`author` 外键、`author_state` 与 `author_actor_id`/`on_behalf_grant_id` 的一致性、`lifecycle_state` 检查、`source_document` 的 `link_state` 四态检查、`source_kind` 与 `source_document_id` 的一致性（`manual` 不得有指针）、`consent_event` 的 `type` 检查；
+- `record` 的 `kind`/`subject`/`author` 外键、`author_state` 与 `author_actor_id`/`on_behalf_grant_id` 的一致性、`lifecycle_state` 检查、`source_document` 的 `link_state` 四态检查、`consent_event` 的 `type` 检查；
+- 跨 subject 引用一致性（见 §9.7）：本片段只用普通外键，外键只保证行存在，不保证 `record_revision.record_id` 与 `source_document_id` 属于同一 subject；
 - 触发器只示例“修订只增”，其余不变式（如“当前修订必须是 `MAX(revision_no)`”的跨行一致性）尚无触发器；
 - 建库器需设置的 PRAGMA（`foreign_keys=ON` 是**每连接**执行，不属于建表语句）；
 - 随包 JSON Schema（`details_json` 的字段合同）、应用层交叉校验（如代理授权、隐私传播、幂等载荷）和迁移脚本。
@@ -1130,7 +1131,7 @@ CREATE TABLE record_revision (
   text                 TEXT,
   source_kind          TEXT NOT NULL
                        CHECK (source_kind IN ('manual','document','legacy_text','removed_irrecoverable')),
-                       -- manual/legacy_text/removed_irrecoverable 必须 source_document_id IS NULL；
+                       -- 本表 CHECK 强制：source_kind <> 'document' 时 source_document_id 必须 NULL；
                        -- document 才允许指针，且无指针即按 unresolved 读取（§4.1）
                        -- 历史修订同样是“被替换那一版”的分类型字段快照：缺键（如资料库分支没有日期键）
                        -- 落 NULL，不补空串/默认值；分类只看 source_text 痕迹，与是否历史项无关
@@ -1185,7 +1186,9 @@ CREATE TABLE record_revision (
   ),
   CHECK (
     (end_precision IS NULL AND end_date IS NULL AND end_raw IS NULL)
-    OR (end_precision = 'unknown' AND end_date IS NULL)
+    OR (end_precision IS NOT NULL
+        AND end_precision = 'unknown'
+        AND end_date IS NULL)
     OR (end_precision IS NOT NULL
         AND end_precision = 'month'
         AND end_date IS NOT NULL
@@ -1204,7 +1207,9 @@ CREATE TABLE record_revision (
   ),
   CHECK (
     (review_precision IS NULL AND review_date IS NULL AND review_raw IS NULL)
-    OR (review_precision = 'unknown' AND review_date IS NULL)
+    OR (review_precision IS NOT NULL
+        AND review_precision = 'unknown'
+        AND review_date IS NULL)
     OR (review_precision IS NOT NULL
         AND review_precision = 'month'
         AND review_date IS NOT NULL
@@ -1223,7 +1228,9 @@ CREATE TABLE record_revision (
   ),
   CHECK (
     (report_precision IS NULL AND report_date IS NULL AND report_raw IS NULL)
-    OR (report_precision = 'unknown' AND report_date IS NULL)
+    OR (report_precision IS NOT NULL
+        AND report_precision = 'unknown'
+        AND report_date IS NULL)
     OR (report_precision IS NOT NULL
         AND report_precision = 'month'
         AND report_date IS NOT NULL
@@ -1241,7 +1248,8 @@ CREATE TABLE record_revision (
         AND date(report_date) = report_date)
   ),
   CHECK (ongoing IS NULL OR ongoing = 0 OR
-         (end_date IS NULL AND end_precision IS NULL AND end_raw IS NULL))
+         (end_date IS NULL AND end_precision IS NULL AND end_raw IS NULL)),
+  CHECK (source_kind = 'document' OR source_document_id IS NULL)
 );
 
 CREATE TRIGGER record_revision_no_update
@@ -1257,9 +1265,11 @@ BEGIN
 END;
 ```
 
-**字节与字符不是一回事**：SQLite `length(text)` 数的是字符，`length(hex(text))` 数的是字节的十六进制长度；日期/时间字段要求**定长 ASCII 字节**（10/7/20 字符对应 20/14/40 个 hex 字符），避免全角数字、组合字符或尾随空格混进日期列。上例只写了 `occurred_date` 与 `created_at`；`end_date`、`review_date`、`report_date`、`removed_at`、`decided_at` 等**所有**日期/瞬时列必须套用同样检查，是否已全量覆盖见 V-31。`details_json` 的 8 KiB 上限也按 UTF-8 字节算，不按字符算；**合并后的完整对象超 8192 字节必须整批回滚（`details_json_too_large`），CHECK 只负责拒绝，不能靠截断通过**（G-05）。
+**字节与字符不是一回事**：SQLite `length(text)` 数的是字符，`length(hex(text))` 数的是字节的十六进制长度；日期/时间字段要求**定长 ASCII 字节**（10/7/20 字符对应 20/14/40 个 hex 字符），避免全角数字、组合字符或尾随空格混进日期列。上例为 `occurred_date`、`end_date`、`review_date`、`report_date` 与 `created_at` 都写了形状检查；`removed_at`、`decided_at` 等不在本片段，**所有**日期/瞬时列必须套用同样检查，是否已全量覆盖见 V-31。空串日期（`''`）会被长度、GLOB 或 `date()` 检查拒绝；`precision='unknown'` 仍要求日期列为 NULL。`details_json` 的 8 KiB 上限也按 UTF-8 字节算，不按字符算；**合并后的完整对象超 8192 字节必须整批回滚（`details_json_too_large`），CHECK 只负责拒绝，不能靠截断通过**（G-05）。
 
 `created_at` 的 CHECK 必须同时有 `strftime(...) IS NOT NULL` 与 `strftime(...) = created_at`：SQLite 的 `strftime` 对月份 13 这类非法值返回 `NULL`，而 `CHECK` 表达式为 `NULL` 时**视为通过**，只写等号会让 `2026-13-01T00:00:00Z` 进入库。`2026-02-30` 不是这个漏洞：`strftime` 会把它归一化成 `2026-03-02`，等号检查因不相等而拒绝；修复说明不能把它写成 NULL 漏洞。另加 `substr(created_at,12,2) BETWEEN '00' AND '23'`，因为 SQLite 接受 `24:00:00` 并保留该文本，仅靠 `strftime` 相等检查仍会放行；本模型要求 UTC 瞬时按 `00–23` 规范化，不接受 `24:00`。该段**只在 `node:sqlite` 内存库冒烟过部分日期值，未在宿主执行**；宿主 SQLite 是否接受 `Z` 后缀/`T` 分隔符需在 Q-08 探针中确认，确认前不得当成已通过。
+
+**三值逻辑陷阱（2026-11-04 修正）**：`end`/`review`/`report` 的 `*_precision = 'unknown'` 分支若不先写 `*_precision IS NOT NULL`，当 precision 为 NULL、date 为 NULL、raw 非空时，该分支求值为 `NULL`，其余分支为 `FALSE`，整个 `OR` 为 `NULL`；SQLite 的 CHECK 对 `NULL` **视为通过**，于是“precision NULL 必须三列全 NULL”被绕过。`occurred_precision` 因 `NOT NULL` 不受此影响。修正已加入三个分支；复现与残余缺口见 §11.2。
 
 `record.kind` 通过 `record_kind` 外键；`details_json` 的具体字段由随包 JSON Schema 校验，DB 只保证 JSON 合法与大小上限。`privacy` 变更插入新修订，所以“改隐私”也不会触发 UPDATE 触发器。**代理不得写 `not_private`、件级隐私传播、授权与幂等语义都无法只靠 DDL 表达**，必须在命令层实现并有应用测试；DDL 不是这些规则的证据。
 
@@ -2227,11 +2237,122 @@ console.log('SQLite core regression: PASS');
 
 补充静态检查（可在无库时做）：
 
-- 本文件第 9.3 节 DDL 曾用含最小 stub 表的 SQLite 临时内存库做过**语法冒烟**（不落盘、不算生产库）；未保留脚本与输出，2026-11-03 只在 `node:sqlite` 观察过，Desktop 宿主仍未核验；这不是完整 DDL 执行，也不是 V-31 的全列覆盖；
+- 本文件第 9.3 节 DDL 曾用含最小 stub 表的 SQLite 临时内存库做过**语法冒烟**（不落盘、不算生产库）；2026-11-03 只在 `node:sqlite` 观察过，Desktop 宿主仍未核验。2026-11-04 又做了 49 例负向实验（见 §11.2），发现并修正 end/review/report 的 unknown 分支三值逻辑漏洞与 `source_kind`/指针一致性缺口；完整 49 例脚本未保留，§11.2 给可复跑 9 例缩减脚本。两个实验都不是完整 DDL 执行，也不是 V-31 的全列覆盖；
 - `record_revision` 的日期 CHECK 对 `2026-02-30` 拒绝、对 `2026-02` 接受、对 `2026-13` 拒绝；
 - `privacy_state='unknown'` 不得被任何默认读模型当成 `not_private`。
 
 这些检查必须在 M5 的测试库重新执行，并把结果附在 G3/M5 记录中；仅“文档写了”或“骨架跑通”不算通过。**V-33 的迁移隐私/编号/来源五态（含历史无 fileId、legacy_text、removed_irrecoverable）/作者/consent 初始化、V-43～V-59 的来源/采纳/恢复/保护写入/版本隔离/链状态/作者状态/原型事实/断开歧义/合成 original 与 fileId 异常专项均没有可执行实现或测试，状态保持“未验证/未执行”。**
+
+### 11.2 §9.3 DDL 负向实验（2026-11-04，仅内存）
+
+2026-11-04 对 §9.3 的 `record_revision` 片段做了一轮独立负向实验，只回答“这段 SQL 在 SQLite 中实际拒绝/接受什么”，不替代 M5/G3 验收。
+
+环境：Node v24.22.2，`node:sqlite`（SQLite 3.53.4），`:memory:`，连接内显式 `PRAGMA foreign_keys = ON`；不写 `.sqlite` 文件，未在 Desktop 宿主执行。方法：从本文件 §9.3 直接截取 `sql` 围栏块，另建 `actor`/`record`/`source_document` 三个最小 stub 表（`r1`→`s1`、`r2`→`s2`、`d1`→`s1`、`d2`→`s2`），执行 49 条 `record_revision` INSERT；每条只改一个变量，预期按 §5.2/§9.3 的语义判定。完整 49 例脚本为一次性使用，未保留；下面的 9 例缩减脚本覆盖本轮关键发现，可复跑。
+
+| 用例组 | draft.12（HEAD 9d3c48b） | draft.13 | 结论 |
+|---|---|---|---|
+| `occurred_precision` 为 NULL | 拒绝 | 拒绝 | 列 `NOT NULL`，无三值漏洞 |
+| `occurred` 为 day/month 但日期空/缺 | 拒绝 | 拒绝 | 形状检查成立 |
+| `occurred` 为 unknown 但日期非 NULL | 拒绝 | 拒绝 | 形状检查成立 |
+| end/review/report 的 precision 为 NULL、日期 NULL、raw 非空 | **接受（K/K2/K3）** | 拒绝 | 三值逻辑漏洞，已修正 |
+| end/review/report 的 precision 为 unknown、日期 NULL、raw 非空 | 接受 | 接受 | 符合 §5.2“无法解析保留 raw” |
+| manual/legacy_text/removed_irrecoverable 带指针 | **接受（R/S/T）** | 拒绝 | 原仅注释“必须”，现为表级 CHECK |
+| document + 空指针 | 接受 | 接受 | 按 unresolved 交给应用层 |
+| document + 不存在的指针 | 拒绝 | 拒绝 | 外键 |
+| document + 另一 subject 的指针 | 接受 | 接受 | **残余 W**，普通外键只查行存在 |
+| `details_json` 为 `{}`/`[]`/`null`/`1` | 接受 | 接受 | **残余**，DB 只查合法 JSON 与字节上限 |
+| `details_json` 为空串/非法 JSON | 拒绝 | 拒绝 | `json_valid` |
+| `details_json` 8192 / 8193 ASCII 字节；多字节 8408 字节 | 接受/拒绝/拒绝 | 接受/拒绝/拒绝 | 按 UTF-8 字节计数 |
+| `created_at` 月 13、`24:00:00`、`2026-02-30`、非 `Z`、尾随空格 | 拒绝 | 拒绝 | 形状/规范化检查成立 |
+| `ongoing = 0` 且 end 三列全 NULL | 接受 | 接受 | **残余 N**，槽位是否适用属应用层 §5.2/V-64 |
+| end 为 unknown 且 raw 为空串 | 接受 | 接受 | **残余**，DDL 未要求 raw 非空 |
+| `occurred_date = '0000-01-01'` | 接受 | 接受 | **残余**，1900–2100 是原型策略，不在 DDL |
+
+`draft.12` 的 8 个 MISMATCH 中，K/K2/K3 是同一类三值逻辑漏洞：`*_precision` 为 NULL、日期为 NULL、raw 非空时，`*_precision = 'unknown'` 求值为 `NULL`，`AND date IS NULL` 仍为 `NULL`，其余分支为 `FALSE`，整个 `OR` 为 `NULL`；SQLite 的 CHECK 把 `NULL` 当通过。修正为 `*_precision IS NOT NULL AND ...` 后三个分支都拒绝。R/S/T 是 `source_kind` 与指针一致性未在 DDL 强制（原文只在注释写“必须”，且明确列为省略项）；draft.13 加了表级 CHECK，`manual`/`legacy_text`/`removed_irrecoverable` 带指针一律拒绝。`occurred_precision` 为 `NOT NULL`，没有同一漏洞。
+
+残余缺口必须由应用层/迁移层或 §9.7 的校验补足，不能因为本片段“跑通”而认为已隔离：
+
+- **跨 subject 引用（W）**：`record_revision.record_id` 与 `source_document_id` 可以属于不同 subject，普通外键只保证行存在；按 §9.7/Q-30，写入前必须逐行比对 subject，本版未实现。
+- **ongoing 与 end 槽位（N）**：`ongoing=0` 且 end 三列全 NULL 会被接受；§5.2/V-64 要求 `unknown` + `needs_review`（不适用槽位除外），这属于应用层映射，DDL 无法知道该 kind 是否使用 end 槽。
+- **unknown + 空 raw**：`end/review/report` 的 precision 为 `unknown` 时 raw 可以是空串；§5.2 要求保留非空原文，DDL 未强制。
+- **JSON 顶层类型**：`details_json` 为数组、`null` 或数字都能写入；§5.3 的“完整对象”与字段约束由 JSON Schema/应用层保证，DB 只保证合法 JSON 与 ≤8192 UTF-8 字节。
+- **年份策略**：`0000-01-01` 能写入；1900–2100 是原型策略，不是临床规则，也不在 DDL。
+- **document + 空指针**：按设计接受，读取时按 unresolved 处理，不能当成“无来源”。
+
+局限：本实验只执行 `record_revision` 一张表，`actor`/`record`/`source_document` 是 stub；没有执行其余表、索引、部分索引、除 append-only 外的触发器，也没有测试 UPDATE/DELETE 路径、迁移、导入、命令层、UI、代理授权、恢复、并发或宿主。`PRAGMA foreign_keys` 只在脚本连接内打开，未验证每个连接都设置。完整 49 例脚本未保留，缩减脚本只覆盖上表关键行。V-31 的“所有日期/瞬时列全量覆盖”仍未执行，V-03/V-33/V-43～V-59 等状态不变；本节不是验收，也不声称实现完成。
+
+复现（将下面代码保存为 `/tmp/ddl-probe-min.mjs`）：
+
+```bash
+node /tmp/ddl-probe-min.mjs docs/DATA-MODEL-DRAFT.md
+# 对照修正前：
+git show 9d3c48b:docs/DATA-MODEL-DRAFT.md > /tmp/d12.md
+node /tmp/ddl-probe-min.mjs /tmp/d12.md
+```
+
+修订后应看到 9 例中 1 个 MISMATCH（跨 subject）；draft.12 应看到 5 个 MISMATCH（三个 precision、manual 指针、跨 subject）。跨 subject 的 MISMATCH 是已登记残余，不是通过。
+
+```js
+import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+
+const docPath = process.argv[2] ?? 'docs/DATA-MODEL-DRAFT.md';
+const md = readFileSync(docPath, 'utf8');
+const sec = md.slice(md.indexOf('### 9.3 '), md.indexOf('### 9.4 '));
+const ddl = sec.match(/```sql\n([\s\S]*?)```/)[1];
+
+const db = new DatabaseSync(':memory:');
+db.exec(`PRAGMA foreign_keys = ON;
+CREATE TABLE actor (actor_id TEXT PRIMARY KEY);
+CREATE TABLE record (record_id TEXT PRIMARY KEY, subject_id TEXT NOT NULL);
+CREATE TABLE source_document (document_id TEXT PRIMARY KEY, subject_id TEXT NOT NULL);
+INSERT INTO actor VALUES ('a1');
+INSERT INTO record VALUES ('r1','s1'), ('r2','s2');
+INSERT INTO source_document VALUES ('d1','s1'), ('d2','s2');
+${ddl}`);
+
+let n = 0;
+function insert(over = {}) {
+  n += 1;
+  const row = {
+    revision_id: `rev-${n}`, record_id: 'r1', revision_no: n,
+    occurred_precision: 'unknown', occurred_date: null, occurred_raw: null,
+    end_precision: null, end_date: null, end_raw: null,
+    review_precision: null, review_date: null, review_raw: null,
+    report_precision: null, report_date: null, report_raw: null,
+    ongoing: null, source_kind: 'manual', source_text: '手工',
+    source_document_id: null, privacy_state: 'not_private',
+    privacy_origin: 'self_declared', details_json: null,
+    change_kind: 'initial', created_at: '2026-11-04T00:00:00Z',
+    created_by_actor_id: 'a1', ...over,
+  };
+  const cols = Object.keys(row);
+  try {
+    db.prepare(`INSERT INTO record_revision (${cols}) VALUES (${cols.map(() => '?')})`)
+      .run(...cols.map(k => row[k]));
+    return true;
+  } catch { return false; }
+}
+
+const cases = [
+  ['end precision NULL + non-empty raw', { end_raw: '~2020' }, false],
+  ['review precision NULL + non-empty raw', { review_raw: '~2020' }, false],
+  ['report precision NULL + non-empty raw', { report_raw: '~2020' }, false],
+  ['manual + non-empty pointer', { source_kind: 'manual', source_document_id: 'd1' }, false],
+  ['document + pointer to another subject', { source_kind: 'document', source_document_id: 'd2' }, false],
+  ['document + pointer to missing document', { source_kind: 'document', source_document_id: 'nope' }, false],
+  ['occurred month + empty date', { occurred_precision: 'month', occurred_date: '' }, false],
+  ['occurred unknown + non-NULL date', { occurred_precision: 'unknown', occurred_date: '2026-01-01' }, false],
+  ['details_json top-level array', { details_json: '[]' }, true],
+];
+let bad = 0;
+for (const [name, over, expected] of cases) {
+  const actual = insert(over);
+  if (actual !== expected) bad += 1;
+  console.log(`${actual === expected ? 'ok' : 'MISMATCH'} | ${name} | expected ${expected ? 'accept' : 'reject'} got ${actual ? 'accept' : 'reject'}`);
+}
+console.log(`${cases.length} cases, ${bad} mismatches; MISMATCH is a logged residual or historical gap, not a pass.`);
+```
 
 ---
 
@@ -2302,8 +2423,8 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 - [ ] **AI**：确认**本版** AI 永不接收私密/未知、无逐条例外、无 override；确认 **Q-10 的“未来逐条授权”仍是未决政策**，不得由 G3 勾选或配置打开（V-25）。
 - [ ] **迁移**：确认 `schema_version=1`、迁移 ledger 连续唯一、备份/失败回滚、expand/contract；确认**单事务为默认、重建表是显式非原子例外**且 Q-29 未设计前不进入生产；确认重建时 `foreign_keys=OFF` 在事务外、`foreign_key_check` 在 COMMIT 前、`ROLLBACK` 不留孤儿、提交后 `ON` 并复核；确认原型映射与 §10.4 隐私初始化（true/false/缺失/非布尔、`history[]` 逐项且**历史无 `fileId` 不回填**、`files[]` unknown 为 0/0/0、`fileId` 缺失/null 且无原件痕迹、`created_at`）**只有伪代码，不含可执行 SQL，未实现、未验证**；确认候选/run 逐条 INSERT、两表来源非空、`adoption_state`/互指/报告按 §10.4；确认采纳关系在来源分类前全量预解析、不可判定整批 `ROLLBACK adoption_unresolved`、写入后按计划复核；v1 不产出 `unknown` 迁移行（V-44/V-48/V-70/V-71）；确认历史编号 `history[i]→i+1`、当前 `N+1` 且迁移后自检（V-49）；**确认来源五态 `no_file/resolved/legacy_text/removed_irrecoverable/unresolved`：历史项是分类型字段快照（完整键集见 §0.7/§10.4，消化为 `date/datePrecision/text/source/private`），缺键即 NULL；只有**有效** `fileId`（非空字符串/非零有限数）才是指针，缺失/null 是正常无指针，空串/0/布尔/对象/非有限数是异常值（无指针+needs_review+计数，不判 unresolved）；无有效指针时按来源文本落 `manual`（不以“原件：”开头、不含“原件已移除”）、`legacy_text`（trim 后以“原件：”开头）、`removed_irrecoverable`（**含**“原件已移除”，全等/带备注记 variant），后两者不进 `source_chain` 且不得判 `unresolved`；只有有效指针悬空/跨主体/不一致才 `unresolved`；`original` 只是合成副本、不参与任何判定且迁移丢弃计数（V-33/V-51/V-54/V-59）**；**确认“原件已移除”可能来自删除登记，也可能来自更正解除/改挂关联或空来源兜底，旧数据不可区分：不得建墓碑、不得写 `removed_at/by`/`link_state='removed'`、不得断言“已删除/可恢复”，`removed_irrecoverable` 只表示来源已断开且不可恢复（V-56/V-58）；手工来源被清指针后**不写 removed 标记**，与从未关联同形，只能按 `manual`/`no_file` 处理，不推断曾关联；但迁移侧 `no_file` 仍必须 `legacy_unverifiable`+至少 `unknown`+`needs_review`**；确认日期槽位：occurred 每个修订必写（缺键 unknown+needs_review），end/review/report 不适用时三列全 NULL，被使用时 precision 非 NULL 且**历史与当前两条 INSERT 都写**（V-55）；确认无作者证据时 `author_state='unknown'`、两列 NULL，不默认本人（V-53）；确认 cloud run 无 consent 整批 `ROLLBACK`/`consent_unresolved`（V-52）。**确认 `no_file` 必须区分 `source_basis`：迁移 `legacy_unverifiable` 至少 `unknown`+`needs_review`+逐条报告，只有运行期本人显式 `self_declared` 才可 `not_private`（V-60）；确认运行时候选缺来源失败关闭、迁移缺来源整批回滚，不得跳过坏行（V-61）；确认 `needs_review` 是复合状态、报告按 `review_reasons` 分原因计数而非一个总数（V-62）；确认 occurred 当前/历史共用 `occurred_triple`（V-63）；确认 `ongoing=1`+结束日冲突按 `preserve_pending` 保留原值待核或 `strict_reject` 整批回滚，且满足 DDL CHECK（V-64）；确认非本 kind 键不写提升列、原值进 `details_json.legacy`（V-65）；确认历史一律 `classify_ref(h, is_history=True)`、异常 `fileId` 不回填不解析（V-66）；确认 legacy ID 归一后碰撞/非法在写入前检测并整批回滚，零 ID 两侧同判（V-67/V-68）；确认 record/candidate 互指只由步骤 5 一次双向写入（V-69）**。**Q-27/Q-28/Q-29/Q-30/Q-31 均为 G3 阻塞；Q-33 为迁移阻塞。**
 - [ ] **版本恢复**：确认记录级恢复以新修订写入、不删历史、**只恢复内容、不恢复/降低隐私、不得洗白**、self-only、来源指针保留；库级恢复走 10.3 校验；确认恢复后回执失效**尚未设计，Q-28 为 G3 阻塞**（V-27/V-37）。
-- [ ] **验证**：确认第 11 节 V-01～V-75 为 M5 验收项，而不是“开发自测即可”；§11.1 只保留**可重跑骨架**（`created_at` CHECK、外键重建回滚、三列回执主键、sticky/release/epoch），**不是**“批量断言全部通过”，也不覆盖命令层、迁移、代理授权、跨 subject 或宿主 Q-08；不得把骨架当端到端证据。本版新增 V-35～V-42、V-43～V-48、V-49～V-53、V-54～V-59、V-60～V-69 全部为**未执行**，不得写成已通过；V-54～V-57 是原型事实专项（历史无 fileId、未知日期、移除不可恢复、既存/未来隔离），V-58 是断开原因不可判定专项，V-59 是合成 `original` 与 `fileId` 异常值专项；V-60～V-69 覆盖 draft.12 的 F-01～F-10（V-69↔F-09、V-68↔F-10；no_file 双依据、运行时/迁移失败关闭、needs_review 多原因、occurred 统一、ongoing 冲突、键 kind、历史分类、ID 碰撞、零 ID、互指），V-70～V-75 覆盖二次修订 G-01～G-06（预解析、后置复核、unknown_privacy、created_at 原文、8192 整批回滚、legacy 键值原样），每条都要求失败关闭或回滚而不是“跳过坏行”；V-48 另受 Q-31 阻塞，V-53/Q-32、V-52/Q-33 的旧数据证据仍未取得。
-- [ ] **DDL**：确认第 9.3 节只是示意、其省略清单已逐项对完整脚本验收；不把示例字段数当合同；确认字节/ASCII 检查只示例了部分列（V-28/V-31）。
+- [ ] **验证**：确认第 11 节 V-01～V-75 为 M5 验收项，而不是“开发自测即可”；§11.1 只保留**可重跑骨架**（`created_at` CHECK、外键重建回滚、三列回执主键、sticky/release/epoch），**不是**“批量断言全部通过”，也不覆盖命令层、迁移、代理授权、跨 subject 或宿主 Q-08；§11.2 的负向实验同样只覆盖单表与三个 stub 表，不是上述证据；不得把骨架或缩例脚本当端到端证据。本版新增 V-35～V-42、V-43～V-48、V-49～V-53、V-54～V-59、V-60～V-69 全部为**未执行**，不得写成已通过；V-54～V-57 是原型事实专项（历史无 fileId、未知日期、移除不可恢复、既存/未来隔离），V-58 是断开原因不可判定专项，V-59 是合成 `original` 与 `fileId` 异常值专项；V-60～V-69 覆盖 draft.12 的 F-01～F-10（V-69↔F-09、V-68↔F-10；no_file 双依据、运行时/迁移失败关闭、needs_review 多原因、occurred 统一、ongoing 冲突、键 kind、历史分类、ID 碰撞、零 ID、互指），V-70～V-75 覆盖二次修订 G-01～G-06（预解析、后置复核、unknown_privacy、created_at 原文、8192 整批回滚、legacy 键值原样），每条都要求失败关闭或回滚而不是“跳过坏行”；V-48 另受 Q-31 阻塞，V-53/Q-32、V-52/Q-33 的旧数据证据仍未取得。
+- [ ] **DDL**：确认第 9.3 节只是示意、其省略清单已逐项对完整脚本验收；不把示例字段数当合同；确认字节/ASCII 检查只示例了部分列（V-28/V-31）；2026-11-04 已按 §11.2 修正 end/review/report 三值逻辑与 source_kind/指针一致性示例，但 §11.2 仍只覆盖 `record_revision` 单表，残余的跨 subject、JSON 顶层类型、ongoing 槽位与年份策略仍须应用层/迁移层校验。
 - [ ] **未决项**：Q-01～Q-34 中仍标未决的每项有负责人/结论（Q-03 已定，不再作为二选一）；**Q-27/Q-28/Q-29/Q-30/Q-31 已明确列入 G3 阻塞，不得写成“不阻塞 v1”**；Q-33 为迁移阻塞（不改变运行时合同），Q-32 默认 `unknown` 且不阻塞本版；未来事项仅保留 Q-10 未来例外、Q-17 放宽、P-04 备选、Q-02/Q-23/Q-19/Q-14 等，逐条标注“不阻塞 v1”，不得以“后续再说”混进阻塞清单，也不得把未设计写成已完成。
 
 **签认后也只允许：** 先建测试库 → 跑 fixture/不变量 → 通过后再建用户数据根。  
@@ -2328,20 +2449,21 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 | v0.1.0-draft.11 | 2026-11-03 | 按**断开来源复核**（AA-01～AA-06，见 §0.9）修订，纠正 draft.10 的四处过度断言：① **“原件已移除”不等于“登记已删除”**：原型删除登记与更正时解除/改挂关联（无新文件）都写同一标记，空来源还会被 `\|\|` 兜成标记，旧数据无法区分；`removed_irrecoverable` 只表示“来源已断开、不可恢复、原因不可判定”，禁止建墓碑/`removed_at/by`/`link_state='removed'`/推断删除（D-29/D-32/INV-35/§4.1/§4.5/§4.7/§6.1/§10.4/V-56/V-58）；② **分类统一**：来源文本**含**“原件已移除”（全等或带备注变体）一律 `removed_irrecoverable`，记 `source_variant ∈ {exact, with_note}`；`legacy_text` 只保留 trim 后以“原件：”开头的自动文本；`original` 不再参与任何分类（D-29/INV-28/§4.1/§4.5/§4.7/§10.4/V-33/V-51）；③ **`original` 是合成副本**：只在采纳时写 `{title:fileName,text:c.text}`，不是原件字节/完整解析文本；迁移丢弃并计 `original_copies_dropped`，不作为原件证据（INV-09/§6.1/§10.4/V-59/Q-26）；④ **`fileId` 有效性**：只有键存在且为非空字符串或非零有限数才是指针；空串/纯空白/`0`/布尔/对象/`NaN`/`Infinity` 是异常输入→无指针+`needs_review`+计数，不判 `unresolved`、不伪造 document；`null`/缺键是正常无指针（D-29/INV-34/§4.5/§10.4/V-51/V-59）；⑤ **§10.4 日期槽位补齐**：新增 `occurred_triple`/`date_triple`，`end/review/report` 在**历史与当前两条 INSERT** 都写；键不存在→三列 NULL（不适用），被使用→precision 非 NULL，非法值→date NULL+raw 保留+needs_review；`ongoing=1`→end_* NULL（§5.2/§9.3/§10.4/V-55）；⑥ **消化历史键完整列出**为 `date/datePrecision/text/source/private`（§0.7/§10.4/V-54）；⑦ **无标记同形**：记录已有手工 `source_text` 时，删除/解除只清 `fileId`/`original`、不改文本、不写标记，旧数据与“从未关联”完全同形；迁移只能按 `manual`/`no_file` 保守处理，不推断曾关联、不补 `needs_review`/标记（**draft.12 已收紧：迁移 `no_file` 必须 `legacy_unverifiable`+至少 `unknown`+`needs_review`，见 §0.10**），报告记“不可判定（无标记）”（§0.9/§13/V-58）；⑧ 新增 §0.9、Y-05、V-58/V-59，同步改写 D-29/D-32、INV-09/22/28/34/35、§4.1 注释与 `resolve_source`、§4.5/§4.7、§5.2、§6.1、§9.3 注释、§10.4 映射/隐私初始化/`migrate_v1` 伪代码/自检、§11 V-33/V-51/V-54/V-56、§13、Q-26/Q-34、§15；**全部验收仍未执行，G3 未签** | **待 G3，未签**；Q-27～Q-31 仍阻塞；未建库/未迁真实旧库/未在宿主执行；迁移仍只有伪代码，无可执行 SQL；V-33/V-51/V-54/V-56/V-58/V-59 均“未执行” |
 | v0.1.0-draft.12 | 2026-11-03 | 按**独立审查**（F-01～F-10，见 §0.10）修订，只收紧判定、不新增业务能力：① **`no_file` 断链不可区分**：迁移旧数据无法区分“从未关联”与“关联被清”，统一 `source_basis='legacy_unverifiable'`、隐私 `strongest(自身,unknown)`、`needs_review`、`source_floor='unknown'`、逐条 `legacy_ref` 进报告；只有运行期本人显式 `self_declared` 才保持 `not_private`（F-01，D-29/INV-37/§4.1/§4.5/V-51/V-60）；② **运行时 vs 迁移**：候选缺来源/不一致在创建即失败关闭、不可采纳；迁移同一缺失整批 `ROLLBACK`，不得跳过坏行（F-02，§6.2/§10.4/V-61）；③ **`needs_review` 多原因**：未知日期、隐私缺失、来源三态、`file_id_anomaly`、`key_kind_conflict`、`ongoing_conflict` 等可叠加，报告按 `review_reasons` 分原因计数，“来源不额外标记”≠整体为 0（F-03，INV-38/§10.4/V-62）；④ **occurred 统一**：当前与历史都走 `occurred_triple()`，历史不再另写日期逻辑（F-04，§5.2/§10.4/V-63）；⑤ **ongoing+结束日冲突**：`preserve_pending` 三列 NULL+原值进 `details_json.legacy.end_date_conflict`+needs_review，或 `strict_reject` 整批回滚，两种都满足 `CHECK(ongoing IS NULL OR ongoing=0 OR end 三列全 NULL)`（F-05，§5.2/§9.3/§10.4/V-64）；⑥ **键与 kind 冲突**：只写该 kind 允许集，其余键原值保留并标 `key_kind_conflict`，未知 kind 整批 `kind_unmapped`（F-06，INV-39/§10.4/V-65）；⑦ **历史分类**：一律 `classify_ref(h, is_history=True)`，异常导出带 `fileId` 也不当指针、不回填（F-07，§10.4/V-66）；⑧ **ID 归一碰撞**：任何归一化前先检测同 kind 重复/零值/非法，命中即 `ROLLBACK legacy_id_collision`/`legacy_id_invalid`；新 ID 撞库 `id_collision`（F-08，INV-41/§10.4/V-67）；⑨ **record/candidate 互指**：候选 INSERT 恒 `adopted_record_id=NULL`，resolved 由步骤 5 单循环双向写，unknown/未采纳双 NULL，两表 resolved 计数相等（F-09，INV-42/§10.4/V-69）；⑩ **零 ID 一致**：`fileId` 与 legacy key 两侧对 `0/-0/"0"/"0.0"/"00"/空串` 同判无效，不判 `unresolved`、不建 document（F-10，INV-41/§10.4/V-68）；新增 §0.10、INV-37～42、V-60～V-69，同步 §4.1/§4.5/§4.7/§5.2/§6.2/§10.4/§11/§13/§15；**全部验收仍未执行，G3 未签** | **待 G3，未签**；Q-27～Q-31 仍阻塞；未建库/未迁真实旧库/未在宿主执行；迁移只有伪代码，无可执行 SQL；V-60～V-69 均“未执行” |
 | v0.1.0-draft.12（二次修订） | 2026-11-03 | 按六项修订（G-01～G-06，见 §0.11）收紧 draft.12，只改判定与边界：① **采纳预解析先于来源分类**：`resolve_adoption()` 在任何 `classify_ref` 前产出全量计划，已采纳记录以候选 document 为来源、不得判 `no_file`；任何不可判定/冲突整批 `ROLLBACK adoption_unresolved`，**取消 `unknown` 继续模式**；步骤 5 后 `verify_adoption()` 按计划逐对复核（G-01，INV-43/44，§10.4/V-48/V-70/V-71）；② **`unknown_privacy` 进 `review_reasons`**：隐私派生 unknown 必写原因，`merge_details` 对原因并集去重、不得覆盖（G-02，INV-45/V-62/V-72）；③ **非法 `created_at` 原文保留**：写迁移时间戳 + `details_json.legacy.created_at_raw` + `legacy_created_at_invalid`，record/revision/候选各自判定（G-03，INV-46/V-73）；④ **`end_date_conflict` 只落 `details_json.legacy`**，不得放顶层（G-04，V-64）；⑤ **8192 UTF-8 字节按合并后完整对象计**：超限整批 `ROLLBACK details_json_too_large` 并报告人工处理，不截断、不丢键（G-05，INV-47/V-74）；⑥ **冲突键与值原样存 `legacy`**：键名、JSON 类型与值逐字保留，`legacy.key_kind_conflict` 只记键名（G-06，INV-48/V-65/V-75）；新增 §0.11、INV-43～48、V-70～V-75，同步 §4.5/§5.2/§5.3/§6.2/§9.2/§9.3/§9.7/§10.4/§10.5/§11/§12/§13/§15；**全部验收仍未执行，G3 未签** | **待 G3，未签**；Q-27～Q-31 仍阻塞；未建库/未迁真实旧库/未在宿主执行；迁移只有伪代码，无可执行 SQL；V-70～V-75 均“未执行” |
+| v0.1.0-draft.13 | 2026-11-04 | 按 §9.3 DDL 独立内存负向实验（49 例，见 §11.2）修订：① 修正 end/review/report 的 unknown 分支缺少 `*_precision IS NOT NULL` 造成的三值逻辑放行（precision NULL + date NULL + raw 非空原本被接受）；② 把 `source_kind` 与 `source_document_id` 一致性纳入本片段 CHECK（`manual`/`legacy_text`/`removed_irrecoverable` 不得有指针），并从省略清单移除；③ 省略清单新增跨 subject 引用；④ 更正“上例只写 occurred_date/created_at”为四类日期都示例，补空串与 unknown 日期说明、三值逻辑段；⑤ 新增 §11.2 记录环境/方法/结果/残余/局限/可复跑 9 例脚本；⑥ §11.1/§13/§15 同步引用。**全部验收仍未执行，G3 未签** | **待 G3，未签**；仅内存单表与 stub，未建库/未迁真实旧库/未在宿主执行；残余 W（跨 subject）、N（ongoing=0+end 空）、JSON 顶层类型、unknown+空 raw、年份 0000 仍未由 DDL 解决；V-03/V-31/V-33/V-43～V-59 等仍“未验证/未执行”；完整 49 例脚本未保留，§11.2 的 9 例缩减脚本可复跑；不声称实现完成 |
 
 ---
 
 ## 15. 本文件明确没有做的事
 
 - 没有创建 `workspace.sqlite`、任何 `.db`/`.sqlite` 文件或表；
-- 没有把第 9.3 节 DDL 当作完整建库脚本执行；只在内存 stub 上做过语法冒烟，该片段不是完整建库脚本，省略项见 §9.3；
+- 没有把第 9.3 节 DDL 当作完整建库脚本执行；只在内存 stub 上做过语法冒烟（2026-11-03）与 49 例负向实验（2026-11-04，见 §11.2），两者都不是完整建库脚本，省略项见 §9.3；
 - 没有创建真实数据目录、没有复制任何原件、没有上传任何资料；
 - 没有修改 `docs/SCHEMA.md`、`docs/API-CONTRACT.md`、`docs/DEV-PLAN.md` 或其他现有文件；本任务只改本文件；
 - 没有把原型合成数据当成生产数据，也没有声称已完成迁移、加密、服务端隔离或 Desktop 装机；
 - 没有声称 AI 隔离、代理视图、幂等/合并、隐私传播已实现——它们只是合同与验收项，代码未写、未测；
 - 没有实现 §4.1 `protected_revision`/`protected_record`、§4.6 传播、§9.6 锁序、回执最小化或会话文件句柄；它们只是合同草案，未编码、未测并发、未压测；
 - 没有实现 `record.releaseSourceLink`、`source_link_release` 表、UI、迁移回填或端到端测试；**sticky 的逐条解除只有合同，整套流程是 G3 阻塞**，不能因为文档写了命令名就当成可用功能；
-- 没有在 DSH Desktop 宿主执行任何迁移/DDL；§9.3 的日期/字节检查只在 `node:sqlite` 3.53.4 内存库做过语法/CHECK 冒烟，§11.1 只保留可重跑骨架（不是批量断言结果），宿主 `Z` 后缀/`T` 分隔符/JSON1/部分索引兼容性仍未核验（Q-08）；
+- 没有在 DSH Desktop 宿主执行任何迁移/DDL；§9.3 的日期/字节检查只在 `node:sqlite` 3.53.4 内存库做过语法/CHECK 冒烟与 49 例负向实验（§11.2），§11.1 只保留可重跑骨架（不是批量断言结果），宿主 `Z` 后缀/`T` 分隔符/JSON1/部分索引兼容性仍未核验（Q-08）；
 - 没有实现 §10.4 迁移伪代码，也没有留下任何可执行迁移 SQL；没有在真实旧库执行迁移，真实旧库需 M5 授权与去标识后才可验证（V-33 保持“未验证”）；没有实现 `adoption_state`、`resolve_adoption`、`adoption_plan`/`verify_adoption` 后置复核、候选/run 非空拒绝或互指自检，**迁移采纳关系未实现、未迁移、未测试（Q-31/V-48/V-70/V-71 阻塞）**；历史编号/当前自检、**来源五态（含历史项为分类型字段快照、历史无 `fileId` 时按痕迹落 `manual`/`legacy_text`、移除后→`removed_irrecoverable`，且手工文本不因在历史里改判）**、作者 unknown、cloud consent 的迁移分支同样未实现（V-33/V-49～V-53/V-54/V-56），无 consent 的旧 cloud run 无证据时整批拒绝（Q-33）；
 - 没有实现历史编号“老→新 1..N、当前 N+1”的写入/读取/迁移自检，也没有实现 `record.author_state`、`link_state` 四态校验、来源五态 `resolve_source`（含 `manual` 与“以‘原件：’开头/**含**‘原件已移除’”的文本判定、`fileId` 有效性/异常值、`source_variant`）或云解析 consent 的前置失败关闭；V-49～V-59 全部“未执行”，不得把合同当可用功能；
 - **没有运行任何迁移来验证“历史无 fileId 不回填 / 历史项是分类型快照”“unknown 日期=NULL+raw+needs_review”“移除/解除关联后无墓碑/文件名不可恢复/原因不可判定”“合成 `original` 不参与判定”“异常 `fileId` 不判悬空”**；这些结论来自对 `prototypes/v0.2/index.html` 的只读代码核对（Y-01～Y-05、§0.8 Z-01～Z-04、§0.9 AA-01～AA-06），V-54～V-59 仍是待执行验收，不是已通过结果；没有取得任何真实旧库/旧导出样本，因此“删除登记 vs 解除关联在旧数据上不可区分”只是**代码路径推断**，未用真实数据验证；
@@ -2351,5 +2473,6 @@ G3 不是“文档看过了”，而是对下列合同逐项签字。**阻塞项
 - 没有核对真实旧数据里 `original` 与异常 `fileId` 的实际分布，也没有验证“解除关联 / 删除登记 / 空来源兜底”在真实样本中的比例；不得据本文推断“多数是删除”或“多数是解除”；
 - 没有实现 draft.12 新增的 `source_basis`/`legacy_unverifiable`、运行时候选失败关闭、`key_kind_conflict`、`ongoing_conflict`、legacy ID 归一化预扫描/`legacy_id_collision`/`legacy_id_invalid`/`id_collision`、`review_reasons` 分原因报告或互指单循环写入；这些只在合同、伪代码与 V-60～V-69 里，未编码，V-60～V-69 全部“未执行”；也没有用真实旧导出验证同一 kind 内归一 ID 是否真的出现碰撞；
 - 没有实现二次修订 G-01～G-06 的 `adoption_plan`/`verify_adoption`、`unknown_privacy` 原因并集、`created_at_value`、`finalize_details` 的 8192 字节整批回滚或冲突键值原样保留；这些只在 §0.11、INV-43～48、§10.4 伪代码与 V-70～V-75 里，**未编码、未迁移、未测试**，V-70～V-75 全部“未执行”；
-- 没有修复任何已发布代码或数据库；本文件只是 draft.12（二次修订）合同文本，不能当作漏洞已修复的证据；
+- 没有解决 §11.2 记录的残余：跨 subject 引用、`details_json` 顶层类型、`ongoing=0` 的槽位映射、`unknown` 空 raw、`0000` 年份；这些仍由应用层/迁移层负责，不能因 CHECK 通过而视为隔离或验收；
+- 没有修复任何已发布代码或数据库；本文件只是 draft.13 合同文本，§9.3 的两处 CHECK 修正只发生在文档示例中，不能当作运行时代码漏洞已修复的证据；
 - 没有把 G2 当成 G3；本文件仍需签认。
