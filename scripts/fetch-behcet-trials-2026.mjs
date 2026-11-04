@@ -26,6 +26,10 @@
  * 或结束后的版本请求失败/不完整时，整份快照记 `INCOMPLETE`。这只降低混合快照风险，
  * 不能证明分页期间上游没有变化。
  *
+ * 即使分页、计数、令牌链全部闭合，`dataTimestamp` 也必须覆盖窗口末日的 UTC 日结束
+ * （次日 `00:00:00Z`，不含）；早于该边界说明窗口最后一天可能仍有登记未进上游，整份
+ * 快照记 `INCOMPLETE`，并在 `windowCoverage` 与 `data_window_uncovered` 中说明。
+ *
  * ## 输出与核验
  * `<out>/manifest.json`、`<out>/trials.jsonl`、`<out>/trials.sqlite`、
  * `<out>/pages/...`（原始响应，含 `version.json` / `version-after.json`）。
@@ -39,6 +43,14 @@
  * SQLite 并更新 manifest 哈希仍会被内容比对发现。`manifest.files` 只接受
  * `trials.jsonl` 与 `trials.sqlite` 两个固定文件名，拒绝额外或改名文件，避免用 decoy
  * JSONL 冒充证据。测试直接调用它；不能把现有 checker 的 PASS 当成原始响应已核验。
+ *
+ * 复核还绑定：`manifest.aliases` 与 `queries[]` 一一对应且 queryId 可由别名+序号重算；
+ * 四个官方来源的 sourceId/label/url/是否可查与实际状态；请求 URL 能由 API base、别名、
+ * 窗口、pageSize、pageToken 重建；before/after 版本与每页原始文件路径互不复用；
+ * `windowCoverage` 由原始版本响应重算；`recordCount`/`dbCount`/`counts`/来源汇总由
+ * 原始页重算。返回值 `ok` 只表示清单与原始证据内部一致，`complete`/`status.verified`
+ * 才表示该清单有资格标 COMPLETE；INCOMPLETE/FAILED 快照可以 `ok=true`，但绝不能
+ * `complete=true`。
  *
  * NCT 号必须匹配 `^NCT\d{8}$`；形状非法的登记不进入唯一 ID 集合、不参与日期归类，
  * 记为 `invalid_nct_id` 并使该查询 `INCOMPLETE`，不会悄悄混入快照。
@@ -111,6 +123,21 @@ export const BEHCET_ALIASES = Object.freeze([
   'Adamantiades-Behcet',
 ])
 
+export const ALIAS_COVERAGE_RULE =
+  'COMPLETE requires every BEHCET_ALIASES alias to be queried; a subset is diagnostic only'
+
+/** 别名覆盖是 COMPLETE 的必要条件，但不影响“采集证据是否自洽”。 */
+function aliasCoverageFor(aliases) {
+  const queried = Array.isArray(aliases) ? [...aliases] : []
+  const missing = BEHCET_ALIASES.filter((alias) => !queried.includes(alias))
+  return {
+    complete: missing.length === 0,
+    required: [...BEHCET_ALIASES],
+    queried,
+    missing,
+  }
+}
+
 export const CHANNELS = Object.freeze([
   {
     sourceId: 'clinicaltrials.gov',
@@ -169,6 +196,59 @@ function utcDate(value, label = 'date') {
 
 export function formatDate(date) {
   return date.toISOString().slice(0, 10)
+}
+
+/** 按 UTC 日历加/减天；只用于窗口末日的次日零点边界。 */
+export function addDaysUTC(value, days) {
+  if (!Number.isInteger(days)) throw new Error(`days must be an integer, got ${days}`)
+  const date = utcDate(value)
+  date.setUTCDate(date.getUTCDate() + days)
+  return formatDate(date)
+}
+
+const ISO_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})?$/
+
+/**
+ * CTG 的 `/version` 返回 `dataTimestamp` 时经常不带时区（例如
+ * `2026-11-03T10:00:05`）。把它当本地时间解析会让“数据覆盖到哪一天”随运行机器
+ * 的 TZ 漂移；这里统一按 UTC 解释无偏移量的时间戳。格式不认识或日期不存在时返回
+ * null，而不是猜一个时间。
+ */
+export function parseUtcTimestamp(value) {
+  if (typeof value !== 'string' || !ISO_TIMESTAMP_PATTERN.test(value)) return null
+  const withZone = /(Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`
+  const ms = Date.parse(withZone)
+  return Number.isFinite(ms) ? ms : null
+}
+
+/**
+ * 窗口末日的“UTC 日结束”边界是次日 00:00:00Z（不含）。服务端数据时间早于该
+ * 边界时，窗口最后一天尚未被数据完整覆盖：可能还有当天晚些时候发布的登记没进
+ * 上游，因此即使分页和计数都闭合，也不能把快照标成 COMPLETE。
+ *
+ * 采集前后两次 dataTimestamp 都必须覆盖边界；采集期间变化本身已由
+ * `collectionStable` 记为不完整，这里不重复解释。
+ */
+export function evaluateWindowCoverage({ window, dataTimestamp, dataTimestampAfter } = {}) {
+  if (!window?.end || !DATE_PATTERN.test(String(window.end))) {
+    throw new Error('window.end must be YYYY-MM-DD')
+  }
+  const requiredThroughExclusive = `${addDaysUTC(window.end, 1)}T00:00:00.000Z`
+  const requiredMs = Date.parse(requiredThroughExclusive)
+  const beforeMs = parseUtcTimestamp(dataTimestamp)
+  const afterMs = parseUtcTimestamp(dataTimestampAfter)
+  return {
+    windowEnd: window.end,
+    // 供人阅读的闭区间末刻；程序比较用下面的不含上界。
+    requiredThrough: `${window.end}T23:59:59.999Z`,
+    requiredThroughExclusive,
+    dataTimestamp: dataTimestamp ?? null,
+    dataTimestampAfter: dataTimestampAfter ?? null,
+    dataTimestampValid: beforeMs !== null,
+    dataTimestampAfterValid: afterMs !== null,
+    covered: beforeMs !== null && beforeMs >= requiredMs && afterMs !== null && afterMs >= requiredMs,
+  }
 }
 
 /** 按 UTC 日历加/减月份；目标月没有该日时取月末（1-31 减 3 个月 → 2-28/29）。 */
@@ -934,12 +1014,37 @@ function expectedSourceStatusRows(manifest) {
   return rows
 }
 
-function verifyChannelRetrievedAt({ db, dbName, manifest, report }) {
+/**
+ * 清单的采集起止时间必须是可解析的规范 ISO 时间戳，且 startedAt <= generatedAt。
+ * 旧逻辑对无效时间直接跳过 retrieved_at 的上下界检查：把 startedAt 改成
+ * `not-a-time` 就能让一份频道采集时间早于采集开始的清单照样通过。这里把无效值本身
+ * 记为证据错误，retrieved_at 的边界检查再使用已验证的毫秒值。
+ */
+function verifyManifestTimestamps({ manifest, report }) {
+  const parsed = { startedMs: null, generatedMs: null }
+  for (const field of ['startedAt', 'generatedAt']) {
+    const text = manifest[field]
+    const ms = typeof text === 'string' ? Date.parse(text) : Number.NaN
+    if (!Number.isFinite(ms) || new Date(ms).toISOString() !== text) {
+      report(`manifest.${field} ${sqliteValueLabel(text)} is not a canonical ISO timestamp`)
+      continue
+    }
+    parsed[field === 'startedAt' ? 'startedMs' : 'generatedMs'] = ms
+  }
+  if (
+    parsed.startedMs !== null &&
+    parsed.generatedMs !== null &&
+    parsed.startedMs > parsed.generatedMs
+  ) {
+    report('manifest.startedAt is after manifest.generatedAt')
+  }
+  return parsed
+}
+
+function verifyChannelRetrievedAt({ db, dbName, manifest, report, startedMs, generatedMs }) {
   const rows = db
     .prepare("SELECT source_id, retrieved_at FROM source_statuses WHERE scope = 'channel'")
     .all()
-  const startedMs = Date.parse(manifest.startedAt)
-  const generatedMs = Date.parse(manifest.generatedAt)
   const queriedSourceIds = new Set(
     (Array.isArray(manifest.sources) ? manifest.sources : [])
       .filter((source) => source?.queried === true)
@@ -955,10 +1060,10 @@ function verifyChannelRetrievedAt({ db, dbName, manifest, report }) {
       )
       continue
     }
-    if (Number.isFinite(startedMs) && ms < startedMs) {
+    if (startedMs !== null && ms < startedMs) {
       report(`${dbName} source_statuses channel ${row.source_id} retrieved_at is before manifest.startedAt`)
     }
-    if (Number.isFinite(generatedMs) && ms > generatedMs) {
+    if (generatedMs !== null && ms > generatedMs) {
       report(`${dbName} source_statuses channel ${row.source_id} retrieved_at is after manifest.generatedAt`)
     }
   }
@@ -970,7 +1075,7 @@ function verifyChannelRetrievedAt({ db, dbName, manifest, report }) {
  * JSONL 或只比对 NCT 集合都不够：同时改写 JSONL、SQLite 和 manifest 哈希后，两者
  * 可以一起说谎。
  */
-async function verifySqliteTrials({ root, dbName, expectedRecords, manifest, report }) {
+async function verifySqliteTrials({ root, dbName, expectedRecords, manifest, report, manifestTimes }) {
   let db
   try {
     db = new DatabaseSync(join(root, dbName), { readOnly: true })
@@ -1053,7 +1158,14 @@ async function verifySqliteTrials({ root, dbName, expectedRecords, manifest, rep
       keyOf: (row) => `${row.source_id}/${row.scope}/${row.query ?? ''}`,
       report,
     })
-    verifyChannelRetrievedAt({ db, dbName, manifest, report })
+    verifyChannelRetrievedAt({
+      db,
+      dbName,
+      manifest,
+      report,
+      startedMs: manifestTimes.startedMs,
+      generatedMs: manifestTimes.generatedMs,
+    })
   } catch (error) {
     report(`${dbName}: SQLite validation failed: ${error.message}`)
   } finally {
@@ -1377,12 +1489,16 @@ async function listFilesUnder(root, relative) {
  * - `evidenceConsistent`：原始响应解析后的计数、令牌链、ID、日期窗口、版本标志与
  *   JSONL 并集都与清单一致。FAILED/INCOMPLETE 快照如实保留失败证据时，这一层仍可为
  *   true，便于诊断，不要求快照本身成功；
- * - `status.verified`：仅当清单声称 `COMPLETE`，且文件、证据、查询、版本与退出码都
- *   支持该声明时才为 true；`status.claimed` 始终回显清单状态。
- * `ok` 只在文件与证据一致且没有把未闭合证据标成 `COMPLETE` 时为 true。
+ * - `status.verified`：仅当清单声称 `COMPLETE`，且文件、证据、别名覆盖、查询、版本
+ *   与退出码都支持该声明时才为 true；`status.claimed` 始终回显清单状态。
+ * - `ok`：清单与原始证据内部一致（`filesConsistent && evidenceConsistent`）。
+ *   FAILED/INCOMPLETE 快照如实保留失败证据时仍可为 true，因此它**不**表示检索完整。
+ * - `complete`：清单声称 `COMPLETE` 且没有任何完成性理由（含别名子集、窗口未覆盖、
+ *   错误、非零退出码）时才为 true；它才是“这份快照可以作为完整检索结果”的判据。
  *
  * @returns {{
  *   ok: boolean,
+ *   complete: boolean,
  *   filesConsistent: boolean,
  *   evidenceConsistent: boolean,
  *   status: {claimed: string|null, verified: boolean, justified: boolean|null},
@@ -1427,6 +1543,7 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
   } catch (error) {
     return {
       ok: false,
+      complete: false,
       filesConsistent: false,
       evidenceConsistent: false,
       status: { claimed: null, verified: false, justified: null },
@@ -1442,6 +1559,9 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
   if (!['COMPLETE', 'PARTIAL', 'INCOMPLETE', 'FAILED', 'PENDING'].includes(claimedStatus)) {
     completionError(`manifest has unknown status ${JSON.stringify(manifest.status)}`)
   }
+  // 时间戳是文件/证据之外的独立证据：无效的 startedAt/generatedAt 不能让
+  // source_statuses.retrieved_at 的上下界检查静默失效。
+  const manifestTimes = verifyManifestTimestamps({ manifest, report: evidenceError })
 
   const manifestFiles = manifest.files && typeof manifest.files === 'object' ? manifest.files : {}
   const fileBytes = new Map()
@@ -1480,6 +1600,9 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
   }
 
   const expectedPageFiles = new Set()
+  // 原始证据路径必须唯一：同一份文件不能既当 before 版本、又当 after 版本或某个
+  // 分页响应。否则“前后一致”的结论可以由同一个字节内容自证。
+  const rawOwners = new Map()
   const versionEvidence = new Map()
   for (const [label, version] of [
     ['api.version', manifest.api?.version],
@@ -1510,6 +1633,16 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
       continue
     }
     expectedPageFiles.add(version.storedAs)
+    const expectedStoredAs = label === 'api.version' ? 'pages/version.json' : 'pages/version-after.json'
+    if (version.storedAs !== expectedStoredAs) {
+      fileError(`${label}: storedAs ${JSON.stringify(version.storedAs)} does not match expected ${JSON.stringify(expectedStoredAs)}`)
+    }
+    const reusedBy = rawOwners.get(version.storedAs)
+    if (reusedBy) {
+      fileError(`${label}: raw version file ${version.storedAs} is reused by ${reusedBy}`)
+    } else {
+      rawOwners.set(version.storedAs, label)
+    }
     let bytes
     try {
       bytes = await readFile(absolute)
@@ -1624,6 +1757,15 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
       utcDate(window.start, 'manifest.window.start')
       utcDate(window.end, 'manifest.window.end')
       if (window.start > window.end) throw new Error('window.start is after window.end')
+      // months 不是装饰字段：start 必须由 end 与 months 按 UTC 日历推出。否则
+      // 清单可以声明“9 个月窗口”却实际只查了 1 个月，同时让 coverage 看起来成立。
+      if (!Number.isInteger(window.months) || window.months < 1 || window.months > MAX_MONTHS) {
+        throw new Error(`window.months ${JSON.stringify(window.months)} is not an integer 1..${MAX_MONTHS}`)
+      }
+      const associatedStart = addMonthsUTC(window.end, -window.months)
+      if (window.start !== associatedStart) {
+        throw new Error(`window.start ${window.start} does not match end - months (${associatedStart})`)
+      }
       windowUsable = true
     } catch (error) {
       evidenceError(`manifest.window is invalid: ${error.message}`)
@@ -1631,9 +1773,178 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
   }
 
   const queries = Array.isArray(manifest.queries) ? manifest.queries : []
+  // 窗口覆盖必须用“原始版本响应”重算，不能照抄 manifest.windowCoverage。这样把
+  // 清单从 INCOMPLETE 改成 COMPLETE 时，仍然会在这里被 dataTimestamp 边界拦住。
+  let expectedWindowCoverage = null
+  if (windowUsable) {
+    try {
+      expectedWindowCoverage = evaluateWindowCoverage({
+        window,
+        dataTimestamp: beforeVersion.dataTimestamp,
+        dataTimestampAfter: afterVersion.dataTimestamp,
+      })
+    } catch (error) {
+      evidenceError(`manifest.windowCoverage cannot be recomputed: ${error.message}`)
+    }
+  }
+  if (expectedWindowCoverage) {
+    const recordedCoverage = manifest.windowCoverage
+    if (!recordedCoverage || typeof recordedCoverage !== 'object' || Array.isArray(recordedCoverage)) {
+      evidenceError('manifest.windowCoverage is missing')
+    } else {
+      for (const field of [
+        'windowEnd',
+        'requiredThrough',
+        'requiredThroughExclusive',
+        'dataTimestamp',
+        'dataTimestampAfter',
+        'dataTimestampValid',
+        'dataTimestampAfterValid',
+        'covered',
+      ]) {
+        if (JSON.stringify(recordedCoverage[field] ?? null) !== JSON.stringify(expectedWindowCoverage[field])) {
+          evidenceError(
+            `manifest.windowCoverage.${field} ${JSON.stringify(recordedCoverage[field] ?? null)} != raw ${JSON.stringify(expectedWindowCoverage[field])}`,
+          )
+        }
+      }
+    }
+  }
+
+  // 别名清单是“有没有漏查一个别名”的权威清单。只信 queries[] 会让删除一个
+  // 失败/空结果查询后的快照仍显得完整；这里要求 manifest.aliases 与 queries 一一
+  // 对应，且 queryId 能由 alias+序号重算，防止把两个别名的查询互换。
+  const manifestAliases = Array.isArray(manifest.aliases) ? manifest.aliases : null
+  if (!manifestAliases) {
+    evidenceError('manifest.aliases is missing')
+  } else if (!manifestAliases.length) {
+    evidenceError('manifest.aliases is empty')
+  } else {
+    if (manifestAliases.some((alias) => typeof alias !== 'string' || !alias.trim())) {
+      evidenceError('manifest.aliases contains a non-string/empty alias')
+    }
+    if (new Set(manifestAliases).size !== manifestAliases.length) {
+      evidenceError('manifest.aliases contains duplicate aliases')
+    }
+    if (manifestAliases.length !== queries.length) {
+      evidenceError(`manifest.aliases lists ${manifestAliases.length} aliases but queries has ${queries.length}`)
+    }
+    for (let index = 0; index < queries.length; index += 1) {
+      const query = queries[index]
+      if (query.alias !== manifestAliases[index]) {
+        evidenceError(
+          `${query.queryId}: alias ${JSON.stringify(query.alias)} does not match manifest.aliases[${index}] ${JSON.stringify(manifestAliases[index])}`,
+        )
+      }
+      if (query.sourceId !== SOURCE_ID) {
+        evidenceError(`${query.queryId}: sourceId ${JSON.stringify(query.sourceId)} != ${SOURCE_ID}`)
+      }
+      if (typeof query.alias === 'string') {
+        const expectedQueryId = queryIdFor(query.alias, index)
+        if (query.queryId !== expectedQueryId) {
+          evidenceError(
+            `${query.queryId}: queryId ${JSON.stringify(query.queryId)} != alias/index ${JSON.stringify(expectedQueryId)}`,
+          )
+        }
+      }
+    }
+  }
+
+  // 别名覆盖度必须由 manifest.aliases 复算：子集查询仍是合法的诊断快照，但不能
+  // 支撑 COMPLETE。这里不把子集本身记为证据错误（否则诚实的 INCOMPLETE 快照会
+  // 连“内部一致”都拿不到），只在下面作为 COMPLETE 的完成性理由。
+  const expectedAliasCoverage = aliasCoverageFor(manifestAliases)
+  const recordedAliasCoverage = manifest.aliasCoverage
+  if (!recordedAliasCoverage || typeof recordedAliasCoverage !== 'object' || Array.isArray(recordedAliasCoverage)) {
+    evidenceError('manifest.aliasCoverage is missing')
+  } else {
+    for (const field of ['complete', 'required', 'queried', 'missing']) {
+      if (JSON.stringify(recordedAliasCoverage[field] ?? null) !== JSON.stringify(expectedAliasCoverage[field])) {
+        evidenceError(
+          `manifest.aliasCoverage.${field} ${JSON.stringify(recordedAliasCoverage[field] ?? null)} != manifest.aliases-derived ${JSON.stringify(expectedAliasCoverage[field])}`,
+        )
+      }
+    }
+    if (recordedAliasCoverage.rule !== ALIAS_COVERAGE_RULE) {
+      evidenceError('manifest.aliasCoverage.rule does not state the full-alias COMPLETE requirement')
+    }
+  }
+
+  // 官方来源台账：四条通道的 sourceId/url/label 与代码常量逐条绑定。NOT_QUERIED
+  // 的通道不得带任何查询日期、窗口或计数，否则“未查询”会被伪装成零结果。
+  const sources = Array.isArray(manifest.sources) ? manifest.sources : []
+  if (sources.length !== CHANNELS.length) {
+    evidenceError(`manifest.sources lists ${sources.length} sources; expected ${CHANNELS.length}`)
+  }
+  for (const channel of CHANNELS) {
+    const source = sources.find((row) => row?.sourceId === channel.sourceId)
+    if (!source) {
+      evidenceError(`manifest.sources is missing official source ${channel.sourceId}`)
+      continue
+    }
+    if (source.label !== channel.label) {
+      evidenceError(`${channel.sourceId}: source label does not match the official channel label`)
+    }
+    if (source.url !== channel.url) {
+      evidenceError(`${channel.sourceId}: source url ${JSON.stringify(source.url)} is not the official source URL ${channel.url}`)
+    }
+    if (Boolean(source.queried) !== Boolean(channel.queryable)) {
+      evidenceError(`${channel.sourceId}: queried ${Boolean(source.queried)} != channel capability ${Boolean(channel.queryable)}`)
+    }
+    if (!channel.queryable) {
+      if (source.state !== 'NOT_QUERIED') {
+        evidenceError(`${channel.sourceId}: unqueried source state ${JSON.stringify(source.state)} != NOT_QUERIED`)
+      }
+      const leaked = ['queryDate', 'windowStart', 'windowEnd', 'pageCount', 'totalCount', 'uniqueRecords']
+        .filter((field) => source[field] !== null && source[field] !== undefined)
+      if (leaked.length) {
+        evidenceError(`${channel.sourceId}: NOT_QUERIED source carries ${leaked.join(', ')}`)
+      }
+    }
+  }
+  if (!ctgSource) {
+    evidenceError('manifest.sources is missing the queried clinicaltrials.gov source')
+  } else {
+    if (windowUsable && (ctgSource.windowStart !== window.start || ctgSource.windowEnd !== window.end)) {
+      evidenceError('clinicaltrials.gov source window does not match manifest.window')
+    }
+    if (manifest.snapshotDate && ctgSource.queryDate !== manifest.snapshotDate) {
+      evidenceError('clinicaltrials.gov source queryDate does not match manifest.snapshotDate')
+    }
+    const channelApiState = api.state === 'FAILED'
+      ? 'FAILED'
+      : bothVersionsOk && rawStable
+        ? 'OK'
+        : 'INCOMPLETE'
+    const expectedCtgState = deriveChannelState(queries, channelApiState)
+    if (ctgSource.state !== expectedCtgState) {
+      evidenceError(
+        `clinicaltrials.gov source state ${JSON.stringify(ctgSource.state)} != query-derived ${JSON.stringify(expectedCtgState)}`,
+      )
+    }
+  }
+
+  // 请求 URL 必须能从官方 baseUrl + 别名 + 窗口 + pageSize + 令牌重建。只比对
+  // `query.windowStart/windowEnd` 不够：URL 里可以嵌着另一个窗口或另一个别名。
+  const apiBase = typeof api.baseUrl === 'string' && api.baseUrl ? api.baseUrl : null
+  const apiPageSize = api.pageSize
+  if (api.sourceId !== SOURCE_ID) {
+    evidenceError(`manifest.api.sourceId ${JSON.stringify(api.sourceId)} != ${SOURCE_ID}`)
+  }
+  if (!apiBase) {
+    evidenceError('manifest.api.baseUrl is missing')
+  }
+  if (typeof api.customApiBase !== 'boolean') {
+    evidenceError('manifest.api.customApiBase is not a boolean')
+  } else if (!api.customApiBase && normaliseApiBase(apiBase) !== normaliseApiBase(DEFAULT_API_BASE)) {
+    evidenceError(`manifest.api.baseUrl ${JSON.stringify(apiBase)} is not the official API base ${DEFAULT_API_BASE}`)
+  }
+  if (!Number.isInteger(apiPageSize) || apiPageSize < 1 || apiPageSize > 1000) {
+    evidenceError(`manifest.api.pageSize ${JSON.stringify(apiPageSize)} is not a valid page size`)
+  }
+
   const successfulRawIds = new Map()
   const rawStudiesByQuery = new Map()
-  const pageOwner = new Map()
   for (const query of queries) {
     checked.queries += 1
     const pages = Array.isArray(query.pages) ? query.pages : []
@@ -1657,6 +1968,35 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
     if ((query.dataTimestamp ?? null) !== beforeVersion.dataTimestamp) {
       evidenceError(`${query.queryId}: dataTimestamp does not match the pre-collection raw version response`)
     }
+    if (typeof query.pageSize !== 'number' || query.pageSize !== apiPageSize) {
+      evidenceError(`${query.queryId}: pageSize ${JSON.stringify(query.pageSize)} != manifest.api.pageSize ${JSON.stringify(apiPageSize)}`)
+    }
+    if (query.apiBase !== apiBase) {
+      evidenceError(`${query.queryId}: apiBase ${JSON.stringify(query.apiBase)} != manifest.api.baseUrl ${JSON.stringify(apiBase)}`)
+    }
+    if (windowUsable && apiBase && typeof query.alias === 'string' && Number.isInteger(query.pageSize)) {
+      const boundWindow = {
+        start: window.start,
+        end: window.end,
+        rule: `AREA[StudyFirstPostDate]RANGE[${window.start},${window.end}]`,
+      }
+      try {
+        const expectedQueryUrl = buildStudiesUrl({
+          apiBase,
+          alias: query.alias,
+          window: boundWindow,
+          pageSize: query.pageSize,
+          pageToken: null,
+        })
+        if (query.queryUrl !== expectedQueryUrl) {
+          evidenceError(
+            `${query.queryId}: queryUrl ${JSON.stringify(query.queryUrl)} is not bound to alias/window/pageSize (${expectedQueryUrl})`,
+          )
+        }
+      } catch (error) {
+        evidenceError(`${query.queryId}: queryUrl cannot be rebuilt: ${error.message}`)
+      }
+    }
 
     const seenTokens = new Set()
     let previousManifestNextToken = null
@@ -1678,6 +2018,34 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
     for (let index = 0; index < pages.length; index += 1) {
       const page = pages[index]
       const pageLabel = `${query.queryId} page ${page.page}`
+      if (
+        windowUsable &&
+        apiBase &&
+        typeof query.alias === 'string' &&
+        Number.isInteger(query.pageSize) &&
+        (page.pageToken === null || typeof page.pageToken === 'string')
+      ) {
+        try {
+          const expectedPageUrl = buildStudiesUrl({
+            apiBase,
+            alias: query.alias,
+            window: {
+              start: window.start,
+              end: window.end,
+              rule: `AREA[StudyFirstPostDate]RANGE[${window.start},${window.end}]`,
+            },
+            pageSize: query.pageSize,
+            pageToken: page.pageToken,
+          })
+          if (page.url !== expectedPageUrl) {
+            evidenceError(
+              `${pageLabel}: request URL ${JSON.stringify(page.url)} is not bound to alias/window/pageSize/pageToken (${expectedPageUrl})`,
+            )
+          }
+        } catch (error) {
+          evidenceError(`${pageLabel}: request URL cannot be rebuilt: ${error.message}`)
+        }
+      }
       if (page.page !== index + 1) {
         evidenceError(`${query.queryId}: page out of order at index ${index} (got ${page.page})`)
       }
@@ -1712,11 +2080,11 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
           `${pageLabel}: storedAs ${JSON.stringify(page.storedAs)} does not match this query/page (${expectedStoredAs})`,
         )
       }
-      const reusedBy = pageOwner.get(page.storedAs)
+      const reusedBy = rawOwners.get(page.storedAs)
       if (reusedBy) {
         fileError(`${pageLabel}: raw page ${page.storedAs} is reused by ${reusedBy}`)
       } else {
-        pageOwner.set(page.storedAs, pageLabel)
+        rawOwners.set(page.storedAs, pageLabel)
       }
       expectedPageFiles.add(page.storedAs)
 
@@ -2042,6 +2410,7 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
         dbName: 'trials.sqlite',
         expectedRecords: derivedRecords,
         manifest,
+        manifestTimes,
         report: evidenceError,
       })
     } else {
@@ -2060,6 +2429,84 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
   }
   for (const relative of expectedPageFiles) {
     if (!actualPageFiles.includes(relative)) fileError(`missing raw file under pages/: ${relative}`)
+  }
+
+  // 汇总字段必须能由原始分页重算：manifest.recordCount/dbCount/counts 里的每个
+  // 数字都对应一次真实读取，而不是采集脚本自己填的常量。缺失汇总是证据缺口，
+  // 不是“旧版兼容”。
+  const rawUniqueIds = new Set()
+  for (const ids of successfulRawIds.values()) {
+    for (const id of ids) rawUniqueIds.add(id)
+  }
+  const expectedRecordCount = rawUniqueIds.size
+  const expectedQueryPages = queries.reduce(
+    (sum, query) => sum + (Array.isArray(query.pages) ? query.pages.length : 0),
+    0,
+  )
+  const expectedStatusRows = CHANNELS.length + queries.length
+  const expectedPreDedup = queries.reduce(
+    (sum, query) => sum + (Number.isInteger(query.preDedupCount) ? query.preDedupCount : 0),
+    0,
+  )
+  const counts = manifest.counts && typeof manifest.counts === 'object' ? manifest.counts : null
+  if (!counts) {
+    evidenceError('manifest.counts is missing')
+  } else {
+    const expectedCounts = {
+      jsonlRecords: expectedRecordCount,
+      dbRecords: expectedRecordCount,
+      sourceStatusRows: expectedStatusRows,
+      queryRows: queries.length,
+      queryPages: expectedQueryPages,
+      uniqueRecordIds: expectedRecordCount,
+    }
+    for (const [field, expectedValue] of Object.entries(expectedCounts)) {
+      if (counts[field] !== expectedValue) {
+        evidenceError(`manifest.counts.${field} ${JSON.stringify(counts[field])} != raw-derived ${expectedValue}`)
+      }
+    }
+    const expectedErrorCount = Array.isArray(manifest.errors) ? manifest.errors.length : null
+    if (expectedErrorCount !== null && counts.errors !== expectedErrorCount) {
+      evidenceError(`manifest.counts.errors ${JSON.stringify(counts.errors)} != manifest.errors ${expectedErrorCount}`)
+    }
+  }
+  if (manifest.recordCount !== expectedRecordCount) {
+    evidenceError(`manifest.recordCount ${JSON.stringify(manifest.recordCount)} != raw-derived ${expectedRecordCount}`)
+  }
+  if (manifest.dbCount !== expectedRecordCount) {
+    evidenceError(`manifest.dbCount ${JSON.stringify(manifest.dbCount)} != raw-derived ${expectedRecordCount}`)
+  }
+  if (manifest.sourceStatusRows !== expectedStatusRows) {
+    evidenceError(`manifest.sourceStatusRows ${JSON.stringify(manifest.sourceStatusRows)} != raw-derived ${expectedStatusRows}`)
+  }
+  if (ctgSource) {
+    if (ctgSource.queryCount !== queries.length) {
+      evidenceError(`clinicaltrials.gov source queryCount ${ctgSource.queryCount} != queries ${queries.length}`)
+    }
+    if (ctgSource.pageCount !== expectedQueryPages) {
+      evidenceError(`clinicaltrials.gov source pageCount ${ctgSource.pageCount} != raw-derived ${expectedQueryPages}`)
+    }
+    if (ctgSource.totalCount !== expectedRecordCount) {
+      evidenceError(`clinicaltrials.gov source totalCount ${ctgSource.totalCount} != raw-derived ${expectedRecordCount}`)
+    }
+    if (ctgSource.uniqueRecords !== expectedRecordCount) {
+      evidenceError(`clinicaltrials.gov source uniqueRecords ${ctgSource.uniqueRecords} != raw-derived ${expectedRecordCount}`)
+    }
+    if (ctgSource.preDedupCount !== expectedPreDedup) {
+      evidenceError(`clinicaltrials.gov source preDedupCount ${ctgSource.preDedupCount} != raw-derived ${expectedPreDedup}`)
+    }
+  }
+  const coverage = manifest.coverage && typeof manifest.coverage === 'object' ? manifest.coverage : null
+  const expectedNotQueried = CHANNELS.filter((channel) => !channel.queryable).map((channel) => channel.sourceId)
+  if (!coverage) {
+    evidenceError('manifest.coverage is missing')
+  } else {
+    if (JSON.stringify(coverage.queriedSources) !== JSON.stringify([SOURCE_ID])) {
+      evidenceError('manifest.coverage.queriedSources is not exactly [clinicaltrials.gov]')
+    }
+    if (JSON.stringify(coverage.notQueriedSources) !== JSON.stringify(expectedNotQueried)) {
+      evidenceError('manifest.coverage.notQueriedSources does not match the unqueried official channels')
+    }
   }
 
   const completionReasons = []
@@ -2083,6 +2530,22 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
     if (api.collectionStable !== true) {
       completionReasons.push('manifest claims COMPLETE but api.collectionStable is not true')
     }
+    if (api.customApiBase === true) {
+      completionReasons.push('manifest claims COMPLETE but the API base is not the official ClinicalTrials.gov base')
+    }
+    if (expectedWindowCoverage && !expectedWindowCoverage.covered) {
+      completionReasons.push(
+        `manifest claims COMPLETE but dataTimestamp ${JSON.stringify(expectedWindowCoverage.dataTimestamp)} / ` +
+        `after ${JSON.stringify(expectedWindowCoverage.dataTimestampAfter)} does not cover the end of window ` +
+        `${expectedWindowCoverage.windowEnd} in UTC (need >= ${expectedWindowCoverage.requiredThroughExclusive})`,
+      )
+    }
+    if (!expectedAliasCoverage.complete) {
+      completionReasons.push(
+        `manifest claims COMPLETE but aliases cover ${expectedAliasCoverage.queried.length}/${BEHCET_ALIASES.length} ` +
+        `of BEHCET_ALIASES (missing ${expectedAliasCoverage.missing.join(', ')})`,
+      )
+    }
     if (!Array.isArray(manifest.errors) || manifest.errors.length) {
       completionReasons.push('manifest claims COMPLETE but carries errors')
     }
@@ -2096,8 +2559,13 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
     && completionReasons.length === 0
     && filesConsistent
     && evidenceConsistent
+  // ok 只表示“清单与原始证据互相一致”，不表示“检索完整”。完整与否看 complete/
+  // status.verified；把两者混在一个 ok 里会让 INCOMPLETE 快照的 ok=true 被误读为
+  // 通过，也会让伪造的 COMPLETE 在内部完全自洽时拿到 ok=false 而掩盖真正原因。
+  const consistent = filesConsistent && evidenceConsistent
   return {
-    ok: filesConsistent && evidenceConsistent && completionErrors.length === 0,
+    ok: consistent,
+    complete: completionVerified,
     filesConsistent,
     evidenceConsistent,
     status: {
@@ -2290,6 +2758,11 @@ export async function runSnapshot({
     const dataTimestampChanged = timestampsComparable && version.dataTimestamp !== versionAfter.dataTimestamp
     const apiVersionChanged = Boolean(version.apiVersion && versionAfter.apiVersion && version.apiVersion !== versionAfter.apiVersion)
     const versionStable = version.state === 'OK' && versionAfter.state === 'OK' && timestampsComparable && !dataTimestampChanged && !apiVersionChanged
+    const windowCoverage = evaluateWindowCoverage({
+      window,
+      dataTimestamp: version.dataTimestamp,
+      dataTimestampAfter: versionAfter.dataTimestamp,
+    })
     const channelApiState = version.state === 'FAILED'
       ? 'FAILED'
       : version.state === 'OK' && versionStable
@@ -2317,6 +2790,7 @@ export async function runSnapshot({
 
     const queries = queryResults.map((result) => result.query)
     const channelState = deriveChannelState(queries, channelApiState)
+    const aliasCoverage = aliasCoverageFor(aliases)
     let status = overallStatusFor(channelState)
     const totalPages = queries.reduce((sum, query) => sum + query.pageCount, 0)
 
@@ -2440,6 +2914,29 @@ export async function runSnapshot({
     // PARTIAL（已有 version_metadata_missing 说明），不额外升级成 INCOMPLETE。
     const versionAfterProblem = versionAfter.state !== 'OK' || dataTimestampChanged || apiVersionChanged
     if (versionAfterProblem && status !== 'FAILED') status = 'INCOMPLETE'
+    // 分页、计数和令牌链全部闭合，只说明“抓到的页是完整的”；若上游数据时间还没
+    // 走到窗口末日的 UTC 零点，窗口最后一天可能仍有登记未出现在上游。此时快照
+    // 只能记 INCOMPLETE，不能因为 66 条原始命中与 10 条去重记录闭合就标 COMPLETE。
+    if (!windowCoverage.covered && version.state === 'OK' && versionAfter.state === 'OK') {
+      errors.push({
+        scope: 'api',
+        code: 'data_window_uncovered',
+        message:
+          `dataTimestamp ${version.dataTimestamp} / after ${versionAfter.dataTimestamp} does not cover ` +
+          `the end of window ${window.end} in UTC (need >= ${windowCoverage.requiredThroughExclusive})`,
+      })
+      if (status !== 'FAILED') status = 'INCOMPLETE'
+    }
+    // 自定义 baseUrl 可能是镜像/代理；它抓到的数据不能当作官方 ClinicalTrials.gov
+    // 的完整覆盖。允许采集用于诊断，但必须记明并拒绝 COMPLETE。
+    if (base !== normaliseApiBase(DEFAULT_API_BASE) && status !== 'FAILED') {
+      errors.push({
+        scope: 'api',
+        code: 'non_official_api_base',
+        message: `apiBase ${base} is not the official ${DEFAULT_API_BASE}; snapshot cannot claim COMPLETE`,
+      })
+      status = 'INCOMPLETE'
+    }
     if (!databaseIntegrityOk) {
       errors.push({
         scope: 'integrity',
@@ -2450,6 +2947,19 @@ export async function runSnapshot({
       // 查询终态，快照级 status 与 errors 负责说明完整性失败。已 FAILED 的快照
       // 不能被较温和的 INCOMPLETE 覆盖。
       if (status !== 'FAILED') status = 'INCOMPLETE'
+    }
+    // 查询全部成功也不等于“白塞病检索完整”：只查 BEHCET_ALIASES 的一个子集是合法
+    // 的诊断快照，但不能标 COMPLETE。只在本来会成为 COMPLETE 时降级，避免把已经
+    // PARTIAL/FAILED 的诊断状态改写成较温和的 INCOMPLETE。
+    if (!aliasCoverage.complete && status === 'COMPLETE') {
+      errors.push({
+        scope: 'coverage',
+        code: 'alias_coverage_incomplete',
+        message:
+          `aliases cover ${aliases.length}/${BEHCET_ALIASES.length} of BEHCET_ALIASES ` +
+          `(missing ${aliasCoverage.missing.join(', ')}); a subset is diagnostic only and cannot claim COMPLETE`,
+      })
+      status = 'INCOMPLETE'
     }
 
     const generatedAt = clock().toISOString()
@@ -2464,7 +2974,9 @@ export async function runSnapshot({
       exitCode: status === 'COMPLETE' ? 0 : 1,
       scope: 'M4 research preparation snapshot; ClinicalTrials.gov only; not a production database, not a four-channel search, not an eligibility assessment.',
       window,
+      windowCoverage,
       aliases: [...aliases],
+      aliasCoverage: { ...aliasCoverage, rule: ALIAS_COVERAGE_RULE },
       dedupe: {
         key: 'NCTId',
         scope: 'across all queried aliases of this snapshot',
@@ -2476,6 +2988,7 @@ export async function runSnapshot({
         customApiBase: base !== normaliseApiBase(DEFAULT_API_BASE),
         state: version.state,
         httpStatus: version.httpStatus,
+        pageSize,
         version,
         after: versionAfter,
         afterState: versionAfter.state,
@@ -2577,8 +3090,18 @@ export async function runSnapshot({
     } catch (error) {
       rawVerification = {
         ok: false,
+        complete: false,
+        filesConsistent: false,
+        evidenceConsistent: false,
         errors: [`raw hash verification crashed: ${error.message}`],
-        checked: { files: 0, versions: 0, pages: 0 },
+        checked: {
+          files: 0,
+          versions: 0,
+          pages: 0,
+          queries: 0,
+          rawStudyRecords: 0,
+          jsonlRecords: 0,
+        },
       }
     }
     manifest.integrity.rawFiles = rawVerification
@@ -2590,6 +3113,16 @@ export async function runSnapshot({
         scope: 'integrity',
         code: 'raw_hash_mismatch',
         message: rawVerification.errors.slice(0, 5).join(' | '),
+      })
+      manifest.counts.errors = manifest.errors.length
+    } else if (manifest.status === 'COMPLETE' && !rawVerification.complete) {
+      // 快照自身写的是 COMPLETE，但原始证据只支持“内部一致”，不支持“完整”。
+      manifest.status = 'INCOMPLETE'
+      manifest.exitCode = 1
+      manifest.errors.push({
+        scope: 'integrity',
+        code: 'raw_evidence_not_complete',
+        message: rawVerification.errors.slice(0, 5).join(' | ') || 'raw evidence does not justify COMPLETE',
       })
       manifest.counts.errors = manifest.errors.length
     }

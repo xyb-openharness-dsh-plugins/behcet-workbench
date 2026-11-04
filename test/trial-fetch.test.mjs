@@ -30,6 +30,7 @@ import {
   OUTPUT_LOCK_FILE,
   buildStudiesUrl,
   buildWindow,
+  evaluateWindowCoverage,
   parseArgs,
   prepareOutDir,
   runSnapshot,
@@ -131,8 +132,9 @@ function realisticStudy(nctId) {
   return study
 }
 
-function page(studies, { totalCount = studies.length, nextPageToken } = {}) {
-  const body = { studies, totalCount }
+function page(studies, { totalCount = studies.length, nextPageToken, omitTotalCount = false } = {}) {
+  // 尾页真实响应可以省略 totalCount；用 undefined 无法表达，因为默认参数会回落。
+  const body = omitTotalCount ? { studies } : { studies, totalCount }
   if (nextPageToken) body.nextPageToken = nextPageToken
   return { body }
 }
@@ -144,6 +146,20 @@ function aliasRoutes(aliases, pages) {
     byToken[index === 0 ? '' : pages[index - 1].body.nextPageToken] = entry
   })
   return Object.fromEntries(aliases.map((alias) => [alias, byToken]))
+}
+
+/**
+ * 只有查满 BEHCET_ALIASES 全部 12 个别名才可能认证 COMPLETE。测试若只关心其中
+ * 一两个别名的证据，用本函数为其余别名补上真实零结果路由，避免把“少查别名”与
+ * 被测行为混在一起。
+ */
+function fullAliasRoutes(routesByAlias = {}) {
+  return Object.fromEntries(
+    BEHCET_ALIASES.map((alias) => [
+      alias,
+      routesByAlias[alias] ?? { '': page([], { totalCount: 0 }) },
+    ]),
+  )
 }
 
 function makeFetch({
@@ -198,7 +214,9 @@ async function runCase(t, {
   })
   const result = await runSnapshot({
     outDir: out,
-    endDate: '2026-11-03',
+    // 上游 dataTimestamp=2026-11-03T10:00:05 只覆盖到 11-03 日间；窗口末日取
+    // 11-02，末 UTC 日边界 11-03T00:00:00Z 才被完整覆盖。
+    endDate: '2026-11-02',
     months: 9,
     aliases,
     fetchImpl,
@@ -293,7 +311,8 @@ test('查询 URL 固定 cond、九个月窗口、分页参数与 pageToken 链',
 })
 
 test('完整分页：逐页哈希与令牌链、计数核对、NCT 去重、结构检查器通过', async (t) => {
-  const aliases = ['Behçet', 'Behcet']
+  // COMPLETE 要求查满 BEHCET_ALIASES；Behçet/Behcet 承载分页夹具，其余别名返回真实零结果。
+  const aliases = BEHCET_ALIASES
   const pages = [
     page([sampleStudy('NCT00000001'), sampleStudy('NCT00000002')], {
       totalCount: 3,
@@ -303,17 +322,19 @@ test('完整分页：逐页哈希与令牌链、计数核对、NCT 去重、结�
   ]
   const { dir, out, result, fetchImpl } = await runCase(t, {
     aliases,
-    routes: aliasRoutes(aliases, pages),
+    routes: fullAliasRoutes(aliasRoutes(['Behçet', 'Behcet'], pages)),
   })
 
   assert.equal(result.exitCode, 0)
   assert.equal(result.manifest.status, 'COMPLETE')
   assert.equal(result.manifest.sources[0].state, 'SUCCESS')
-  assert.equal(result.manifest.counts.queryPages, 4)
+  assert.equal(result.manifest.counts.queryPages, 14) // 2 个别名各 2 页 + 其余 10 个各 1 页
   assert.equal(result.manifest.counts.jsonlRecords, 3)
-  assert.equal(fetchImpl.calls.length, 6) // before version + 2 pages × 2 aliases + after version
+  assert.equal(fetchImpl.calls.length, 16) // before/after version + 14 study pages
 
-  for (const query of result.manifest.queries) {
+  for (const query of result.manifest.queries.filter(
+    (entry) => entry.alias === 'Behçet' || entry.alias === 'Behcet',
+  )) {
     assert.equal(query.state, 'SUCCESS')
     assert.equal(query.pageCount, 2)
     assert.equal(query.firstPageTotal, 3)
@@ -359,17 +380,21 @@ test('完整分页：逐页哈希与令牌链、计数核对、NCT 去重、结�
   assert.equal(manifest.recordCount, 3) // check-trial-snapshot 的固定字段
   assert.equal(manifest.dbCount, 3)
   assert.equal(manifest.counts.dbRecords, 3)
-  assert.equal(manifest.counts.sourceStatusRows, 6) // 4 通道 + 2 别名
-  assert.equal(manifest.sources[0].preDedupCount, 6) // 两个别名各返回 3 条，去重后 3 条
+  assert.equal(manifest.counts.sourceStatusRows, 16) // 4 通道 + 12 别名
+  assert.equal(manifest.aliasCoverage.complete, true)
+  assert.deepEqual(manifest.aliasCoverage.missing, [])
+  assert.equal(manifest.aliasCoverage.queried.length, BEHCET_ALIASES.length)
+  assert.equal(manifest.sources[0].preDedupCount, 6) // 两个非零别名各返回 3 条，去重后 3 条
   assert.equal(manifest.sources[0].uniqueRecords, 3)
   assert.equal(manifest.integrity.sqlite, 'ok')
   assert.equal(manifest.integrity.jsonlMatchesDb, true)
-  assert.deepEqual(manifest.integrity.dbCounts, { trials: 3, sourceStatuses: 6, queries: 2 })
+  assert.deepEqual(manifest.integrity.dbCounts, { trials: 3, sourceStatuses: 16, queries: 12 })
   assert.equal(manifest.api.after.state, 'OK')
   assert.equal(manifest.api.dataTimestampChanged, false)
   assert.equal(manifest.api.collectionStable, true)
   assert.equal(manifest.integrity.rawFiles.ok, true)
-  assert.equal(manifest.integrity.rawFiles.checked.pages, 4)
+  assert.equal(manifest.integrity.rawFiles.complete, true)
+  assert.equal(manifest.integrity.rawFiles.checked.pages, 14)
   assert.equal(manifest.integrity.rawFiles.checked.versions, 2)
   assert.equal(manifest.coverage.queriedSources.length, 1)
   assert.equal(manifest.coverage.notQueriedSources.length, 3)
@@ -377,7 +402,7 @@ test('完整分页：逐页哈希与令牌链、计数核对、NCT 去重、结�
   const db = openDb(out)
   try {
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM trials').get().n, 3)
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM source_statuses').get().n, 6)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM source_statuses').get().n, 16)
     const channels = db
       .prepare("SELECT source_id, state, total_count, query_date, page_count, http_status FROM source_statuses WHERE scope = 'channel' ORDER BY source_id")
       .all()
@@ -401,14 +426,16 @@ test('完整分页：逐页哈希与令牌链、计数核对、NCT 去重、结�
 })
 
 test('服务端真实零条：一页、totalCount=0、无令牌时才记 SUCCESS_ZERO', async (t) => {
-  const aliases = ['Behçet']
+  const aliases = BEHCET_ALIASES
   const { dir, out, result } = await runCase(t, {
     aliases,
-    routes: { Behçet: { '': page([], { totalCount: 0 }) } },
+    routes: fullAliasRoutes(),
   })
 
   assert.equal(result.exitCode, 0)
   assert.equal(result.manifest.status, 'COMPLETE')
+  assert.equal(result.manifest.queries.length, BEHCET_ALIASES.length)
+  assert.equal(result.manifest.aliasCoverage.complete, true)
   assert.equal(result.manifest.sources[0].state, 'SUCCESS_ZERO')
   assert.equal(result.manifest.queries[0].state, 'SUCCESS_ZERO')
   assert.equal(result.manifest.queries[0].firstPageTotal, 0)
@@ -722,11 +749,11 @@ test('第二页 HTTP 500：整条查询 FAILED，第一页记录不并入快照'
 
 test('SQLite queries 与 source_statuses 逐行对照清单：成功、零结果、真实失败与未查', async (t) => {
   const success = await runCase(t, {
-    aliases: ['Behçet', 'Behcet'],
-    routes: {
+    aliases: BEHCET_ALIASES,
+    routes: fullAliasRoutes({
       Behçet: { '': page([sampleStudy('NCT00000001')]) },
       Behcet: { '': page([sampleStudy('NCT00000002')]) },
-    },
+    }),
   })
   assert.equal(success.result.manifest.status, 'COMPLETE')
   assert.equal((await verifySnapshotHashes(success.out)).ok, true)
@@ -811,14 +838,16 @@ test('SQLite queries 与 source_statuses 逐行对照清单：成功、零结果
   }
 
   const zero = await runCase(t, {
-    aliases: ['Behçet'],
-    routes: { Behçet: { '': page([], { totalCount: 0 }) } },
+    aliases: BEHCET_ALIASES,
+    routes: fullAliasRoutes(),
   })
   assert.equal(zero.result.manifest.status, 'COMPLETE')
   assert.equal((await verifySnapshotHashes(zero.out)).ok, true)
   const zeroDb = openDb(zero.out)
   try {
-    const queryRow = zeroDb.prepare('SELECT * FROM queries').get()
+    const queryRows = zeroDb.prepare('SELECT * FROM queries').all()
+    assert.equal(queryRows.length, BEHCET_ALIASES.length)
+    const queryRow = queryRows[0]
     assert.equal(queryRow.state, 'SUCCESS_ZERO')
     assert.equal(queryRow.total_count, 0)
     assert.equal(queryRow.pre_dedup_count, 0)
@@ -890,8 +919,8 @@ test('SQLite queries 与 source_statuses 逐行对照清单：成功、零结果
 
 test('篡改 SQLite queries 与 source_statuses 并同步哈希：逐行对照清单仍拒绝', async (t) => {
   const { dir, out } = await runCase(t, {
-    aliases: ['Behçet'],
-    routes: { Behçet: { '': page([sampleStudy('NCT00000130')]) } },
+    aliases: BEHCET_ALIASES,
+    routes: fullAliasRoutes({ Behçet: { '': page([sampleStudy('NCT00000130')]) } }),
   })
   const manifest = await manifestOf(out)
   const target = manifest.queries[0]
@@ -1024,10 +1053,10 @@ test('超过 maxPages 仍有下一页：停页记 INCOMPLETE，不无限翻页',
 })
 
 test('后续页缺 totalCount、尾页为空都属正常分页，不误报计数变化', async (t) => {
-  const aliases = ['Behçet', 'Behcet']
+  const aliases = BEHCET_ALIASES
   const { result } = await runCase(t, {
     aliases,
-    routes: {
+    routes: fullAliasRoutes({
       Behçet: {
         '': page([sampleStudy('NCT00000100')], { totalCount: 1, nextPageToken: 'p2' }),
         // CTG 后续页可以不带 totalCount；缺失不是“计数变成 0”。
@@ -1041,12 +1070,14 @@ test('后续页缺 totalCount、尾页为空都属正常分页，不误报计数
         // 服务端也可能追加一个不再带令牌的尾空页。
         p2: { body: { studies: [] } },
       },
-    },
+    }),
   })
 
   assert.equal(result.exitCode, 0)
   assert.equal(result.manifest.status, 'COMPLETE')
-  for (const query of result.manifest.queries) {
+  for (const query of result.manifest.queries.filter(
+    (entry) => entry.alias === 'Behçet' || entry.alias === 'Behcet',
+  )) {
     assert.equal(query.state, 'SUCCESS')
     assert.equal(query.pageCount, 2)
     assert.equal(query.pages[1].totalCount, null)
@@ -1226,17 +1257,17 @@ test('采集后 /version 失败：快照 INCOMPLETE，不能沿用采集前的�
 
 test('可复用原始文件核验：篡改分页/版本文件后失败，但 checker 仍 PASS', async (t) => {
   const { dir, out, result } = await runCase(t, {
-    aliases: ['Behçet', 'Behcet'],
-    routes: aliasRoutes(['Behçet', 'Behcet'], [
+    aliases: BEHCET_ALIASES,
+    routes: fullAliasRoutes(aliasRoutes(['Behçet', 'Behcet'], [
       page([sampleStudy('NCT00000150')], { totalCount: 1, nextPageToken: 'p2' }),
-      page([], {}),
-    ]),
+      page([], { omitTotalCount: true }),
+    ])),
   })
 
   const clean = await verifySnapshotHashes(out)
   assert.deepEqual(clean.ok, true)
   assert.equal(clean.errors.length, 0)
-  assert.equal(clean.checked.pages, 4)
+  assert.equal(clean.checked.pages, 14)
   assert.equal(clean.checked.versions, 2)
 
   const target = result.manifest.queries[0].pages[0].storedAs
@@ -1332,11 +1363,11 @@ test('发布中断时清单始终待核验，临时文件不能冒充最终清�
     const dir = await mkdtemp(join(tmpdir(), 'trial-fetch-crash-'))
     t.after(() => rm(dir, { recursive: true, force: true }))
     const script = `
-      import { runSnapshot } from ${JSON.stringify(new URL('../scripts/fetch-behcet-trials-2026.mjs', import.meta.url).href)};
-      await runSnapshot({ outDir: ${JSON.stringify(dir)}, endDate: '2026-11-03',
-        aliases: ['Behcet'], now: () => new Date('2026-11-03T21:05:00Z'),
+      import { runSnapshot, BEHCET_ALIASES } from ${JSON.stringify(new URL('../scripts/fetch-behcet-trials-2026.mjs', import.meta.url).href)};
+      await runSnapshot({ outDir: ${JSON.stringify(dir)}, endDate: '2026-11-02',
+        aliases: BEHCET_ALIASES, now: () => new Date('2026-11-03T21:05:00Z'),
         fetchImpl: async (url) => new Response(JSON.stringify(String(url).endsWith('/version')
-          ? { apiVersion: '2', dataTimestamp: '2026-11-03' }
+          ? { apiVersion: '2', dataTimestamp: '2026-11-03T00:00:00Z' }
           : { studies: [], totalCount: 0 })),
         onPublicationStage: (stage) => { if (stage === ${JSON.stringify(stage)}) process.exit(77) }
       });`
@@ -1373,7 +1404,7 @@ test('非字符串 nextPageToken 显式失败，即使计数相符也不能视�
 })
 
 test('原始证据复算：只改清单的计数、ID、令牌、totalCount 或窗口不能冒充原文', async (t) => {
-  const aliases = ['Behçet']
+  const aliases = BEHCET_ALIASES
   const pages = [
     page([sampleStudy('NCT00000201'), sampleStudy('NCT00000202')], {
       totalCount: 3,
@@ -1381,7 +1412,10 @@ test('原始证据复算：只改清单的计数、ID、令牌、totalCount 或�
     }),
     page([sampleStudy('NCT00000203')], { totalCount: 3 }),
   ]
-  const { out } = await runCase(t, { aliases, routes: aliasRoutes(aliases, pages) })
+  const { out } = await runCase(t, {
+    aliases,
+    routes: fullAliasRoutes(aliasRoutes(['Behçet'], pages)),
+  })
 
   const clean = await verifySnapshotHashes(out)
   assert.equal(clean.ok, true)
@@ -1416,7 +1450,7 @@ test('原始证据复算：只改清单的计数、ID、令牌、totalCount 或�
 })
 
 test('原始页正文与版本被改写并同步哈希后，复算仍按正文发现，而非信任清单', async (t) => {
-  const aliases = ['Behçet']
+  const aliases = BEHCET_ALIASES
   const pages = [
     page([sampleStudy('NCT00000201'), sampleStudy('NCT00000202')], {
       totalCount: 3,
@@ -1424,7 +1458,10 @@ test('原始页正文与版本被改写并同步哈希后，复算仍按正文�
     }),
     page([sampleStudy('NCT00000203')], { totalCount: 3 }),
   ]
-  const { out } = await runCase(t, { aliases, routes: aliasRoutes(aliases, pages) })
+  const { out } = await runCase(t, {
+    aliases,
+    routes: fullAliasRoutes(aliasRoutes(['Behçet'], pages)),
+  })
 
   const clean = await verifySnapshotHashes(out)
   assert.equal(clean.ok, true)
@@ -1517,7 +1554,9 @@ test('日期窗口由原始页复算：如实 INCOMPLETE 可通过，篡改计�
   forged.status = 'COMPLETE'
   await writeManifest(out, forged)
   const forgedResult = await verifySnapshotHashes(out)
-  assert.equal(forgedResult.ok, false)
+  // ok 只表示内部一致；伪造的 COMPLETE 在文件/证据自洽时 ok=true，但 complete=false。
+  assert.equal(forgedResult.ok, true)
+  assert.equal(forgedResult.complete, false)
   assert.equal(forgedResult.filesConsistent, true)
   assert.equal(forgedResult.evidenceConsistent, true)
   assert.equal(forgedResult.status.claimed, 'COMPLETE')
@@ -1630,10 +1669,10 @@ test('同步修改 JSONL 和清单哈希后，原始查询并集仍能发现缺�
 
 test('manifest.files 只接受固定文件名：额外 JSONL 不能冒充快照证据', async (t) => {
   const { out, result } = await runCase(t, {
-    aliases: ['Behcet'],
-    routes: {
+    aliases: BEHCET_ALIASES,
+    routes: fullAliasRoutes({
       Behcet: { '': page([sampleStudy('NCT00000110')]) },
-    },
+    }),
   })
   assert.equal(result.manifest.status, 'COMPLETE')
 
@@ -1732,6 +1771,231 @@ test('非法 NCT 形状：查询 INCOMPLETE、记录不并入，诚实快照仍�
   assert.deepEqual(verified.errors, [])
 })
 
+test('窗口末 UTC 日边界：dataTimestamp 必须 >= 次日零点才算覆盖', () => {
+  const window = buildWindow({ endDate: '2026-11-02' })
+  const covered = evaluateWindowCoverage({
+    window,
+    dataTimestamp: '2026-11-03T00:00:00',
+    dataTimestampAfter: '2026-11-03T00:00:00',
+  })
+  assert.equal(covered.covered, true)
+  assert.equal(covered.requiredThroughExclusive, '2026-11-03T00:00:00.000Z')
+
+  const beforeEarly = evaluateWindowCoverage({
+    window,
+    dataTimestamp: '2026-11-02T23:59:59',
+    dataTimestampAfter: '2026-11-03T00:00:00',
+  })
+  assert.equal(beforeEarly.covered, false)
+
+  const afterEarly = evaluateWindowCoverage({
+    window,
+    dataTimestamp: '2026-11-03T00:00:00',
+    dataTimestampAfter: '2026-11-02T23:59:59',
+  })
+  assert.equal(afterEarly.covered, false)
+
+  const invalid = evaluateWindowCoverage({
+    window,
+    dataTimestamp: 'not-a-timestamp',
+    dataTimestampAfter: '2026-11-03T00:00:00',
+  })
+  assert.equal(invalid.covered, false)
+  assert.equal(invalid.dataTimestampValid, false)
+})
+
+test('dataTimestamp 未覆盖窗口末 UTC 日：快照不得 COMPLETE，伪造状态仍不通过', async (t) => {
+  const { out, result } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000701')]) } },
+    options: { endDate: '2026-11-03' },
+  })
+  const manifest = result.manifest
+  assert.equal(manifest.status, 'INCOMPLETE')
+  assert.equal(manifest.exitCode, 1)
+  assert.equal(manifest.windowCoverage.covered, false)
+  assert.equal(manifest.windowCoverage.requiredThroughExclusive, '2026-11-04T00:00:00.000Z')
+  assert.ok(manifest.errors.some((entry) => entry.code === 'data_window_uncovered'))
+  // 查询本身是闭合的；不完整只来自上游数据时间没有走到窗口末日结束。
+  assert.equal(manifest.queries[0].state, 'SUCCESS')
+
+  const honest = await verifySnapshotHashes(out)
+  assert.equal(honest.ok, true)
+  assert.equal(honest.complete, false)
+  assert.equal(honest.filesConsistent, true)
+  assert.equal(honest.evidenceConsistent, true)
+  assert.equal(honest.status.verified, false)
+
+  const forged = await manifestOf(out)
+  forged.status = 'COMPLETE'
+  forged.exitCode = 0
+  forged.errors = []
+  forged.counts.errors = 0
+  await writeManifest(out, forged)
+  const forgedResult = await verifySnapshotHashes(out)
+  assert.equal(forgedResult.ok, true)
+  assert.equal(forgedResult.complete, false)
+  assert.equal(forgedResult.status.verified, false)
+  assert.ok(forgedResult.errors.some((message) => /does not cover the end of window 2026-11-03 in UTC/.test(message)))
+})
+
+test('before/after 版本证据路径不可复用：同一文件自证不算稳定', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000702')]) } },
+  })
+  const manifest = await manifestOf(out)
+  manifest.api.after.storedAs = manifest.api.version.storedAs
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, false)
+  assert.ok(verified.errors.some((message) => /raw version file .* is reused by api\.version/.test(message)))
+  assert.ok(verified.errors.some((message) => /storedAs .* does not match expected .*version-after\.json/.test(message)))
+})
+
+test('别名清单必须覆盖 queries：少一个别名不能靠删除查询冒充完整', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behçet', 'Behcet'],
+    routes: aliasRoutes(['Behçet', 'Behcet'], [page([sampleStudy('NCT00000703')])]),
+  })
+  const manifest = await manifestOf(out)
+  manifest.aliases = ['Behçet']
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, false)
+  assert.ok(verified.errors.some((message) => /manifest\.aliases lists 1 aliases but queries has 2/.test(message)))
+})
+
+test('官方来源台账绑定：改 source url 或把未查通道写成已查都不能通过', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000704')]) } },
+  })
+  const manifest = await manifestOf(out)
+  const ctg = manifest.sources.find((source) => source.sourceId === 'clinicaltrials.gov')
+  ctg.url = 'https://example.invalid/clinicaltrials.gov'
+  const who = manifest.sources.find((source) => source.sourceId === 'trialsearch.who.int')
+  who.queried = true
+  who.state = 'SUCCESS_ZERO'
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, false)
+  assert.ok(verified.errors.some((message) => /clinicaltrials\.gov: source url .* is not the official source URL/.test(message)))
+  assert.ok(verified.errors.some((message) => /trialsearch\.who\.int: queried true != channel capability false/.test(message)))
+})
+
+test('请求 URL 与窗口/别名/pageSize 绑定：清单窗口正确但 URL 嵌别的窗口会被发现', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000705')]) } },
+  })
+  const manifest = await manifestOf(out)
+  const query = manifest.queries[0]
+  const wrongWindow = {
+    start: manifest.window.start,
+    end: '2026-10-31',
+    rule: `AREA[StudyFirstPostDate]RANGE[${manifest.window.start},2026-10-31]`,
+  }
+  query.queryUrl = buildStudiesUrl({
+    apiBase: manifest.api.baseUrl,
+    alias: query.alias,
+    window: wrongWindow,
+    pageSize: query.pageSize,
+    pageToken: null,
+  })
+  query.pages[0].url = buildStudiesUrl({
+    apiBase: manifest.api.baseUrl,
+    alias: query.alias,
+    window: wrongWindow,
+    pageSize: query.pageSize,
+    pageToken: query.pages[0].pageToken,
+  })
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, false)
+  assert.ok(verified.errors.some((message) => /queryUrl .* is not bound to alias\/window\/pageSize/.test(message)))
+  assert.ok(verified.errors.some((message) => /request URL .* is not bound to alias\/window\/pageSize\/pageToken/.test(message)))
+})
+
+test('汇总计数必须由原始页重算：dbCount、分页数、来源 totalCount、覆盖列表都不能改', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000706')]) } },
+  })
+  const manifest = await manifestOf(out)
+  manifest.counts.queryPages += 1
+  manifest.dbCount += 1
+  manifest.sources.find((source) => source.sourceId === 'clinicaltrials.gov').totalCount += 1
+  manifest.coverage.queriedSources = ['clinicaltrials.gov', 'who.int']
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, false)
+  assert.ok(verified.errors.some((message) => /manifest\.counts\.queryPages .* != raw-derived/.test(message)))
+  assert.ok(verified.errors.some((message) => /manifest\.dbCount .* != raw-derived/.test(message)))
+  assert.ok(verified.errors.some((message) => /clinicaltrials\.gov source totalCount .* != raw-derived/.test(message)))
+  assert.ok(verified.errors.some((message) => /manifest\.coverage\.queriedSources is not exactly/.test(message)))
+})
+
+test('windowCoverage 清单字段不能照抄：改 covered 会被原始 dataTimestamp 复算发现', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000707')]) } },
+  })
+  const manifest = await manifestOf(out)
+  manifest.windowCoverage.covered = false
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, false)
+  assert.ok(verified.errors.some((message) => /manifest\.windowCoverage\.covered false != raw true/.test(message)))
+})
+
+test('非官方 API base 可采集但不能标 COMPLETE', async (t) => {
+  const custom = 'https://mirror.example.test/api/v2.0'
+  const { out, result } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000708')]) } },
+    options: { apiBase: custom },
+  })
+  assert.equal(result.manifest.status, 'INCOMPLETE')
+  assert.equal(result.manifest.api.customApiBase, true)
+  assert.equal(result.manifest.api.baseUrl, custom)
+  assert.ok(result.manifest.errors.some((entry) => entry.code === 'non_official_api_base'))
+
+  const honest = await verifySnapshotHashes(out)
+  assert.equal(honest.ok, true)
+  assert.equal(honest.complete, false)
+  assert.equal(honest.status.verified, false)
+  assert.deepEqual(honest.errors, [])
+
+  const forged = await manifestOf(out)
+  forged.status = 'COMPLETE'
+  forged.exitCode = 0
+  forged.errors = []
+  forged.counts.errors = 0
+  await writeManifest(out, forged)
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, true)
+  assert.equal(verified.complete, false)
+  assert.ok(verified.errors.some((message) => /API base is not the official ClinicalTrials\.gov base/.test(message)))
+})
+
 test('锁释放只删除本次运行的锁，被覆盖或被重建的锁保留给后来者', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'trial-fetch-lock-own-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
@@ -1758,4 +2022,148 @@ test('锁释放只删除本次运行的锁，被覆盖或被重建的锁保留�
   await writeFile(recreatedLock, 'later-run\n', 'utf8')
   assert.equal(await releaseRecreated(), false)
   assert.equal(await readFile(recreatedLock, 'utf8'), 'later-run\n')
+})
+
+test('别名子集即使查询全成功也不能认证 COMPLETE；伪造 COMPLETE 仍缺覆盖', async (t) => {
+  const aliases = ['Behçet']
+  const { out, result } = await runCase(t, {
+    aliases,
+    routes: fullAliasRoutes(),
+  })
+
+  assert.equal(result.exitCode, 1)
+  assert.equal(result.manifest.status, 'INCOMPLETE')
+  assert.equal(result.manifest.aliasCoverage.complete, false)
+  assert.deepEqual(result.manifest.aliasCoverage.missing, BEHCET_ALIASES.slice(1))
+  assert.ok(
+    result.manifest.errors.some((entry) => entry.code === 'alias_coverage_incomplete'),
+  )
+
+  const honest = await verifySnapshotHashes(out)
+  assert.equal(honest.ok, true)
+  assert.equal(honest.complete, false)
+  assert.equal(honest.status.claimed, 'INCOMPLETE')
+  assert.equal(honest.status.verified, false)
+
+  // 子集快照能通过文件/证据核验，但没有资格声称 COMPLETE；把状态改成
+  // COMPLETE 不能让核验器补出缺失别名，也不能让 complete 变真。
+  const forged = await manifestOf(out)
+  forged.status = 'COMPLETE'
+  forged.exitCode = 0
+  forged.errors = []
+  forged.counts.errors = 0
+  await writeManifest(out, forged)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, true)
+  assert.equal(verified.complete, false)
+  assert.equal(verified.status.claimed, 'COMPLETE')
+  assert.equal(verified.status.verified, false)
+  assert.ok(verified.errors.some((message) => /aliases cover 1\/12/.test(message)))
+})
+
+test('清单缺失时 early return 与正常返回同形：complete=false、checked 全零', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'trial-fetch-empty-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+
+  const verified = await verifySnapshotHashes(dir)
+  assert.deepEqual(Object.keys(verified).sort(), [
+    'checked',
+    'complete',
+    'errors',
+    'evidenceConsistent',
+    'filesConsistent',
+    'ok',
+    'status',
+  ])
+  assert.equal(verified.ok, false)
+  assert.equal(verified.complete, false)
+  assert.equal(verified.filesConsistent, false)
+  assert.equal(verified.evidenceConsistent, false)
+  assert.deepEqual(verified.checked, {
+    files: 0,
+    versions: 0,
+    pages: 0,
+    queries: 0,
+    rawStudyRecords: 0,
+    jsonlRecords: 0,
+  })
+  assert.ok(verified.errors.some((message) => /cannot read manifest\.json/.test(message)))
+})
+
+test('startedAt/generatedAt 必须是规范 ISO：无效或倒序不能放行 retrieved_at 边界', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: BEHCET_ALIASES,
+    routes: fullAliasRoutes(),
+  })
+  const original = await readFile(join(out, 'manifest.json'), 'utf8')
+
+  const cases = [
+    {
+      name: 'startedAt 非日期',
+      mutate: (manifest) => {
+        manifest.startedAt = 'not-a-time'
+      },
+      pattern: /manifest\.startedAt .* is not a canonical ISO timestamp/,
+    },
+    {
+      name: 'generatedAt 只带时区偏移',
+      mutate: (manifest) => {
+        manifest.generatedAt = '2026-11-03T21:05:00+00:00'
+      },
+      pattern: /manifest\.generatedAt .* is not a canonical ISO timestamp/,
+    },
+    {
+      name: 'startedAt 晚于 generatedAt',
+      mutate: (manifest) => {
+        manifest.startedAt = '2026-11-03T22:00:00.000Z'
+      },
+      pattern: /manifest\.startedAt is after manifest\.generatedAt/,
+    },
+  ]
+
+  for (const entry of cases) {
+    const manifest = JSON.parse(original)
+    entry.mutate(manifest)
+    await writeManifest(out, manifest)
+
+    const verified = await verifySnapshotHashes(out)
+    assert.equal(verified.ok, false, entry.name)
+    assert.equal(verified.evidenceConsistent, false, entry.name)
+    assert.ok(
+      verified.errors.some((message) => entry.pattern.test(message)),
+      `${entry.name}: ${verified.errors.join('\n')}`,
+    )
+  }
+})
+
+test('window.months 必须与 start/end 关联：数字合法但窗口对不上不能放行', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: BEHCET_ALIASES,
+    routes: fullAliasRoutes(),
+  })
+  const original = await readFile(join(out, 'manifest.json'), 'utf8')
+
+  const mismatched = JSON.parse(original)
+  mismatched.window.months = 8 // start 仍是按 9 个月算出的，不能被当成 8 个月窗口
+  await writeManifest(out, mismatched)
+  const association = await verifySnapshotHashes(out)
+  assert.equal(association.ok, false)
+  assert.equal(association.evidenceConsistent, false)
+  assert.ok(
+    association.errors.some((message) => /does not match end - months/.test(message)),
+  )
+
+  for (const months of [0, 13, '9', 9.5]) {
+    const manifest = JSON.parse(original)
+    manifest.window.months = months
+    await writeManifest(out, manifest)
+    const verified = await verifySnapshotHashes(out)
+    assert.equal(verified.ok, false)
+    assert.equal(verified.evidenceConsistent, false)
+    assert.ok(
+      verified.errors.some((message) => /is not an integer 1\.\.12/.test(message)),
+      `${JSON.stringify(months)}: ${verified.errors.join('\n')}`,
+    )
+  }
 })
