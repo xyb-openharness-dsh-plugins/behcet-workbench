@@ -17,7 +17,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -244,6 +244,35 @@ async function jsonlOf(out) {
 
 function openDb(out) {
   return new DatabaseSync(join(out, 'trials.sqlite'), { readOnly: true })
+}
+
+async function modeOf(path) {
+  return (await stat(path)).mode & 0o777
+}
+
+/** 在指定 umask 下执行，结束后恢复；用于验证模式不依赖调用者环境。 */
+async function withUmask(mask, action) {
+  const previous = process.umask(mask)
+  try {
+    return await action()
+  } finally {
+    process.umask(previous)
+  }
+}
+
+/** 递归断言快照里没有比 0700/0600 更宽松的目录或文件。 */
+async function assertPrivateTree(root) {
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const full = join(root, entry.name)
+    if (entry.isDirectory()) {
+      assert.equal(await modeOf(full), 0o700, `${full} should be 0700`)
+      await assertPrivateTree(full)
+    } else if (entry.isFile()) {
+      assert.equal(await modeOf(full), 0o600, `${full} should be 0600`)
+    } else {
+      assert.fail(`${full} should be a regular file or directory`)
+    }
+  }
 }
 
 test('九个月窗口按 UTC 日历计算，含首尾日期', () => {
@@ -2166,4 +2195,140 @@ test('window.months 必须与 start/end 关联：数字合法但窗口对不上�
       `${JSON.stringify(months)}: ${verified.errors.join('\n')}`,
     )
   }
+})
+
+test('新建快照逐级目录 0700、所有文件 0600，不受 umask 022/077/777 影响', async (t) => {
+  for (const mask of [0o022, 0o077, 0o777]) {
+    const base = await mkdtemp(join(tmpdir(), 'trial-fetch-mode-'))
+    t.after(() => rm(base, { recursive: true, force: true }))
+    const callerDir = join(base, 'caller-dir')
+    await mkdir(callerDir)
+    await chmod(callerDir, 0o750)
+    const out = join(callerDir, 'new-parent', 'snapshot')
+    const routes = fullAliasRoutes({
+      ['Behçet']: aliasRoutes(['Behçet'], [page([sampleStudy('NCT00000001')], { totalCount: 1 })]),
+    })
+
+    const result = await withUmask(mask, () => runSnapshot({
+      outDir: out,
+      endDate: '2026-11-02',
+      aliases: ['Behçet'],
+      fetchImpl: makeFetch({ routes }),
+      now: () => new Date('2026-11-03T21:05:00Z'),
+    }))
+
+    // 别名子集不满足 COMPLETE，但落盘权限与检索结论无关。
+    assert.equal(result.exitCode, 1)
+    assert.equal(await modeOf(out), 0o700, `umask ${mask.toString(8)}: snapshot root`)
+    assert.equal(await modeOf(join(callerDir, 'new-parent')), 0o700, 'new intermediate directory')
+    assert.equal(await modeOf(callerDir), 0o750, 'existing caller directory must keep its mode')
+    await assertPrivateTree(out)
+  }
+})
+
+test('加锁创建的新目录与锁文件 0700/0600；已有锁保持原 mode 和内容', async (t) => {
+  for (const mask of [0o022, 0o777]) {
+    const base = await mkdtemp(join(tmpdir(), 'trial-fetch-mode-lock-'))
+    t.after(() => rm(base, { recursive: true, force: true }))
+    await chmod(base, 0o750)
+    const out = join(base, 'snapshot')
+    const release = await withUmask(mask, () => prepareOutDir(out))
+    assert.equal(await modeOf(out), 0o700)
+    assert.equal(await modeOf(join(out, OUTPUT_LOCK_FILE)), 0o600)
+    assert.equal(await modeOf(base), 0o750, 'existing parent must keep its mode')
+    assert.equal(await release(), true)
+  }
+
+  const base = await mkdtemp(join(tmpdir(), 'trial-fetch-mode-lock-'))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const out = join(base, 'snapshot')
+  await mkdir(out)
+  await chmod(out, 0o755)
+  const lockPath = join(out, OUTPUT_LOCK_FILE)
+  await writeFile(lockPath, 'other-run\n', 'utf8')
+  await chmod(lockPath, 0o644)
+
+  await assert.rejects(withUmask(0o777, () => prepareOutDir(out)), /locked by another run/)
+  assert.equal(await modeOf(out), 0o755, 'existing directory must not be chmod-ed')
+  assert.equal(await modeOf(lockPath), 0o644, 'existing lock must not be chmod-ed')
+  assert.equal(await readFile(lockPath, 'utf8'), 'other-run\n')
+})
+
+test('非空目录拒绝写入：已有文件不改权限、不被覆盖，也不发请求', async (t) => {
+  const base = await mkdtemp(join(tmpdir(), 'trial-fetch-mode-nonempty-'))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const out = join(base, 'snapshot')
+  await mkdir(out)
+  await chmod(out, 0o755)
+  const keep = join(out, 'caller-notes.txt')
+  await writeFile(keep, 'do not touch\n', 'utf8')
+  await chmod(keep, 0o644)
+  let calls = 0
+  const fetchImpl = async () => {
+    calls += 1
+    return json(VERSION)
+  }
+
+  await assert.rejects(
+    withUmask(0o777, () => runSnapshot({
+      outDir: out,
+      endDate: '2026-11-02',
+      aliases: ['Behçet'],
+      fetchImpl,
+      now: () => new Date('2026-11-03T21:05:00Z'),
+    })),
+    /not empty/,
+  )
+
+  assert.equal(calls, 0)
+  assert.equal(await modeOf(out), 0o755)
+  assert.equal(await modeOf(keep), 0o644)
+  assert.equal(await readFile(keep, 'utf8'), 'do not touch\n')
+  await assert.rejects(readFile(join(out, OUTPUT_LOCK_FILE), 'utf8'), { code: 'ENOENT' })
+})
+
+test('采集失败仍只留下 0700/0600，不会因异常放宽权限', async (t) => {
+  const base = await mkdtemp(join(tmpdir(), 'trial-fetch-mode-failed-'))
+  t.after(() => rm(base, { recursive: true, force: true }))
+  const out = join(base, 'snapshot')
+
+  const result = await withUmask(0o777, () => runSnapshot({
+    outDir: out,
+    endDate: '2026-11-02',
+    aliases: ['Behçet'],
+    fetchImpl: async () => {
+      throw new Error('network offline')
+    },
+    now: () => new Date('2026-11-03T21:05:00Z'),
+  }))
+
+  assert.equal(result.exitCode, 1)
+  assert.notEqual(result.manifest.status, 'COMPLETE')
+  assert.equal(await modeOf(out), 0o700)
+  await assertPrivateTree(out)
+})
+
+test('发布中断留下的锁与临时清单仍是 0600', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'trial-fetch-mode-crash-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const script = `
+    import { runSnapshot, BEHCET_ALIASES } from ${JSON.stringify(new URL('../scripts/fetch-behcet-trials-2026.mjs', import.meta.url).href)};
+    await runSnapshot({ outDir: ${JSON.stringify(dir)}, endDate: '2026-11-02',
+      aliases: BEHCET_ALIASES, now: () => new Date('2026-11-03T21:05:00Z'),
+      fetchImpl: async (url) => new Response(JSON.stringify(String(url).endsWith('/version')
+        ? { apiVersion: '2', dataTimestamp: '2026-11-03T00:00:00Z' }
+        : { studies: [], totalCount: 0 })),
+      onPublicationStage: (stage) => { if (stage === 'before-rename') process.exit(77) }
+    });`
+  await assert.rejects(
+    withUmask(0o777, () => execFileSync(process.execPath, ['--input-type=module', '-e', script], { stdio: 'pipe' })),
+    (error) => error.status === 77,
+  )
+
+  assert.equal(await modeOf(dir), 0o700)
+  assert.equal(await modeOf(join(dir, OUTPUT_LOCK_FILE)), 0o600)
+  assert.equal(await modeOf(join(dir, 'manifest.json')), 0o600)
+  assert.equal(await modeOf(join(dir, 'manifest.json.tmp')), 0o600)
+  assert.equal(await modeOf(join(dir, 'pages', 'version.json')), 0o600)
+  await assertPrivateTree(join(dir, 'pages'))
 })

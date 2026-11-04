@@ -57,11 +57,14 @@
  *
  * ## 安全边界与并发
  * `--out` 必填，且目标目录必须不存在或为空：脚本不会覆盖已有快照，也没有默认生产库
- * 路径。写入前在目标目录原子创建 `.trial-fetch.lock`；并发运行会因锁失败而拒绝，
- * 非空目录会在加锁后再次检查并拒绝，不会改动其中已有文件。释放锁前核对 inode 与
- * 本进程写入的随机令牌，锁被外部删除并重建时不会误删后来者的锁。进程被强杀可能留下
- * 锁文件，需确认没有其他采集在跑后手工删除。正式入库、四通道检索、临床审核与患者
- * 访谈都不属于本脚本。
+ * 路径。新建的快照目录（含 `pages/`）固定为 0700，新建的文件（含锁、临时清单和
+ * SQLite）固定为 0600；创建后显式 chmod，不受调用者 umask 影响。调用者已经存在的
+ * 目录或文件**不会被递归改权限**：目录已存在就原样沿用，文件必须新建（`wx`），
+ * 已存在则拒绝或失败，不会覆盖。写入前在目标目录原子创建 `.trial-fetch.lock`；
+ * 并发运行会因锁失败而拒绝，非空目录会在加锁后再次检查并拒绝，不会改动其中已有
+ * 文件。释放锁前核对 inode 与本进程写入的随机令牌，锁被外部删除并重建时不会误删
+ * 后来者的锁。进程被强杀可能留下锁文件，需确认没有其他采集在跑后手工删除。正式
+ * 入库、四通道检索、临床审核与患者访谈都不属于本脚本。
  *
  * ## 残留限制（不因本脚本通过而消失）
  * - 只查 CTG；ChiCTR、药物临床试验登记与信息公示平台、WHO ICTRP 仍是 `NOT_QUERIED`。
@@ -78,13 +81,17 @@
  * 测试只传 `fetchImpl` 夹具，不访问网络（见 test/trial-fetch.test.mjs）。
  */
 import { createHash, randomBytes } from 'node:crypto'
-import { lstat, mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { isDeepStrictEqual } from 'node:util'
 
 export const SNAPSHOT_SCHEMA_VERSION = 1
+/** 新建快照目录的权限；调用者已有的目录不会被改动。 */
+export const SNAPSHOT_DIR_MODE = 0o700
+/** 新建快照文件的权限；调用者已有的文件不会被改动。 */
+export const SNAPSHOT_FILE_MODE = 0o600
 export const DEFAULT_API_BASE = 'https://clinicaltrials.gov/api/v2'
 export const DEFAULT_PAGE_SIZE = 1000
 export const MAX_PAGE_SIZE = 1000
@@ -448,8 +455,8 @@ async function fetchVersion({ apiBase, outDir, fetchImpl, timeoutMs, now, fileNa
     version.httpStatus = response.status
     version.bytes = raw.length
     version.sha256 = sha256(raw)
-    await mkdir(join(outDir, 'pages'), { recursive: true })
-    await writeFile(join(outDir, storedAs), raw)
+    await ensurePrivateDirectory(join(outDir, 'pages'))
+    await writePrivateFile(join(outDir, storedAs), raw)
     version.storedAs = storedAs
     if (!response.ok) {
       version.error = `HTTP ${response.status}: ${bodySnippet(raw)}`
@@ -598,8 +605,8 @@ async function collectAliasQuery({
 
     const storedAs = `pages/${queryId}/page-${String(page).padStart(4, '0')}.json`
     try {
-      await mkdir(dirname(join(outDir, storedAs)), { recursive: true })
-      await writeFile(join(outDir, storedAs), raw)
+      await ensurePrivateDirectory(dirname(join(outDir, storedAs)))
+      await writePrivateFile(join(outDir, storedAs), raw)
       pageRecord.storedAs = storedAs
     } catch (error) {
       pushError(query, 'page_store_failed', `page ${page}: ${error.message}`)
@@ -2579,6 +2586,62 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
 }
 
 /**
+ * 逐级创建缺失目录，只把**本次新建**的目录收紧到 0700。
+ *
+ * 不能直接 `chmod -R`：目标目录可能位于调用者已有的目录中，递归改权限会波及无关
+ * 文件。这里从目标往上找到第一个已存在的祖先，再自上而下创建缺失部分；已存在的
+ * 目录一个都不 chmod。`mkdir(mode)` 会受 umask 削弱，因此每个新目录创建后显式
+ * `chmod` 到 0700，保证任意 umask 下结果一致。并发创建（EEXIST）时无法证明目录
+ * 归本次运行所有，不 chmod。
+ */
+async function ensurePrivateDirectory(dirPath) {
+  const missing = []
+  let current = resolve(dirPath)
+  for (;;) {
+    try {
+      const info = await stat(current)
+      if (!info.isDirectory()) {
+        throw new Error(`refusing to use ${current} as a snapshot directory: not a directory`)
+      }
+      break
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error
+      missing.push(current)
+      const parent = dirname(current)
+      if (parent === current) {
+        throw new Error(`cannot find an existing parent directory for ${dirPath}`)
+      }
+      current = parent
+    }
+  }
+  for (const dir of missing.reverse()) {
+    try {
+      await mkdir(dir, { mode: SNAPSHOT_DIR_MODE })
+    } catch (error) {
+      if (error.code === 'EEXIST') continue
+      throw error
+    }
+    await chmod(dir, SNAPSHOT_DIR_MODE)
+  }
+}
+
+/**
+ * 只创建新文件并以 0600 写入；`wx` 保证不会覆盖已有的调用者文件，也不会对已有
+ * 文件 chmod。open 的 mode 同样受 umask 削弱，因此在写入前对句柄显式 fchmod。
+ */
+async function writePrivateFile(filePath, data, encoding = 'utf8') {
+  let handle
+  try {
+    handle = await open(filePath, 'wx', SNAPSHOT_FILE_MODE)
+    await handle.chmod(SNAPSHOT_FILE_MODE)
+    if (typeof data === 'string') await handle.writeFile(data, encoding)
+    else await handle.writeFile(data)
+  } finally {
+    if (handle) await handle.close()
+  }
+}
+
+/**
  * 原子加锁并确认目标目录为空。返回 release 函数；调用方必须在 finally 中释放。
  * 锁文件与并发检查避免两个采集同时写同一快照，也避免覆盖已有文件。
  *
@@ -2586,11 +2649,11 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
  * `rm` 会在锁被外部删除并重建后误删另一个运行的锁，让两个采集同时写同一目录。
  */
 export async function prepareOutDir(outDir) {
-  await mkdir(outDir, { recursive: true })
+  await ensurePrivateDirectory(outDir)
   const lockPath = join(outDir, OUTPUT_LOCK_FILE)
   let handle
   try {
-    handle = await open(lockPath, 'wx')
+    handle = await open(lockPath, 'wx', SNAPSHOT_FILE_MODE)
   } catch (error) {
     if (error.code === 'EEXIST') {
       throw new Error(
@@ -2604,6 +2667,8 @@ export async function prepareOutDir(outDir) {
   try {
     // 在写令牌前取句柄的 inode；释放时用它证明路径仍指向本次打开的文件。
     lockStat = await handle.stat()
+    // open 的 mode 会受 umask 削弱；锁文件也必须是 0600，不能只在正常 umask 下碰巧成立。
+    await handle.chmod(SNAPSHOT_FILE_MODE)
     await handle.writeFile(`${lockToken}\n`, 'utf8')
   } catch (error) {
     try {
@@ -2856,9 +2921,12 @@ export async function runSnapshot({
 
     const jsonl = records.map((row) => JSON.stringify(row)).join('\n') + (records.length ? '\n' : '')
     const jsonlPath = join(resolvedOut, 'trials.jsonl')
-    await writeFile(jsonlPath, jsonl, 'utf8')
+    await writePrivateFile(jsonlPath, jsonl)
 
     const databasePath = join(resolvedOut, 'trials.sqlite')
+    // DatabaseSync 会按进程 umask 建库；先以 0600 建空文件并用 wx 拒绝覆盖已有文件，
+    // 之后再让 SQLite 打开它，数据库与回滚日志就不会沿用宽松的默认权限。
+    await writePrivateFile(databasePath, '')
     const sqliteIntegrity = createDatabase(databasePath, records, statusRows, queries)
     let dbCounts = null
     let dbCountsError = null
@@ -3079,7 +3147,7 @@ export async function runSnapshot({
     }
 
     const pendingManifest = { ...manifest, status: 'PENDING', exitCode: 1, files: {} }
-    await writeFile(join(resolvedOut, 'manifest.json'), `${JSON.stringify(pendingManifest, null, 2)}\n`, 'utf8')
+    await writePrivateFile(join(resolvedOut, 'manifest.json'), `${JSON.stringify(pendingManifest, null, 2)}\n`)
     await onPublicationStage('pending')
 
     // 写盘后立即用可复用核验函数复算原始分页/版本文件与令牌链。现有 checker 不读
@@ -3127,7 +3195,7 @@ export async function runSnapshot({
       manifest.counts.errors = manifest.errors.length
     }
     const temporaryManifest = join(resolvedOut, 'manifest.json.tmp')
-    await writeFile(temporaryManifest, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+    await writePrivateFile(temporaryManifest, `${JSON.stringify(manifest, null, 2)}\n`)
     await onPublicationStage('before-rename')
     await rename(temporaryManifest, join(resolvedOut, 'manifest.json'))
 
@@ -3176,7 +3244,8 @@ function printHelp() {
   console.log(`Usage: node scripts/fetch-behcet-trials-2026.mjs --out <new-directory> [options]
 
   --out <dir>              必填。必须不存在或为空；建议使用仓库外受控目录。
-                           原始响应可能包含联系方式，请勿提交。
+                           原始响应可能包含联系方式，请勿提交；新建目录 0700、文件 0600。
+                           已有空目录权限保持不变，请自行确认其访问权限。
   --end-date <YYYY-MM-DD>  窗口结束日（含）。默认运行当天（UTC）。
   --months <n>             1..12，默认 9；>9 必须给 --expansion-reason。
   --expansion-reason <s>   仅记录扩窗理由，不代表已获批准。
