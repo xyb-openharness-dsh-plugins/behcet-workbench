@@ -34,15 +34,22 @@
  * **该检查器只核对 manifest.files 里列出的 JSONL/SQLite，不读取 `pages/` 原始响应。**
  * 原始分页、版本文件、令牌链和逐页哈希由本文件导出的 `verifySnapshotHashes()` 重算；
  * 该函数还会解析原始响应，复算每页条数、`totalCount`、`nextPageToken` 链、唯一 NCT
- * 集合、日期窗口和版本变更标志，并把成功查询的原始 NCT 并集与 JSONL 对照。测试直接
- * 调用它；不能把现有 checker 的 PASS 当成原始响应已核验。
+ * 集合与日期窗口，按采集端同一规则从原始响应重放归一化记录，逐字段对照 JSONL 和
+ * SQLite `trials` 表，并核对 `source_statuses`/`queries` 行数。因此同时改写 JSONL、
+ * SQLite 并更新 manifest 哈希仍会被内容比对发现。`manifest.files` 只接受
+ * `trials.jsonl` 与 `trials.sqlite` 两个固定文件名，拒绝额外或改名文件，避免用 decoy
+ * JSONL 冒充证据。测试直接调用它；不能把现有 checker 的 PASS 当成原始响应已核验。
+ *
+ * NCT 号必须匹配 `^NCT\d{8}$`；形状非法的登记不进入唯一 ID 集合、不参与日期归类，
+ * 记为 `invalid_nct_id` 并使该查询 `INCOMPLETE`，不会悄悄混入快照。
  *
  * ## 安全边界与并发
  * `--out` 必填，且目标目录必须不存在或为空：脚本不会覆盖已有快照，也没有默认生产库
  * 路径。写入前在目标目录原子创建 `.trial-fetch.lock`；并发运行会因锁失败而拒绝，
- * 非空目录会在加锁后再次检查并拒绝，不会改动其中已有文件。进程被强杀可能留下锁文件，
- * 需确认没有其他采集在跑后手工删除。正式入库、四通道检索、临床审核与患者访谈都不属于
- * 本脚本。
+ * 非空目录会在加锁后再次检查并拒绝，不会改动其中已有文件。释放锁前核对 inode 与
+ * 本进程写入的随机令牌，锁被外部删除并重建时不会误删后来者的锁。进程被强杀可能留下
+ * 锁文件，需确认没有其他采集在跑后手工删除。正式入库、四通道检索、临床审核与患者
+ * 访谈都不属于本脚本。
  *
  * ## 残留限制（不因本脚本通过而消失）
  * - 只查 CTG；ChiCTR、药物临床试验登记与信息公示平台、WHO ICTRP 仍是 `NOT_QUERIED`。
@@ -58,11 +65,12 @@
  *   node scripts/fetch-behcet-trials-2026.mjs --out ... --end-date 2026-11-03 --months 9
  * 测试只传 `fetchImpl` 夹具，不访问网络（见 test/trial-fetch.test.mjs）。
  */
-import { createHash } from 'node:crypto'
-import { mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { lstat, mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
+import { isDeepStrictEqual } from 'node:util'
 
 export const SNAPSHOT_SCHEMA_VERSION = 1
 export const DEFAULT_API_BASE = 'https://clinicaltrials.gov/api/v2'
@@ -75,6 +83,13 @@ export const SNAPSHOT_KIND = 'clinicaltrials-gov-behcet-snapshot'
 /** 一次查询最多保留的非致命错误条数；致命错误不受该上限约束。 */
 export const MAX_QUERY_ERRORS = 25
 export const OUTPUT_LOCK_FILE = '.trial-fetch.lock'
+/** CTG 的 NCT 登记号形状；只接受 NCT + 8 位数字，避免把任意字符串当登记号。 */
+export const NCT_ID_PATTERN = /^NCT\d{8}$/
+/**
+ * 快照根目录允许出现在 `manifest.files` 里的文件。只认这两个固定名字：检查器会取
+ * 第一个 `.jsonl`/`.sqlite`，若允许别名或第二个 JSONL，一个 decoy 文件就能顶替证据。
+ */
+export const REQUIRED_SNAPSHOT_FILES = Object.freeze(['trials.jsonl', 'trials.sqlite'])
 
 /**
  * 白塞病的英文别名。带变音符号和不带变音符号、disease/syndrome、Adamantiades 都单列，
@@ -454,6 +469,7 @@ async function collectAliasQuery({
     outOfWindowCount: 0,
     missingPostDateCount: 0,
     invalidPostDateCount: 0,
+    invalidNctIdCount: 0,
   }
 
   const ids = new Map()
@@ -561,6 +577,13 @@ async function collectAliasQuery({
       const nctId = textOrNull(study?.protocolSection?.identificationModule?.nctId)
       if (!nctId) {
         pushError(query, 'missing_nct_id', `page ${page}: study without NCTId`)
+        continue
+      }
+      if (!NCT_ID_PATTERN.test(nctId)) {
+        // 形状不对的登记号不能进入快照：否则 JSONL 记录、sourceUrl 和去重键都会被
+        // 任意字符串污染。属于可读响应的内容错误，记 INCOMPLETE 而不是 FAILED。
+        pushError(query, 'invalid_nct_id', `page ${page}: invalid NCTId ${JSON.stringify(nctId)}`)
+        query.invalidNctIdCount += 1
         continue
       }
       if (ids.has(nctId)) {
@@ -687,6 +710,127 @@ function normaliseStudy(study, { snapshotDate, retrievedAt }) {
       'registry status as returned; not a recruitment or eligibility determination',
     ].join('; '),
     snapshotDate,
+  }
+}
+
+/**
+ * 从**原始分页正文**重放采集端的归一化与合并逻辑，得到 JSONL/SQLite 应包含的记录。
+ * 核验时不能只比对 NCT 集合：标题、日期、赞助方、状态说明和 mergedSources 同样是
+ * 证据；否则同时改写 JSONL、SQLite 与哈希后，原件与派生文件之间的差异无人发现。
+ */
+function deriveSnapshotRecords(queries, rawStudiesByQuery, { snapshotDate }) {
+  const recordsById = new Map()
+  for (const query of queries) {
+    if (query.state !== 'SUCCESS' && query.state !== 'SUCCESS_ZERO') continue
+    for (const study of rawStudiesByQuery.get(query.queryId) ?? []) {
+      const nctId = textOrNull(study?.protocolSection?.identificationModule?.nctId)
+      // 采集端已把非法 NCT 记为 INCOMPLETE，成功查询不应出现；这里跳过是为了让核验
+      // 与采集端同语义，而不是把非法 ID 归一化成一条记录。
+      if (!nctId || !NCT_ID_PATTERN.test(nctId)) continue
+      const row = normaliseStudy(study, { snapshotDate, retrievedAt: query.completedAt })
+      if (!recordsById.has(row.recordId)) {
+        recordsById.set(row.recordId, { ...row, mergedSources: [query.alias] })
+      } else {
+        const existing = recordsById.get(row.recordId)
+        existing.mergedSources = uniqueSorted([...existing.mergedSources, query.alias])
+      }
+    }
+  }
+  return [...recordsById.values()].sort((a, b) =>
+    a.recordId < b.recordId ? -1 : a.recordId > b.recordId ? 1 : 0,
+  )
+}
+
+const SQLITE_TRIAL_FIELDS = Object.freeze([
+  ['recordId', 'record_id', false],
+  ['mergedSources', 'merged_sources', true],
+  ['sourceId', 'source_id', false],
+  ['title', 'title', false],
+  ['studyType', 'study_type', false],
+  ['sponsor', 'sponsors', true],
+  ['registryNumbers', 'registry_numbers', true],
+  ['dates', 'dates', true],
+  ['sourceUrl', 'source_url', false],
+  ['retrievedAt', 'retrieved_at', false],
+  ['statusNote', 'status_note', false],
+  ['snapshotDate', 'snapshot_date', false],
+])
+
+/**
+ * 复核 SQLite 的 trials 表与原始响应重放出的记录逐字段一致。只比对 JSONL 或只比对
+ * NCT 集合都不够：同时改写 JSONL、SQLite 和 manifest 哈希后，两者可以一起说谎。
+ */
+async function verifySqliteTrials({ root, dbName, expectedRecords, manifest, report }) {
+  let db
+  try {
+    db = new DatabaseSync(join(root, dbName), { readOnly: true })
+  } catch (error) {
+    report(`${dbName}: cannot open SQLite read-only: ${error.message}`)
+    return
+  }
+  try {
+    const integrity = db.prepare('PRAGMA integrity_check').all().map((row) => Object.values(row)[0])
+    if (integrity.length !== 1 || integrity[0] !== 'ok') {
+      report(`${dbName}: SQLite integrity_check failed: ${integrity.join('; ')}`)
+    }
+    const rows = db.prepare('SELECT * FROM trials ORDER BY record_id').all()
+    if (rows.length !== expectedRecords.length) {
+      report(`${dbName} trials rows ${rows.length} != raw-derived records ${expectedRecords.length}`)
+    }
+    if (manifest.dbCount !== rows.length) {
+      report(`manifest dbCount ${manifest.dbCount} != ${dbName} trials rows ${rows.length}`)
+    }
+    const expectedById = new Map(expectedRecords.map((row) => [row.recordId, row]))
+    const seen = new Set()
+    for (const row of rows) {
+      const recordId = row.record_id
+      if (typeof recordId !== 'string' || !NCT_ID_PATTERN.test(recordId)) {
+        report(`${dbName} has a record with invalid record_id ${JSON.stringify(recordId)}`)
+        continue
+      }
+      if (seen.has(recordId)) {
+        report(`${dbName} has duplicate record_id ${recordId}`)
+        continue
+      }
+      seen.add(recordId)
+      const expected = expectedById.get(recordId)
+      if (!expected) {
+        report(`${dbName} record ${recordId} is not derived from raw responses`)
+        continue
+      }
+      for (const [jsonKey, sqlKey, isJson] of SQLITE_TRIAL_FIELDS) {
+        let actual = row[sqlKey]
+        if (isJson) {
+          try {
+            actual = actual === null ? null : JSON.parse(actual)
+          } catch (error) {
+            report(`${dbName} record ${recordId}.${sqlKey} is not valid JSON: ${error.message}`)
+            continue
+          }
+        }
+        if (!isDeepStrictEqual(expected[jsonKey] ?? null, actual ?? null)) {
+          report(`${dbName} record ${recordId} field ${jsonKey} does not match the raw-derived value`)
+        }
+      }
+    }
+    for (const expected of expectedRecords) {
+      if (!seen.has(expected.recordId)) {
+        report(`${dbName} is missing raw-derived record ${expected.recordId}`)
+      }
+    }
+    const statusCount = db.prepare('SELECT COUNT(*) AS n FROM source_statuses').get().n
+    if (statusCount !== manifest.sourceStatusRows) {
+      report(`manifest sourceStatusRows ${manifest.sourceStatusRows} != ${dbName} ${statusCount}`)
+    }
+    const queryCount = db.prepare('SELECT COUNT(*) AS n FROM queries').get().n
+    const manifestQueryCount = Array.isArray(manifest.queries) ? manifest.queries.length : 0
+    if (queryCount !== manifestQueryCount) {
+      report(`${dbName} queries rows ${queryCount} != manifest queries ${manifestQueryCount}`)
+    }
+  } catch (error) {
+    report(`${dbName}: SQLite validation failed: ${error.message}`)
+  } finally {
+    db.close()
   }
 }
 
@@ -1075,6 +1219,16 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
   const manifestFiles = manifest.files && typeof manifest.files === 'object' ? manifest.files : {}
   const fileBytes = new Map()
   if (!Object.keys(manifestFiles).length) fileError('manifest.files is empty')
+  // 只认两个固定文件名。检查器会取“第一个” .jsonl/.sqlite；若 manifest 能列
+  // `other.jsonl` 或第二个 JSONL，decoy 就能被当成证据而真正的文件从不被读取。
+  for (const name of Object.keys(manifestFiles)) {
+    if (!REQUIRED_SNAPSHOT_FILES.includes(name)) {
+      fileError(`manifest.files lists unexpected file ${JSON.stringify(name)}; expected only ${REQUIRED_SNAPSHOT_FILES.join(', ')}`)
+    }
+  }
+  for (const name of REQUIRED_SNAPSHOT_FILES) {
+    if (!Object.hasOwn(manifestFiles, name)) fileError(`manifest.files is missing required file ${name}`)
+  }
   for (const name of Object.keys(manifestFiles)) {
     if (!/^[A-Za-z0-9._-]+$/.test(name)) {
       fileError(`manifest filename is not a plain file name: ${JSON.stringify(name)}`)
@@ -1251,6 +1405,7 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
 
   const queries = Array.isArray(manifest.queries) ? manifest.queries : []
   const successfulRawIds = new Map()
+  const rawStudiesByQuery = new Map()
   const pageOwner = new Map()
   for (const query of queries) {
     checked.queries += 1
@@ -1289,7 +1444,9 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
     let rawInvalidPostDateCount = 0
     let rawMissingNctCount = 0
     let rawDuplicateNctCount = 0
+    let rawInvalidNctCount = 0
     let rawFirstPageTotal = null
+    const rawStudies = []
 
     for (let index = 0; index < pages.length; index += 1) {
       const page = pages[index]
@@ -1431,6 +1588,11 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
           rawMissingNctCount += 1
           continue
         }
+        if (!NCT_ID_PATTERN.test(nctId)) {
+          // 与采集端同语义：非法 NCT 记内容错误、不进入 ID 集合，也不驱动日期归类。
+          rawInvalidNctCount += 1
+          continue
+        }
         if (rawIds.has(nctId)) {
           rawDuplicateNctCount += 1
           // 与采集端同语义：重复记录不再做日期归类，否则重复行的越界日期
@@ -1447,6 +1609,8 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
           }
         }
       }
+      // 保存正文供后续按采集端逻辑重放归一化记录；是否使用由 query.state 决定。
+      rawStudies.push(...body.studies)
     }
 
     const isSuccess = query.state === 'SUCCESS' || query.state === 'SUCCESS_ZERO'
@@ -1474,6 +1638,9 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
       }
       if (rawDuplicateNctCount) {
         evidenceError(`${query.queryId}: success query has ${rawDuplicateNctCount} duplicate raw NCTId records`)
+      }
+      if (rawInvalidNctCount) {
+        evidenceError(`${query.queryId}: success query has ${rawInvalidNctCount} raw NCTIds with invalid format`)
       }
       if (rawStudyCount !== query.totalCount) {
         evidenceError(`${query.queryId}: raw study count ${rawStudyCount} != totalCount ${query.totalCount}`)
@@ -1520,14 +1687,31 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
     if (query.invalidPostDateCount !== rawInvalidPostDateCount) {
       evidenceError(`${query.queryId}: raw invalid-date studies ${rawInvalidPostDateCount} != manifest ${query.invalidPostDateCount}`)
     }
+    if ((query.invalidNctIdCount ?? 0) !== rawInvalidNctCount) {
+      evidenceError(`${query.queryId}: raw invalid NCTId studies ${rawInvalidNctCount} != manifest ${query.invalidNctIdCount ?? 0}`)
+    }
     checked.rawStudyRecords += rawStudyCount
+    rawStudiesByQuery.set(query.queryId, rawStudies)
     if (isSuccess) successfulRawIds.set(query.queryId, sortedRawIds)
   }
 
-  const jsonlName = Object.keys(manifestFiles).find((name) => name.endsWith('.jsonl'))
+  let derivedRecords = null
+  if (!DATE_PATTERN.test(String(manifest.snapshotDate ?? ''))) {
+    evidenceError('manifest.snapshotDate is missing or not YYYY-MM-DD')
+  } else {
+    try {
+      derivedRecords = deriveSnapshotRecords(queries, rawStudiesByQuery, {
+        snapshotDate: manifest.snapshotDate,
+      })
+    } catch (error) {
+      evidenceError(`cannot replay normalized records from raw responses: ${error.message}`)
+    }
+  }
+
+  const jsonlName = Object.hasOwn(manifestFiles, 'trials.jsonl') ? 'trials.jsonl' : null
   let jsonlRows = null
   if (!jsonlName) {
-    evidenceError('manifest.files does not list a JSONL file')
+    evidenceError('manifest.files does not list a JSONL file (trials.jsonl)')
   } else {
     const bytes = fileBytes.get(jsonlName)
     if (!bytes) {
@@ -1589,7 +1773,52 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
             evidenceError(`${jsonlName} record ${row.recordId}: mergedSources do not match successful raw queries`)
           }
         }
+        if (derivedRecords) {
+          const rowsById = new Map()
+          for (const row of jsonlRows) {
+            if (typeof row?.recordId !== 'string' || !row.recordId) continue
+            if (!rowsById.has(row.recordId)) rowsById.set(row.recordId, row)
+          }
+          if (jsonlRows.length !== derivedRecords.length) {
+            evidenceError(`${jsonlName} rows ${jsonlRows.length} != raw-derived records ${derivedRecords.length}`)
+          }
+          for (const expected of derivedRecords) {
+            const actual = rowsById.get(expected.recordId)
+            if (!actual) {
+              evidenceError(`${jsonlName} is missing raw-derived record ${expected.recordId}`)
+              continue
+            }
+            const extraKeys = Object.keys(actual).filter((key) => !Object.hasOwn(expected, key))
+            if (extraKeys.length) {
+              evidenceError(`${jsonlName} record ${expected.recordId} has unexpected fields: ${extraKeys.join(', ')}`)
+            }
+            for (const [key, expectedValue] of Object.entries(expected)) {
+              if (!isDeepStrictEqual(expectedValue, actual[key])) {
+                evidenceError(`${jsonlName} record ${expected.recordId} field ${key} does not match the raw-derived value`)
+              }
+            }
+          }
+          for (const recordId of rowsById.keys()) {
+            if (!derivedRecords.some((record) => record.recordId === recordId)) {
+              evidenceError(`${jsonlName} record ${recordId} is not derived from raw responses`)
+            }
+          }
+        }
       }
+    }
+  }
+
+  if (Object.hasOwn(manifestFiles, 'trials.sqlite')) {
+    if (derivedRecords) {
+      await verifySqliteTrials({
+        root,
+        dbName: 'trials.sqlite',
+        expectedRecords: derivedRecords,
+        manifest,
+        report: evidenceError,
+      })
+    } else {
+      evidenceError('cannot verify trials.sqlite because raw-derived records are unavailable')
     }
   }
 
@@ -1657,8 +1886,11 @@ async function verifySnapshotEvidence(outDir, allowPending, candidate = null) {
 /**
  * 原子加锁并确认目标目录为空。返回 release 函数；调用方必须在 finally 中释放。
  * 锁文件与并发检查避免两个采集同时写同一快照，也避免覆盖已有文件。
+ *
+ * 释放前核对锁文件仍是**本次运行创建的那一个**（inode + 写入的随机令牌）。只按路径
+ * `rm` 会在锁被外部删除并重建后误删另一个运行的锁，让两个采集同时写同一目录。
  */
-async function prepareOutDir(outDir) {
+export async function prepareOutDir(outDir) {
   await mkdir(outDir, { recursive: true })
   const lockPath = join(outDir, OUTPUT_LOCK_FILE)
   let handle
@@ -1672,19 +1904,52 @@ async function prepareOutDir(outDir) {
     }
     throw new Error(`cannot create output lock in ${outDir}: ${error.message}`)
   }
+  const lockToken = `${process.pid}:${randomBytes(12).toString('hex')}:${new Date().toISOString()}`
+  let lockStat
+  try {
+    // 在写令牌前取句柄的 inode；释放时用它证明路径仍指向本次打开的文件。
+    lockStat = await handle.stat()
+    await handle.writeFile(`${lockToken}\n`, 'utf8')
+  } catch (error) {
+    try {
+      await handle.close()
+    } catch {
+      // 已经失败；不再用关闭错误覆盖原始错误。
+    }
+    if (lockStat) {
+      try {
+        const current = await lstat(lockPath)
+        if (current.dev === lockStat.dev && current.ino === lockStat.ino) {
+          await rm(lockPath, { force: true })
+        }
+      } catch {
+        // 无法确认所有权就保留锁；宁可留下可见的锁，也不误删别人的锁。
+      }
+    }
+    throw error
+  }
   let released = false
   const release = async () => {
-    if (released) return
+    if (released) return false
     released = true
     try {
       await handle.close()
     } catch {
-      // 锁句柄关闭失败不应掩盖原始错误；文件仍会被删除。
+      // 锁句柄关闭失败不应掩盖原始错误；是否删除由下面的所有权核对决定。
     }
-    await rm(lockPath, { force: true })
+    try {
+      const current = await lstat(lockPath)
+      if (current.dev !== lockStat.dev || current.ino !== lockStat.ino) return false
+      const contents = await readFile(lockPath, 'utf8')
+      if (contents !== `${lockToken}\n`) return false
+      await rm(lockPath, { force: true })
+      return true
+    } catch {
+      // 锁已被删除或被替换且无法读取：无所有权就不删除。
+      return false
+    }
   }
   try {
-    await handle.writeFile(`${process.pid}\n${new Date().toISOString()}\n`, 'utf8')
     const entries = await readdir(outDir)
     const remaining = entries.filter((name) => name !== OUTPUT_LOCK_FILE)
     if (remaining.length) {

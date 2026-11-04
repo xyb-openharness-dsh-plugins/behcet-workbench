@@ -9,7 +9,9 @@
  *
  * 注意：`check-trial-snapshot.mjs` 只读 `manifest.files` 里的 JSONL/SQLite，**不读
  * `pages/` 原始响应**，也不核验分页完整性；原始 version/分页文件必须由本文件的
- * `verifySnapshotHashes` 用例（篡改、缺页、多余文件）单独覆盖。
+ * `verifySnapshotHashes` 用例（篡改、缺页、多余文件）单独覆盖。该函数还会从原始
+ * 正文重放归一化记录，逐字段对照 JSONL 与 SQLite，因此“同时改两处并同步哈希”的
+ * 用例也在这里；锁释放的所有权另有独立用例。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -29,6 +31,7 @@ import {
   buildStudiesUrl,
   buildWindow,
   parseArgs,
+  prepareOutDir,
   runSnapshot,
   verifySnapshotHashes,
 } from '../scripts/fetch-behcet-trials-2026.mjs'
@@ -1384,4 +1387,136 @@ test('同步修改 JSONL 和清单哈希后，原始查询并集仍能发现缺�
   assert.equal(verified.evidenceConsistent, false)
   assert.equal(verified.checked.jsonlRecords, 1)
   assert.ok(verified.errors.some((message) => /successful query raw NCT union .* != JSONL recordIds/.test(message)))
+})
+
+test('manifest.files 只接受固定文件名：额外 JSONL 不能冒充快照证据', async (t) => {
+  const { out, result } = await runCase(t, {
+    aliases: ['Behcet'],
+    routes: {
+      Behcet: { '': page([sampleStudy('NCT00000110')]) },
+    },
+  })
+  assert.equal(result.manifest.status, 'COMPLETE')
+
+  const decoy = join(out, 'decoy.jsonl')
+  const decoyBytes = await readFile(join(out, 'trials.jsonl'))
+  await writeFile(decoy, decoyBytes)
+  const manifest = await manifestOf(out)
+  manifest.files['decoy.jsonl'] = {
+    sha256: createHash('sha256').update(decoyBytes).digest('hex'),
+    bytes: decoyBytes.length,
+  }
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, false)
+  assert.ok(
+    verified.errors.some((message) => /unexpected file "decoy\.jsonl"/.test(message)),
+  )
+})
+
+test('同步篡改 JSONL 与 SQLite 并更新哈希：原始正文重放仍能发现内容不符', async (t) => {
+  const { out } = await runCase(t, {
+    aliases: ['Behcet'],
+    routes: {
+      Behcet: { '': page([sampleStudy('NCT00000120'), sampleStudy('NCT00000121')]) },
+    },
+  })
+  const rows = await jsonlOf(out)
+  const target = rows[0].recordId
+  rows[0].title = `Tampered title for ${target}`
+  await writeFile(
+    join(out, 'trials.jsonl'),
+    `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`,
+  )
+
+  const db = new DatabaseSync(join(out, 'trials.sqlite'))
+  try {
+    db.prepare('UPDATE trials SET title = ? WHERE record_id = ?').run(
+      `Tampered title for ${target}`,
+      target,
+    )
+  } finally {
+    db.close()
+  }
+
+  // 攻击者同时更新两个文件的清单哈希与字节数，哈希检查因此全部通过。
+  const manifest = await manifestOf(out)
+  for (const name of ['trials.jsonl', 'trials.sqlite']) {
+    const bytes = await readFile(join(out, name))
+    manifest.files[name].sha256 = createHash('sha256').update(bytes).digest('hex')
+    manifest.files[name].bytes = bytes.length
+  }
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, false)
+  assert.ok(
+    verified.errors.some((message) =>
+      new RegExp(`trials\\.jsonl record ${target} field title does not match the raw-derived value`).test(message),
+    ),
+  )
+  assert.ok(
+    verified.errors.some((message) =>
+      new RegExp(`trials\\.sqlite record ${target} field title does not match the raw-derived value`).test(message),
+    ),
+  )
+})
+
+test('非法 NCT 形状：查询 INCOMPLETE、记录不并入，诚实快照仍可通过核验', async (t) => {
+  const { out, result } = await runCase(t, {
+    aliases: ['Behcet'],
+    routes: {
+      Behcet: { '': page([sampleStudy('NCT123')]) },
+    },
+  })
+
+  const query = result.manifest.queries[0]
+  assert.equal(result.exitCode, 1)
+  assert.equal(query.state, 'INCOMPLETE')
+  assert.equal(query.totalCount, 1)
+  assert.equal(query.preDedupCount, 1)
+  assert.equal(query.uniqueRecordCount, 0)
+  assert.equal(query.invalidNctIdCount, 1)
+  assert.deepEqual(query.recordIds, [])
+  assert.ok(query.errors.some((entry) => entry.code === 'invalid_nct_id'))
+  assert.equal((await jsonlOf(out)).length, 0)
+  assert.equal(result.manifest.recordCount, 0)
+  assert.equal(result.manifest.dbCount, 0)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, true)
+  assert.equal(verified.evidenceConsistent, true)
+  assert.deepEqual(verified.errors, [])
+})
+
+test('锁释放只删除本次运行的锁，被覆盖或被重建的锁保留给后来者', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'trial-fetch-lock-own-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const lockPath = join(dir, OUTPUT_LOCK_FILE)
+
+  const release = await prepareOutDir(dir)
+  assert.match(await readFile(lockPath, 'utf8'), /^\d+:[a-f0-9]{24}:\d{4}-\d{2}-\d{2}T/)
+  assert.equal(await release(), true)
+  await assert.rejects(readFile(lockPath, 'utf8'), { code: 'ENOENT' })
+
+  const overwritten = await mkdtemp(join(tmpdir(), 'trial-fetch-lock-own-'))
+  t.after(() => rm(overwritten, { recursive: true, force: true }))
+  const overwrittenLock = join(overwritten, OUTPUT_LOCK_FILE)
+  const releaseOverwritten = await prepareOutDir(overwritten)
+  await writeFile(overwrittenLock, 'other-run\n', 'utf8')
+  assert.equal(await releaseOverwritten(), false)
+  assert.equal(await readFile(overwrittenLock, 'utf8'), 'other-run\n')
+
+  const recreated = await mkdtemp(join(tmpdir(), 'trial-fetch-lock-own-'))
+  t.after(() => rm(recreated, { recursive: true, force: true }))
+  const recreatedLock = join(recreated, OUTPUT_LOCK_FILE)
+  const releaseRecreated = await prepareOutDir(recreated)
+  await rm(recreatedLock)
+  await writeFile(recreatedLock, 'later-run\n', 'utf8')
+  assert.equal(await releaseRecreated(), false)
+  assert.equal(await readFile(recreatedLock, 'utf8'), 'later-run\n')
 })
