@@ -756,9 +756,219 @@ const SQLITE_TRIAL_FIELDS = Object.freeze([
   ['snapshotDate', 'snapshot_date', false],
 ])
 
+function sqliteValueLabel(value) {
+  if (value === null) return 'null'
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return JSON.stringify(value)
+  }
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function normaliseSqliteValue(value) {
+  return value === undefined ? null : value
+}
+
 /**
- * 复核 SQLite 的 trials 表与原始响应重放出的记录逐字段一致。只比对 JSONL 或只比对
- * NCT 集合都不够：同时改写 JSONL、SQLite 和 manifest 哈希后，两者可以一起说谎。
+ * 表里的行同样能被同步篡改：更新 SQLite 哈希后，只查行数的复核看不出来。按业务键
+ * 逐行、逐字段对照 manifest，缺失、多余、重复与每个字段都要单独报出来。
+ */
+function compareSqliteRows({ db, dbName, table, expectedRows, keyOf, report }) {
+  const expectedByKey = new Map()
+  for (const expected of expectedRows) {
+    if (expectedByKey.has(expected.key)) {
+      report(`${dbName} manifest declares duplicate ${table} row ${expected.key}`)
+      continue
+    }
+    expectedByKey.set(expected.key, expected.values)
+  }
+  const rows = db.prepare(`SELECT * FROM ${table}`).all()
+  const seen = new Set()
+  for (const row of rows) {
+    const key = keyOf(row)
+    if (seen.has(key)) {
+      report(`${dbName} ${table} has duplicate row ${key}`)
+      continue
+    }
+    seen.add(key)
+    const expected = expectedByKey.get(key)
+    if (!expected) {
+      report(`${dbName} ${table} row ${key} is not declared by manifest`)
+      continue
+    }
+    for (const [column, expectedValue] of Object.entries(expected)) {
+      const actual = normaliseSqliteValue(row[column])
+      const wanted = normaliseSqliteValue(expectedValue)
+      if (!isDeepStrictEqual(actual, wanted)) {
+        report(
+          `${dbName} ${table} row ${key}: ${column} ${sqliteValueLabel(actual)} != manifest ${sqliteValueLabel(wanted)}`,
+        )
+      }
+    }
+  }
+  for (const key of expectedByKey.keys()) {
+    if (!seen.has(key)) report(`${dbName} ${table} is missing manifest row ${key}`)
+  }
+}
+
+function queryErrorText(errors) {
+  if (!errors.length) return null
+  return errors.map((entry) => `${entry?.code}: ${entry?.message}`).join(' | ')
+}
+
+function expectedQuerySqliteRows(manifest) {
+  const queries = Array.isArray(manifest.queries) ? manifest.queries : []
+  return queries.map((query) => {
+    const errors = Array.isArray(query?.errors) ? query.errors : []
+    return {
+      key: String(query?.queryId ?? ''),
+      values: {
+        query_id: query?.queryId ?? null,
+        source_id: query?.sourceId ?? null,
+        alias: query?.alias ?? null,
+        state: query?.state ?? null,
+        query_date: query?.queryDate ?? null,
+        window_start: query?.windowStart ?? null,
+        window_end: query?.windowEnd ?? null,
+        http_status: query?.httpStatus ?? null,
+        last_http_status: query?.lastHttpStatus ?? null,
+        failed_http_status: query?.failedHttpStatus ?? null,
+        page_count: query?.pageCount ?? null,
+        first_page_total: query?.firstPageTotal ?? null,
+        total_count: query?.totalCount ?? null,
+        pre_dedup_count: query?.preDedupCount ?? null,
+        unique_records: query?.uniqueRecordCount ?? null,
+        record_ids: JSON.stringify(Array.isArray(query?.recordIds) ? query.recordIds : []),
+        query_url: query?.queryUrl ?? null,
+        error: queryErrorText(errors),
+        error_count: errors.length,
+        truncated_errors: query?.truncatedErrors ?? null,
+        retrieved_at: query?.completedAt ?? null,
+      },
+    }
+  })
+}
+
+function manifestChannelErrorText(manifest) {
+  const parts = []
+  if (manifest.api?.version?.error) parts.push(`version: ${manifest.api.version.error}`)
+  const queries = Array.isArray(manifest.queries) ? manifest.queries : []
+  for (const query of queries) {
+    const errors = Array.isArray(query?.errors) ? query.errors : []
+    for (const entry of errors) {
+      parts.push(`${query.queryId} ${entry?.code}: ${entry?.message}`)
+    }
+  }
+  return parts.length ? parts.slice(0, 10).join(' | ') : null
+}
+
+function expectedSourceStatusRows(manifest) {
+  const rows = []
+  const baseUrl = typeof manifest.api?.baseUrl === 'string' ? manifest.api.baseUrl : null
+  const channelError = manifestChannelErrorText(manifest)
+  const sources = Array.isArray(manifest.sources) ? manifest.sources : []
+  for (const source of sources) {
+    const queried = source?.queried === true
+    rows.push({
+      key: `${source?.sourceId ?? ''}/channel/`,
+      values: {
+        source_id: source?.sourceId ?? null,
+        scope: 'channel',
+        query: '',
+        state: source?.state ?? null,
+        query_date: source?.queryDate ?? null,
+        window_start: source?.windowStart ?? null,
+        window_end: source?.windowEnd ?? null,
+        // 通道级没有单一 HTTP 状态；未查询的通道所有可空字段必须保持 null。
+        http_status: null,
+        last_http_status: null,
+        failed_http_status: null,
+        failed_page: null,
+        page_count: source?.pageCount ?? null,
+        total_count: source?.totalCount ?? null,
+        pre_dedup_count: source?.preDedupCount ?? null,
+        unique_records: source?.uniqueRecords ?? null,
+        query_url: queried && baseUrl ? `${baseUrl}/studies` : null,
+        error: queried ? channelError : source?.note ?? null,
+        error_count: null,
+        truncated_errors: null,
+        // 已查询通道的 retrieved_at 是采集时刻，清单没有同名字段，由下面单独校验
+        // 时间边界；未查询通道从未发出请求，必须保持 null。
+        ...(queried ? {} : { retrieved_at: null }),
+      },
+    })
+  }
+  const queries = Array.isArray(manifest.queries) ? manifest.queries : []
+  for (const query of queries) {
+    const errors = Array.isArray(query?.errors) ? query.errors : []
+    rows.push({
+      key: `${query?.sourceId ?? ''}/query/${query?.alias ?? ''}`,
+      values: {
+        source_id: query?.sourceId ?? null,
+        scope: 'query',
+        query: query?.alias ?? null,
+        state: query?.state ?? null,
+        query_date: query?.queryDate ?? null,
+        window_start: query?.windowStart ?? null,
+        window_end: query?.windowEnd ?? null,
+        // 页二失败时，整条查询的 HTTP 结果取失败页状态；与 queries 表的首页状态不同。
+        http_status: query?.failedHttpStatus ?? query?.httpStatus ?? null,
+        last_http_status: query?.lastHttpStatus ?? null,
+        failed_http_status: query?.failedHttpStatus ?? null,
+        failed_page: query?.failedPage ?? null,
+        page_count: query?.pageCount ?? null,
+        total_count: query?.totalCount ?? null,
+        pre_dedup_count: query?.preDedupCount ?? null,
+        unique_records: query?.uniqueRecordCount ?? null,
+        query_url: query?.queryUrl ?? null,
+        error: queryErrorText(errors),
+        error_count: errors.length,
+        truncated_errors: query?.truncatedErrors ?? null,
+        retrieved_at: query?.completedAt ?? null,
+      },
+    })
+  }
+  return rows
+}
+
+function verifyChannelRetrievedAt({ db, dbName, manifest, report }) {
+  const rows = db
+    .prepare("SELECT source_id, retrieved_at FROM source_statuses WHERE scope = 'channel'")
+    .all()
+  const startedMs = Date.parse(manifest.startedAt)
+  const generatedMs = Date.parse(manifest.generatedAt)
+  const queriedSourceIds = new Set(
+    (Array.isArray(manifest.sources) ? manifest.sources : [])
+      .filter((source) => source?.queried === true)
+      .map((source) => source.sourceId),
+  )
+  for (const row of rows) {
+    if (!queriedSourceIds.has(row.source_id)) continue
+    const text = row.retrieved_at
+    const ms = typeof text === 'string' ? Date.parse(text) : Number.NaN
+    if (!Number.isFinite(ms) || new Date(ms).toISOString() !== text) {
+      report(
+        `${dbName} source_statuses channel ${row.source_id} retrieved_at ${sqliteValueLabel(text)} is not a canonical ISO timestamp`,
+      )
+      continue
+    }
+    if (Number.isFinite(startedMs) && ms < startedMs) {
+      report(`${dbName} source_statuses channel ${row.source_id} retrieved_at is before manifest.startedAt`)
+    }
+    if (Number.isFinite(generatedMs) && ms > generatedMs) {
+      report(`${dbName} source_statuses channel ${row.source_id} retrieved_at is after manifest.generatedAt`)
+    }
+  }
+}
+
+/**
+ * 复核 SQLite 的 trials 表与原始响应重放出的记录逐字段一致，并逐行核对 queries 与
+ * source_statuses 是否仍与 manifest 的查询、来源状态、错误和 null 语义一致。只比对
+ * JSONL 或只比对 NCT 集合都不够：同时改写 JSONL、SQLite 和 manifest 哈希后，两者
+ * 可以一起说谎。
  */
 async function verifySqliteTrials({ root, dbName, expectedRecords, manifest, report }) {
   let db
@@ -827,6 +1037,23 @@ async function verifySqliteTrials({ root, dbName, expectedRecords, manifest, rep
     if (queryCount !== manifestQueryCount) {
       report(`${dbName} queries rows ${queryCount} != manifest queries ${manifestQueryCount}`)
     }
+    compareSqliteRows({
+      db,
+      dbName,
+      table: 'queries',
+      expectedRows: expectedQuerySqliteRows(manifest),
+      keyOf: (row) => String(row.query_id),
+      report,
+    })
+    compareSqliteRows({
+      db,
+      dbName,
+      table: 'source_statuses',
+      expectedRows: expectedSourceStatusRows(manifest),
+      keyOf: (row) => `${row.source_id}/${row.scope}/${row.query ?? ''}`,
+      report,
+    })
+    verifyChannelRetrievedAt({ db, dbName, manifest, report })
   } catch (error) {
     report(`${dbName}: SQLite validation failed: ${error.message}`)
   } finally {

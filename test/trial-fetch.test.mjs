@@ -713,6 +713,245 @@ test('第二页 HTTP 500：整条查询 FAILED，第一页记录不并入快照'
   } finally {
     db.close()
   }
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, true)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, true)
+})
+
+test('SQLite queries 与 source_statuses 逐行对照清单：成功、零结果、真实失败与未查', async (t) => {
+  const success = await runCase(t, {
+    aliases: ['Behçet', 'Behcet'],
+    routes: {
+      Behçet: { '': page([sampleStudy('NCT00000001')]) },
+      Behcet: { '': page([sampleStudy('NCT00000002')]) },
+    },
+  })
+  assert.equal(success.result.manifest.status, 'COMPLETE')
+  assert.equal((await verifySnapshotHashes(success.out)).ok, true)
+
+  const successManifest = success.result.manifest
+  const successDb = openDb(success.out)
+  try {
+    const queryRows = successDb.prepare('SELECT * FROM queries ORDER BY query_id').all()
+    assert.equal(queryRows.length, successManifest.queries.length)
+    for (const row of queryRows) {
+      const expected = successManifest.queries.find((query) => query.queryId === row.query_id)
+      assert.ok(expected)
+      assert.equal(row.source_id, expected.sourceId)
+      assert.equal(row.alias, expected.alias)
+      assert.equal(row.state, expected.state)
+      assert.equal(row.http_status, expected.httpStatus)
+      assert.equal(row.total_count, expected.totalCount)
+      assert.equal(row.record_ids, JSON.stringify(expected.recordIds))
+      assert.equal(row.error, null)
+      assert.equal(row.error_count, expected.errors.length)
+    }
+
+    const statusRows = successDb.prepare('SELECT * FROM source_statuses').all()
+    assert.equal(statusRows.length, successManifest.sourceStatusRows)
+    for (const expected of successManifest.queries) {
+      const row = statusRows.find(
+        (entry) =>
+          entry.scope === 'query' &&
+          entry.source_id === expected.sourceId &&
+          entry.query === expected.alias,
+      )
+      assert.ok(row)
+      assert.equal(row.state, expected.state)
+      assert.equal(row.http_status, expected.failedHttpStatus ?? expected.httpStatus)
+      assert.equal(row.total_count, expected.totalCount)
+      assert.equal(row.error, null)
+      assert.equal(row.error_count, 0)
+    }
+
+    const channel = statusRows.find(
+      (entry) => entry.scope === 'channel' && entry.source_id === 'clinicaltrials.gov',
+    )
+    assert.equal(channel.state, 'SUCCESS')
+    assert.equal(channel.query, '')
+    assert.equal(channel.total_count, 2)
+    assert.equal(channel.pre_dedup_count, 2)
+    assert.equal(channel.unique_records, 2)
+    assert.equal(channel.query_url, `${successManifest.api.baseUrl}/studies`)
+    assert.equal(channel.error, null)
+    assert.equal(channel.error_count, null)
+    assert.equal(channel.truncated_errors, null)
+
+    const nullableColumns = [
+      'query_date',
+      'window_start',
+      'window_end',
+      'http_status',
+      'last_http_status',
+      'failed_http_status',
+      'failed_page',
+      'page_count',
+      'total_count',
+      'pre_dedup_count',
+      'unique_records',
+      'query_url',
+      'error_count',
+      'truncated_errors',
+      'retrieved_at',
+    ]
+    for (const expected of CHANNELS.filter((entry) => !entry.queryable)) {
+      const row = statusRows.find(
+        (entry) => entry.scope === 'channel' && entry.source_id === expected.sourceId,
+      )
+      assert.ok(row)
+      assert.equal(row.query, '')
+      assert.equal(row.state, 'NOT_QUERIED')
+      assert.equal(row.error, expected.note)
+      for (const column of nullableColumns) assert.equal(row[column], null, column)
+    }
+  } finally {
+    successDb.close()
+  }
+
+  const zero = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([], { totalCount: 0 }) } },
+  })
+  assert.equal(zero.result.manifest.status, 'COMPLETE')
+  assert.equal((await verifySnapshotHashes(zero.out)).ok, true)
+  const zeroDb = openDb(zero.out)
+  try {
+    const queryRow = zeroDb.prepare('SELECT * FROM queries').get()
+    assert.equal(queryRow.state, 'SUCCESS_ZERO')
+    assert.equal(queryRow.total_count, 0)
+    assert.equal(queryRow.pre_dedup_count, 0)
+    assert.equal(queryRow.unique_records, 0)
+    assert.equal(queryRow.record_ids, '[]')
+    assert.equal(queryRow.error, null)
+    assert.equal(queryRow.error_count, 0)
+    const queryStatus = zeroDb.prepare("SELECT * FROM source_statuses WHERE scope = 'query'").get()
+    assert.equal(queryStatus.state, 'SUCCESS_ZERO')
+    assert.equal(queryStatus.total_count, 0)
+    assert.equal(queryStatus.error, null)
+    assert.equal(queryStatus.error_count, 0)
+    const channel = zeroDb.prepare(
+      "SELECT * FROM source_statuses WHERE scope = 'channel' AND source_id = 'clinicaltrials.gov'",
+    ).get()
+    assert.equal(channel.state, 'SUCCESS_ZERO')
+    assert.equal(channel.total_count, 0)
+    assert.equal(channel.error, null)
+  } finally {
+    zeroDb.close()
+  }
+
+  const failure = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: {
+      Behçet: {
+        '': { body: { studies: [sampleStudy('NCT00000010')], totalCount: 1 }, status: 500 },
+      },
+    },
+  })
+  assert.equal(failure.result.manifest.status, 'FAILED')
+  assert.equal((await verifySnapshotHashes(failure.out)).ok, true)
+  const failureManifest = failure.result.manifest
+  const expectedQuery = failureManifest.queries[0]
+  const failureDb = openDb(failure.out)
+  try {
+    const queryRow = failureDb.prepare('SELECT * FROM queries').get()
+    assert.equal(queryRow.state, 'FAILED')
+    assert.equal(queryRow.http_status, expectedQuery.httpStatus)
+    assert.equal(queryRow.error_count, expectedQuery.errors.length)
+    assert.ok(queryRow.error.includes('http_error'))
+    assert.equal(
+      queryRow.error,
+      expectedQuery.errors.map((entry) => `${entry.code}: ${entry.message}`).join(' | '),
+    )
+
+    const queryStatus = failureDb.prepare("SELECT * FROM source_statuses WHERE scope = 'query'").get()
+    assert.equal(queryStatus.state, 'FAILED')
+    assert.equal(queryStatus.http_status, expectedQuery.failedHttpStatus ?? expectedQuery.httpStatus)
+    assert.equal(queryStatus.last_http_status, expectedQuery.lastHttpStatus)
+    assert.equal(queryStatus.error, queryRow.error)
+    assert.equal(queryStatus.error_count, queryRow.error_count)
+
+    const channel = failureDb.prepare(
+      "SELECT * FROM source_statuses WHERE scope = 'channel' AND source_id = 'clinicaltrials.gov'",
+    ).get()
+    assert.equal(channel.state, 'FAILED')
+    assert.equal(channel.total_count, 0)
+    assert.equal(
+      channel.error,
+      expectedQuery.errors
+        .map((entry) => `${expectedQuery.queryId} ${entry.code}: ${entry.message}`)
+        .join(' | '),
+    )
+  } finally {
+    failureDb.close()
+  }
+})
+
+test('篡改 SQLite queries 与 source_statuses 并同步哈希：逐行对照清单仍拒绝', async (t) => {
+  const { dir, out } = await runCase(t, {
+    aliases: ['Behçet'],
+    routes: { Behçet: { '': page([sampleStudy('NCT00000130')]) } },
+  })
+  const manifest = await manifestOf(out)
+  const target = manifest.queries[0]
+
+  const db = new DatabaseSync(join(out, 'trials.sqlite'))
+  try {
+    assert.equal(
+      db.prepare(
+        'UPDATE queries SET alias = ?, state = ?, error = ?, error_count = ? WHERE query_id = ?',
+      ).run('Ghost alias', 'FAILED', 'forged query error', 1, target.queryId).changes,
+      1,
+    )
+    assert.equal(
+      db.prepare(
+        "UPDATE source_statuses SET state = ?, error = ?, error_count = ?, total_count = NULL WHERE source_id = ? AND scope = 'query' AND query = ?",
+      ).run('FAILED', 'forged status error', 1, target.sourceId, target.alias).changes,
+      1,
+    )
+    assert.equal(
+      db.prepare(
+        "UPDATE source_statuses SET state = ?, total_count = 0, page_count = 0, http_status = 200 WHERE source_id = ? AND scope = 'channel'",
+      ).run('SUCCESS_ZERO', 'chictr.org.cn').changes,
+      1,
+    )
+  } finally {
+    db.close()
+  }
+
+  // 攻击者同步更新 SQLite 的清单哈希：文件哈希检查因此通过，行级对照仍须发现。
+  const bytes = await readFile(join(out, 'trials.sqlite'))
+  manifest.files['trials.sqlite'].sha256 = createHash('sha256').update(bytes).digest('hex')
+  manifest.files['trials.sqlite'].bytes = bytes.length
+  await writeManifest(out, manifest)
+
+  const verified = await verifySnapshotHashes(out)
+  assert.equal(verified.ok, false)
+  assert.equal(verified.filesConsistent, true)
+  assert.equal(verified.evidenceConsistent, false)
+
+  const expectedErrors = [
+    `trials.sqlite queries row ${target.queryId}: alias "Ghost alias" != manifest "Behçet"`,
+    `trials.sqlite queries row ${target.queryId}: state "FAILED" != manifest "SUCCESS"`,
+    `trials.sqlite queries row ${target.queryId}: error "forged query error" != manifest null`,
+    `trials.sqlite queries row ${target.queryId}: error_count 1 != manifest 0`,
+    `trials.sqlite source_statuses row ${target.sourceId}/query/${target.alias}: state "FAILED" != manifest "SUCCESS"`,
+    `trials.sqlite source_statuses row ${target.sourceId}/query/${target.alias}: total_count null != manifest 1`,
+    `trials.sqlite source_statuses row ${target.sourceId}/query/${target.alias}: error "forged status error" != manifest null`,
+    `trials.sqlite source_statuses row ${target.sourceId}/query/${target.alias}: error_count 1 != manifest 0`,
+    'trials.sqlite source_statuses row chictr.org.cn/channel/: state "SUCCESS_ZERO" != manifest "NOT_QUERIED"',
+    'trials.sqlite source_statuses row chictr.org.cn/channel/: total_count 0 != manifest null',
+    'trials.sqlite source_statuses row chictr.org.cn/channel/: page_count 0 != manifest null',
+    'trials.sqlite source_statuses row chictr.org.cn/channel/: http_status 200 != manifest null',
+  ]
+  for (const expected of expectedErrors) {
+    assert.ok(verified.errors.includes(expected), `missing error: ${expected}`)
+  }
+
+  // 只看文件哈希与计数的结构检查器仍会 PASS；这正是需要逐行对照的原因。
+  const output = execFileSync(process.execPath, [checker, dir], { encoding: 'utf8' })
+  assert.match(output, /PASS snapshot consistency/)
 })
 
 test('同一查询内重复 NCT：INCOMPLETE，不把重复条数当成多条登记', async (t) => {
