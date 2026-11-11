@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>小贝宝 BeiPal · 白塞病工作台（开发版 v0.1.1）</title><style>
+:root{--ink:#203a38;--muted:#607772;--line:#d9e7e1;--paper:#f4f8f5;--green:#246b5b;--soft:#e4f2eb;--orange:#9a480d}*{box-sizing:border-box}body.big{font-size:19px}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 system-ui,sans-serif;font-variant-numeric:tabular-nums}button,input,textarea,select{font:inherit}button{cursor:pointer;min-height:44px;border:1px solid var(--line);background:white;color:var(--ink);border-radius:10px;padding:8px 14px}button:hover{border-color:var(--green)}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #246b5b;outline-offset:2px}.primary{background:var(--orange);color:white;border-color:var(--orange)}.top{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:12px;padding:10px 24px;background:#f8fbf9eb;border-bottom:1px solid var(--line);backdrop-filter:blur(8px)}.brand{font-weight:800;border:0;background:none;padding:0;color:var(--green)}.version,.tag{font-size:12px;border-radius:20px;padding:3px 9px;background:#eaf2ee;color:#315f53}.top .status{flex:1;color:var(--muted);font-size:13px}.layout{display:flex;min-height:calc(100vh - 65px)}.business{min-width:0;flex:1;display:grid;grid-template-columns:190px minmax(0,1fr)}nav{padding:24px 12px;border-right:1px solid var(--line);background:#f8fbf9}nav button{display:block;width:100%;text-align:left;border:0;background:transparent;margin-bottom:4px}nav button[aria-current=page]{background:#dfeee6;color:#195f50;font-weight:700}main{min-width:0;padding:32px clamp(18px,3vw,42px) 70px;max-width:1400px;width:100%;margin:auto}.eyebrow{font-size:12px;color:var(--green);letter-spacing:.1em;font-weight:700}h1{font-size:clamp(26px,2.4vw,34px);line-height:1.25;margin:6px 0 10px}h2{font-size:19px;margin:0 0 12px}h3{font-size:16px;margin:0 0 5px}p{margin:0 0 12px}.muted,small{color:var(--muted)}.hero{background:linear-gradient(120deg,#e3f2e9,#f8f4e9);border:1px solid #d7e9dd;border-radius:20px;padding:26px;margin-bottom:24px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:20px;min-width:0}.card.private{background:#f6f1fa;border-color:#e8dcef}.card p:last-child{margin:0}.section{margin:28px 0 14px;display:flex;justify-content:space-between;align-items:center;gap:12px}.list{display:grid;gap:10px}.row{border-top:1px solid #edf2ef;padding:12px 0}.row:first-child{border-top:0}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.link{border:0;background:none;color:var(--green);padding:0;text-align:left;text-decoration:underline}.tabs{display:flex;gap:8px;overflow:auto;margin:20px 0}.tabs button{white-space:nowrap}.tabs button[aria-selected=true]{background:var(--green);color:white}.notice{padding:12px 15px;border-radius:10px;background:#f5f7f5;color:#526a63;margin:14px 0}.pane{width:35%;min-width:0;background:#f9fbfa;border-left:1px solid var(--line);padding:20px;overflow:auto}.pane[hidden],.splitter[hidden]{display:none}.splitter{width:9px;cursor:col-resize;background:#e6f0ea;touch-action:none}.panelbox{border:1px dashed #abc8ba;border-radius:14px;padding:18px;background:white}.panelbox textarea{width:100%;min-height:110px}.field{display:block;margin:13px 0}.field input,.field textarea,.field select{display:block;width:100%;padding:10px;border:1px solid #bdcfc5;border-radius:9px;background:white}.field textarea{min-height:90px}.tag.private-tag{background:#eee3f5;color:#674278}.empty{border:1px dashed #c8d9ce;padding:20px;border-radius:12px;color:var(--muted)}dialog{border:1px solid var(--line);border-radius:18px;width:min(600px,calc(100% - 32px));max-height:90vh;padding:0;box-shadow:0 15px 50px #1c514331}dialog::backdrop{background:#213b3480}.dialog-head,.dialog-body,.dialog-foot{padding:18px 22px}.dialog-head,.dialog-foot{background:white}.dialog-head{border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.dialog-body{overflow:auto;max-height:60vh}.dialog-foot{border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#24483e;color:white;border-radius:10px;padding:10px 18px;z-index:10}.skip{position:absolute;left:-9999px}.skip:focus{left:10px;top:10px;z-index:10}.big{font-size:18px}@media(max-width:640px){
+  .top{gap:8px;padding:8px 12px}
+  .top .status{order:9;flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+  .top .version{font-size:11px;padding:2px 8px}
+  .top button,.top .brand{min-height:40px}
+  nav{scroll-snap-type:x proximity;padding:8px 12px 8px 8px}
+  nav button{scroll-snap-align:start;min-height:40px}
+  .business main{padding:16px 14px 48px}
+  .hero{padding:20px}
+  .hero h1{font-size:26px}
+}
+@media(max-width:900px){.business{display:block}nav{display:flex;overflow:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line)}nav button{width:auto;white-space:nowrap;margin:0}.grid{grid-template-columns:minmax(0,1fr)}.top{flex-wrap:wrap}.top .status{flex-basis:100%;order:3}.pane{position:fixed;right:0;top:65px;bottom:0;width:min(420px,100%)!important;z-index:4;box-shadow:-8px 0 30px #204c3620}.splitter{display:none}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+.chart-wrap{overflow-x:auto}.chart-wrap svg{display:block;width:100%;min-width:600px;height:auto}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px}.mcard{height:194px;perspective:1200px;padding:0;border:0;background:transparent;text-align:left}.mcard-inner{position:relative;display:block;width:100%;height:100%;transform-style:preserve-3d;transition:transform .62s cubic-bezier(.2,.72,.2,1)}.mcard[aria-pressed=true] .mcard-inner{transform:rotateY(180deg)}.mface{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:16px;border:1px solid var(--line);border-radius:14px;background:white;backface-visibility:hidden;overflow:auto}.mface.back{transform:rotateY(180deg);background:#edf7f1}.metric-value{font-size:27px;font-weight:700}.chart-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:16px 0}.chart-controls label{display:inline-flex;align-items:center;gap:5px}.legend{display:flex;flex-wrap:wrap;gap:8px 20px}.legend span{border-left:4px solid var(--series);padding-left:8px}.chart-grid{stroke:#e2ebe6;stroke-width:1}.series-path{fill:none;stroke-width:2.5}.chart-label{font-size:12px;fill:#35554b}.chart-note{font-size:11px;fill:#526a63}@media(prefers-reduced-motion:reduce){.mcard-inner{transition:none}}
+
+.onechart-layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px}.chart-sidebar{min-width:0;position:sticky;top:80px;align-self:start}.chart-sidebar fieldset{border:0;padding:0;margin:0 0 16px}.chart-sidebar label{display:block}.chart-sidebar .metric-options{max-height:220px;overflow:auto}.range-buttons{display:flex;flex-wrap:wrap;gap:4px}.range-buttons button[aria-pressed=true]{background:var(--green);color:white}.chart-content{min-width:0}.chart-point{cursor:pointer;stroke:white;stroke-width:2}.chart-point:focus,.chart-point.active{stroke:#142c29;stroke-width:4;outline:none}.pin{margin:12px 0;padding:12px;background:#edf7f1;border-radius:10px}.legend button{min-height:36px;text-align:left}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));container-type:inline-size}.metric-section{container-type:inline-size}.mcard{height:276px;display:block;position:relative;min-width:0;width:100%}.mface{overflow:hidden}.mcard[data-flipped=true] .mcard-inner{transform:rotateY(180deg)}.mface.back{justify-content:flex-start;gap:5px}.mcard-toggle{position:absolute;right:10px;top:8px;z-index:2;min-height:32px;padding:3px 8px}.metric-points{display:flex;gap:4px;flex-wrap:wrap;overflow:auto}.metric-points button{min-height:32px;padding:2px 7px;font-size:12px}.metric-source{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.series-path{stroke-dasharray:1;stroke-dashoffset:0;animation:draw .5s ease-out}@keyframes draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}@media(max-width:980px){.onechart-layout{grid-template-columns:minmax(0,1fr)}.chart-sidebar{position:static}.chart-sidebar .metric-options{max-height:none}}@container (max-width:699px){.metric-grid{grid-template-columns:minmax(0,1fr)}}@media(prefers-reduced-motion:reduce){.series-path{animation:none;stroke-dasharray:none;stroke-dashoffset:0}}
+</style><style>
+/* ── v0.2 评审修复（2026-11-02）────────────────────────────────────────────
+   1) 图表文字原先写死 12px/11px，切“大字”时不变；改用 em 随根字号放大。
+   2) 指标卡固定高度下 overflow:hidden 会在“大字+窄容器”裁掉背面来源行；
+      大字模式同步加高卡片，并让卡面自身可滚动、子元素不被压扁。 */
+.chart-label{font-size:.75em}.chart-note{font-size:.6875em}#main:focus{outline:none}.chart-end-value{font-size:.6875em;font-weight:700;paint-order:stroke;stroke:#f8fbf9;stroke-width:3}.metric-points button{font-size:.75em}
+.mcard{height:276px;perspective:1100px;cursor:pointer}.mcard-hit{position:absolute;inset:0;width:100%;height:100%;min-height:0;opacity:0;border:0;padding:0;background:transparent;pointer-events:none;z-index:2;border-radius:18px}.mcard-hit:focus{outline:none}.mcard:has(>.mcard-hit:focus-visible){outline:3px solid #246b5b;outline-offset:2px;border-radius:18px}.mcard-inner{transition:transform 480ms cubic-bezier(.2,.7,.2,1)}.mface{padding:20px;border-radius:18px;-webkit-backface-visibility:hidden}body.big .mcard{height:340px}.mface{overflow:auto}.mface>*{flex-shrink:0}
+/* 窄容器图表横向滚动提示：默认隐藏，仅在 .chart-wrap 真的溢出时由 JS 取消 hidden */
+.scroll-hint{margin:0 0 8px;font-size:12px;color:var(--muted)}
+.scroll-hint[hidden]{display:none}
+.guide-note{margin:12px 0 0;font-size:.78em;line-height:1.6;color:var(--muted)}
+.hero .actions button[data-primer-open]{background:#fff}
+/* 合成示例组切换：入口始终显示当前组与本页条数；弹窗内两套档案互相独立。 */
+.group-switch{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:4px 10px;border-radius:999px;background:#fff;white-space:nowrap;font-size:12px}
+.gs-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none}
+.dataset-row{display:block;width:100%;text-align:left;margin:0 0 8px;padding:12px 14px;background:#fff;border:1px solid var(--line);border-radius:12px}
+.dataset-row[aria-pressed="true"]{border-color:var(--green);background:#f3faf5}
+.dataset-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dataset-row p{margin:4px 0 0;font-size:.86em}
+@media(max-width:640px){.group-switch{font-size:11px;padding:2px 8px}}
+@media(prefers-reduced-motion:reduce){.mcard-inner{transition:none}}
+/* 治疗阶段折叠卡（M2）：原生 details 默认收起；打印由 beforeprint 展开。 */
+.pathway{margin:18px 0 22px;min-width:0}
+.pathway .section{margin:0 0 8px}
+.phase-fold{background:#fff;border:1px solid var(--line);border-radius:14px;margin:10px 0;min-width:0;overflow:hidden}
+.phase-fold>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:12px 16px;cursor:pointer;list-style:none;min-width:0;line-height:1.5}
+.phase-fold>summary::-webkit-details-marker{display:none}
+.phase-fold>summary::after{content:"▸";margin-left:auto;color:var(--green);font-weight:700}
+.phase-fold[open]>summary::after{content:"▾"}
+.phase-fold>summary:focus-visible{outline:3px solid #246b5b;outline-offset:-3px}
+.ph-dot{color:var(--green)}
+.ph-name{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.ph-date,.ph-text{min-width:0;overflow-wrap:anywhere}
+.ph-text{color:var(--muted)}
+.ph-hint{color:var(--green);font-size:.85em;white-space:nowrap}
+.phase-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px;border-top:1px solid var(--line)}
+.pd-block{min-width:0;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px}
+.pd-block h3{margin:0 0 6px;font-size:1rem;display:flex;gap:8px;align-items:baseline}
+.pd-num{display:inline-flex;width:1.6em;height:1.6em;border-radius:50%;background:var(--soft);color:var(--green);align-items:center;justify-content:center;font-size:.75em;flex:none}
+.pd-summary{margin:0 0 8px;font-size:.9em}
+.pd-items{margin:0;display:grid;gap:6px}
+.pd-items>div{display:grid;grid-template-columns:minmax(5.5em,auto) minmax(0,1fr);gap:8px;border-top:1px dashed var(--line);padding-top:6px}
+.pd-items>div:first-child{border-top:0;padding-top:0}
+.pd-items dt{color:var(--muted);font-size:.82em}
+.pd-items dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.pathway-table-wrap{overflow-x:auto;margin:14px 0 8px}
+.pathway-table{width:100%;border-collapse:collapse;min-width:560px;font-size:.88em}
+.pathway-table th,.pathway-table td{border:1px solid var(--line);padding:8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.pathway-table th{background:var(--soft)}
+.pathway-note{margin:8px 0 0;font-size:.82em;color:var(--muted)}
+@media(max-width:900px){.phase-detail{grid-template-columns:minmax(0,1fr)}.pd-items>div{grid-template-columns:minmax(0,1fr)}}
+.history-protected{margin:8px 0;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;background:var(--soft)}
+.history-protected button{margin-right:8px}
+.history-private-body p{margin:8px 0;padding-left:10px;border-left:3px solid var(--line);overflow-wrap:anywhere}
+.history-private-print-note{display:none}
+@media print{summary::after,.ph-hint{display:none}.phase-fold{break-inside:avoid}.history-private-body,.history-protected [data-history-toggle],.history-protected .small-note{display:none!important}.history-private-print-note{display:block!important;font-size:.8em;color:#444}details[data-history-public] button{display:none!important}}
+
+/* 小贝宝：参考家族工作台的留白与柔和层次，保留绿色识别色。 */
+:root{--brand:#356f60;--ink:#34423e;--muted:#596c62;--line:#e2e9e3;--paper:#faf9f7;--green:#356f60;--soft:#edf6f0;--orange:#a8410a}
+body{font:16px/1.68 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+body.big{font-size:19px}
+button{border-radius:10px;transition:background .16s,border-color .16s,box-shadow .16s,transform .16s}
+button:hover{background:#f7fbf8;border-color:#b8d2c4}
+button.primary:hover{background:#8d3508;border-color:#8d3508;color:#fff}
+.top{background:rgba(255,255,255,.9);border-color:var(--line)}
+.brand{font-weight:600;letter-spacing:.04em}
+.version,.tag{background:#f1f4f1;color:#60736a}
+nav{background:#fff;padding:22px 14px}
+nav button{font-size:13.5px;font-weight:400;border-radius:11px}
+nav button[aria-current=page]{background:#eaf5ee;color:#245f50;font-weight:600}
+main{padding-top:28px}
+h1{font-weight:600;letter-spacing:-.02em;line-height:1.35}
+h2,h3{font-weight:600}
+.eyebrow{font-weight:600;letter-spacing:.1em}
+.primer-home{background:#e3f0ed;border-color:#e3f0ed;color:#164d44;font-weight:600}
+.hero{background:linear-gradient(135deg,#eef8f1 0%,#fffbf6 100%);border-color:#e0eee3;box-shadow:0 8px 28px rgba(52,78,61,.04)}
+.card{border-color:var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(55,73,60,.03),0 10px 28px rgba(55,73,60,.045)}
+.mface{border-color:var(--line);box-shadow:0 8px 26px rgba(55,73,60,.045)}
+.mface.back,.pin{background:#f1f8f3}
+@media(max-width:640px){main{padding-top:16px}.hero{padding:20px}}
+@media(prefers-reduced-motion:reduce){button{transition:none}}
+
+</style><link rel="stylesheet" href="./patterns/disease-primer.css"><style>.dp-panel{inset:0;border-radius:0}.dp-back span{display:inline}.dp-close{padding:0 12px}.dp-close::after{content:'关闭';margin-left:4px}
+/* 指标目录与空卡：固定卡高不在这里改；空卡沿用 276px。 */
+.metric-cat{margin-top:22px;min-width:0;border-top:1px solid var(--line);padding-top:12px}
+.metric-cat[data-has-record="true"]{border-top:0;padding-top:0}
+.metric-cat>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;min-height:44px}
+.metric-cat>summary::-webkit-details-marker{display:none}
+.metric-cat>summary::before{content:'▸';color:var(--muted);transition:transform .2s}
+.metric-cat[open]>summary::before{transform:rotate(90deg)}
+.cat-head,.metric-cat>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0 0 10px}
+.cat-name{font-size:16px;font-weight:700}
+.cat-count{font-size:11.5px;color:var(--muted);font-weight:400}
+.metric-more{margin-top:10px}
+.metric-more>summary{min-height:36px;cursor:pointer;color:var(--muted);font-size:12.5px}
+.metric-grid-empty{margin-top:10px}
+.mcard[data-empty="true"] .mface.front{border-style:dashed;background:#fffdfd}
+.mcard[data-empty="true"] .metric-value{font-size:20px;font-weight:600;color:var(--muted)}
+.mface-empty{display:flex;flex-direction:column;gap:6px;border:1px dashed #c8d9ce;border-radius:10px;padding:10px;color:var(--muted);min-width:0}
+.mface-empty h3{font-size:14px;margin:0;color:var(--ink)}
+.mface-empty p{margin:0;font-size:12px;overflow-wrap:anywhere}
+.check-summary{margin-top:0}
+.check-latest-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px}
+.check-latest{min-width:0;display:flex;flex-direction:column;gap:4px;text-align:left;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;overflow-wrap:anywhere}
+.check-latest .ci-cat,.check-latest .ci-meta,.check-latest .ci-compare{font-size:11.5px;color:var(--muted)}
+.check-latest .ci-value{font-size:20px;font-weight:700}
+.check-latest .ci-compare{color:#526a63}
+.check-missing{margin-top:12px}
+.check-missing>summary{min-height:36px;cursor:pointer;font-size:12px;color:var(--muted)}
+.check-missing ul{margin:6px 0 0;padding-left:20px;columns:2;font-size:12px}
+.task-meta{font-size:11.5px;color:var(--muted);margin:4px 0 0}
+.small-note{font-size:11.5px;margin:2px 0 6px}
+.privacy-stats{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 10px}
+.privacy-list{margin-top:8px}
+.privacy-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start}
+.privacy-row-main{min-width:0}
+.privacy-controls{display:grid;gap:8px;min-width:190px}
+.privacy-controls label{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.45}
+.privacy-controls input{width:18px;height:18px;margin:2px 0 0;flex:none}
+.privacy-controls input:disabled{opacity:.55}
+@media(max-width:640px){.privacy-row{grid-template-columns:minmax(0,1fr)}.privacy-controls{min-width:0;padding-top:2px}}
+@media(max-width:640px){.check-latest-grid{grid-template-columns:minmax(0,1fr)}.check-missing ul{columns:1}}
+</style><style>
+.digest-intro{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0}
+.digest-entry{border:1px solid var(--line);border-radius:12px;padding:16px;background:#fbfdfb}
+.digest-entry h3{margin-bottom:6px}
+.digest-entry .actions{margin-top:10px}
+.digest-board{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:12px;background:white}
+.digest-head,.digest-day{display:grid;grid-template-columns:96px minmax(0,1fr) minmax(0,1fr)}
+.digest-head{background:#eef5f0;color:#47675d;font-size:13px;font-weight:700}
+.digest-head span,.digest-date,.digest-cell{padding:10px 12px;min-width:0}
+.digest-day{border-top:1px solid var(--line)}
+.digest-date{font-weight:700;font-size:14px;background:#fafcfb}
+.digest-cell{border-left:1px solid #edf2ef}
+.digest-cell .row{border-top:0;padding:0 0 10px}
+.digest-cell .row:last-child{padding-bottom:0}
+.digest-cell-empty{color:var(--muted);font-size:13px;margin:0}
+.digest-cell-label{display:none;font-size:12px;color:var(--green);font-weight:700;margin-bottom:4px}
+.digest-group{margin-top:16px}
+.digest-group-title{font-size:15px;margin:0 0 8px}
+.digest-note-link{border:0;background:none;color:var(--green);padding:0 3px;min-height:auto;text-decoration:underline}
+.form-error{color:#8a2f1f;background:#fbebe7;border-radius:8px;padding:8px 10px;margin:10px 0}
+@media(max-width:760px){
+  .digest-intro{grid-template-columns:minmax(0,1fr)}
+  .digest-head{display:none}
+  .digest-day{grid-template-columns:minmax(0,1fr)}
+  .digest-date{border-bottom:1px solid var(--line)}
+  .digest-cell{border-left:0;border-top:1px solid #edf2ef}
+  .digest-cell-label{display:block}
+}
+.s03-banner{background:#fff7ea;border:1px solid #ecd3ad;border-left:5px solid var(--orange);color:#5b3716;padding:16px 18px;border-radius:10px}
+.s03-banner h2{margin:0 0 6px;color:#5b3716}
+.s03-banner p{margin:6px 0}
+.s03-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 2px}
+.s03-fact{border:1px solid #ecd3ad;background:#fffdf8;border-radius:9px;padding:9px 10px}
+.s03-fact span{display:block;font-size:12px;color:#7b5b36;margin-bottom:3px}
+.s03-fact strong{font-size:15px;color:#4d2c0c}
+.s03-pending{background:#fff7ea;border:1px solid #ecd3ad;border-left:5px solid var(--orange);border-radius:10px;padding:14px 16px;margin-top:16px}
+.s03-pending h2{margin-top:0;color:#5b3716}
+.s03-pending p{margin:6px 0}
+.s03-sources{list-style:none;padding:0;margin:10px 0;display:grid;gap:10px}
+.s03-sources li{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdfb}
+.s03-sources p{margin:6px 0}
+.s03-source-line{font-size:14px;margin:10px 0 0}
+.s03-sources a{color:var(--green);text-decoration:underline;overflow-wrap:anywhere}
+@media(max-width:760px){.s03-grid{grid-template-columns:minmax(0,1fr)}}
+/* S04 血管资料：手工录入、原件状态与回源。只使用记录与资料目录现有数据。 */
+.vas-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.vas-stat{border:1px solid var(--line);border-radius:12px;background:#fbfdfb;padding:12px 14px;min-width:0}
+.vas-stat strong{display:block;font-size:24px;line-height:1.15;color:var(--green)}
+.vas-stat span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.vas-row{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0;min-width:0}
+.vas-row-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;margin-bottom:6px}
+.vas-row-head h3{margin:0;min-width:0;overflow-wrap:anywhere}
+.vas-dates{font-size:12px;color:var(--muted)}
+.vas-text{margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.vas-meta{font-size:12px;color:var(--muted);margin:4px 0 0;overflow-wrap:anywhere}
+.no-original-tag{background:#fff1e6;color:#8a3f12;border:1px solid #ecd1bd}
+.original-tag{background:#eef6f0;color:#245f50;border:1px solid #cfe4d7}
+.vas-source-box{border:1px solid var(--line);border-radius:10px;background:#fbfdfb;padding:12px;margin:12px 0;min-width:0}
+.vas-source-box h3{margin:0 0 6px}
+.vas-source-box pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+.vas-unknown-note{font-size:12px;color:var(--muted);margin:2px 0 8px}
+.vas-file-lock{color:#674278;background:#f6f0f9;border:1px solid #e4d6ea;border-radius:8px;padding:8px 10px;font-size:12px}
+@media(max-width:640px){.vas-stats{grid-template-columns:minmax(0,1fr)}}
+</style></head><body><a class="skip" href="#main">跳到主要内容</a><header class="top"><button class="brand" data-view="看板">✿ 小贝宝 BeiPal</button><span class="version">原型 v0.2</span><button id="group-switch" class="group-switch" type="button" data-dataset-open="1" aria-haspopup="dialog" aria-label="切换合成示例组"><span class="gs-dot" aria-hidden="true"></span><span id="group-switch-text">示例 A · 6 条</span><span aria-hidden="true">▾</span></button><span class="status" title="合成示例 · 仅本页临时演示 · 未连接宿主">合成示例 · 仅本页临时演示 · 未连接宿主</span><button class="dp-trigger" type="button" data-primer-open aria-label="疾病概要：定义、医学资料规范和指南情况、目前治疗全景概要、发展趋势" title="疾病概要">?</button><button id="large">大字</button><button id="pane-toggle" aria-expanded="false">AI 对话演示</button><button id="pane-close" aria-label="收起 AI 对话演示" hidden>×</button></header><div class="layout"><div class="business"><nav id="nav" aria-label="工作台导航"></nav><main id="main" tabindex="-1"></main></div><div id="splitter" class="splitter" role="separator" aria-label="调整 AI 演示面板宽度" aria-orientation="vertical" aria-valuemin="25" aria-valuemax="45" aria-valuenow="35" tabindex="0" hidden></div><aside id="pane" class="pane" aria-label="右侧宿主模拟" hidden><div class="eyebrow">右侧面板 · 状态稿</div><h2>原生 AI 对话位置</h2><div class="notice">宿主模拟 / 非真实 DSH 会话。没有连接、发送或回复。</div><div class="panelbox"><p>这里预留给宿主提供的原生会话。工作台本身不会复制聊天界面。</p><p class="muted">讨论草稿仅在下方预览，不会自动发送；私密记录不进入草稿。</p><label class="field">待复制草稿<textarea id="draft" placeholder="选择“和 AI 讨论”生成预览" readonly></textarea></label><button id="copy">复制草稿</button><p id="copy-status" class="muted" role="status"></p></div></aside></div><dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title"></h2><button id="close-dialog" aria-label="关闭">×</button></div><div class="dialog-body" id="dialog-body"></div><div class="dialog-foot" id="dialog-foot"></div></dialog><div class="toast" id="toast" role="status" hidden></div>
+<script src="primer-data.js"></script><script src="./patterns/disease-primer.js"></script><script src="demo-data.js"></script><script src="demo-data-b.js"></script><script src="metric-model.js"></script><script src="pathway-model.js"></script><script>
+const pages=['看板','发作与病程','器官与专科','病情整理','病情一图秀','治疗与用药','复诊与准备','长期与生活'];
+const subs={'发作与病程':['病程与诊断过程','发作记录','症状记录','发作回顾','部位与愈合'],'器官与专科':['眼','血管','神经','消化道','皮肤·关节·口腔'],'病情整理':['资料库','整理草稿 / 核对','病情档案','指标检测','病情汇总'],'病情一图秀':['指标趋势','治疗与事件节点'],'治疗与用药':['当前用药','变更与更正','副作用与感受','用药前检查记录'],'复诊与准备':['问题清单','就诊准备与导出','什么情况要马上就医','医嘱记录'],'长期与生活':['心理与家庭','生育·性健康与用药','工作·费用·异地就医']};
+/* 数据不可用时显示错误状态。默认组仍是 demo-data.js 的 A；B 是另一份独立合成档案。 */
+const DEMO_OK=Array.isArray(window.BEIPAL_DEMO_RECORDS)&&Array.isArray(window.BEIPAL_METRICS)&&Array.isArray(window.BEIPAL_EVENTS)&&typeof window.BEIPAL_METRIC_MODEL?.build==='function'&&typeof window.BEIPAL_PATHWAY_MODEL?.build==='function';
+const demoRecords=DEMO_OK?window.BEIPAL_DEMO_RECORDS:[];
+const demoMetrics=DEMO_OK?window.BEIPAL_METRICS:[];
+const demoEvents=DEMO_OK?window.BEIPAL_EVENTS:[];
+function cloneDemoRecord(r){return JSON.parse(JSON.stringify(r))}
+const DATASETS=DEMO_OK?[{id:'courseA',short:'A',label:'示例组 A · 长病程（默认）',synthetic:true,records:demoRecords,metrics:demoMetrics,events:demoEvents}]:[];
+if(window.BEIPAL_SET_B&&Array.isArray(window.BEIPAL_SET_B.records)&&Array.isArray(window.BEIPAL_SET_B.metrics)&&Array.isArray(window.BEIPAL_SET_B.events))DATASETS.push({...window.BEIPAL_SET_B,short:'B'});
+let currentDataset=DATASETS[0]||null;
+function buildMetricsFor(set){return DEMO_OK&&set?window.BEIPAL_METRIC_MODEL.build(set.metrics||[]):[]}
+function initialState(set){const recs=set&&Array.isArray(set.records)?set.records:[],built=buildMetricsFor(set);return {view:'看板',sub:'',records:recs.map(cloneDemoRecord),selected:new Set(recs.filter(r=>!r.private).map(r=>r.id)),timelineSelected:new Set(),expandedHistory:new Set(),width:35,range:'all',zoom:100,pin:null,showEvents:true,metricIds:new Set(built.slice(0,3).map(m=>m.id)),flipped:new Set(),files:[],candidates:[],fileDialog:null,filesTab:'目录'}}
+let state=initialState(currentDataset);
+let metrics=buildMetricsFor(currentDataset),events=currentDataset?currentDataset.events:[];
+const $=s=>document.querySelector(s);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(el.timer);el.timer=setTimeout(()=>el.hidden=true,3000)}
+function resetHistoryExpansion(){if(state.expandedHistory&&state.expandedHistory.size)state.expandedHistory.clear()}
+function go(view,sub=''){resetHistoryExpansion();state.view=view;state.sub=sub||((subs[view]||[])[0]||'');render();$('#main').focus({preventScroll:true});window.scrollTo(0,0)}
+function nav(){let extra=['授权与隐私','资料目录与云解析'];$('#nav').innerHTML=pages.concat(extra).map(p=>`<button ${extra.includes(p)?'data-go':'data-view'}="${p}" ${p===state.view?'aria-current="page"':''}>${p}</button>`).join('')}
+function rawStartNote(r){return datePrecision(r)==='unknown'&&(r.date||r.datePrecision&&r.datePrecision!=='unknown')?`（原始值：${r.date||'空'}；原始精度：${r.datePrecision||'未声明'}，待核，不参与排序）`:''}
+function rawDateNote(r){let d=String((r&&r.date)||''),declared=String((r&&r.datePrecision)||'');if(!d||datePrecision(r)!=='unknown')return '';let extra=declared&&declared!=='unknown'?`；原始精度：${declared}`:'';return `（原始值：${d}${extra}，待核，不参与排序）`}
+function endText(r){return !r.endDate?'未知':isDayDate(r.endDate)?r.endDate:`待核（原始值：${r.endDate}）`}
+function historyText(r,h){if(typeof h==='string')return h;if(r.kind==='血管资料'||r.kind==='血管')return `检查：${vascularDateText(h.date,h.datePrecision)} · 报告：${vascularDateText(h.reportDate,h.reportDatePrecision)} · 原文：${h.text||'未填写'} · 来源：${h.source?h.source:'未填写'} · ${h.fileLinked?'当时关联本机原件':'无原件'} · ${h.private===true?'私密':h.private===false?'非私密':'隐私状态未知'}`;if(r.kind==='消化症状'||r.kind==='消化道检查')return `日期：${dateText({date:h.date,datePrecision:h.datePrecision})}${rawDateNote(h)} · 原文：${h.text||'未填写'} · 来源：${h.source?h.source:'未填写'} · ${h.private===true?'私密':h.private===false?'非私密':'隐私状态未知'}`;let extra=r.kind==='当前用药'?treatmentFields({...h,kind:r.kind}):r.kind==='发作记录'?`开始：${startText(h)}${rawStartNote(h)} · 结束：${endText(h)} · 部位：${h.site||'未知'} · `:'';return `${extra}原文：${h.text} · 来源：${h.source} · ${h.private===true?'私密':h.private===false?'非私密':'隐私状态未知'}`}
+function isPublicHistory(h){return !!h&&typeof h==='object'&&h.private===false}
+function publicHistoryEntries(r){return (Array.isArray(r.history)?r.history:[]).filter(isPublicHistory)}
+function protectedHistoryEntries(r,owner){return owner?(Array.isArray(r.history)?r.history:[]).filter(h=>!isPublicHistory(h)):[]}
+function protectedHistoryInner(r,owner){let entries=protectedHistoryEntries(r,owner);if(!entries.length)return '';let id=String(r.id),expanded=state.expandedHistory.has(id),entry=h=>esc(r.kind==='医嘱记录'?adviceHistoryText(h):historyText(r,h));return `<button type="button" data-history-toggle="${esc(id)}" aria-expanded="${expanded}">${expanded?'收起':'展开'}私密/未知历史（${entries.length} 条）</button><p class="small-note">${expanded?'已展开：收起后正文会从页面移除。':'正文未渲染；私密或隐私状态未知的更正历史默认不显示。'}</p>${expanded?`<div class="history-private-body">${entries.map(h=>`<p>${entry(h)}</p>`).join('')}</div>`:''}<span class="history-private-print-note">打印已隐藏 ${entries.length} 条私密/未知更正历史。</span>`}
+function protectedHistoryMarkup(r,owner){let inner=protectedHistoryInner(r,owner);return inner?`<div class="history-protected" data-history-protected="${esc(r.id)}" data-history-owner="${owner?'1':'0'}">${inner}</div>`:''}
+function refreshHistoryProtected(box){if(!box)return null;let id=box.dataset.historyProtected,owner=box.dataset.historyOwner==='1',r=state.records.find(x=>String(x.id)===id);if(!r)return null;box.innerHTML=protectedHistoryInner(r,owner);return box.querySelector('[data-history-toggle]')}
+function linkedPrivateFile(r){let f=r&&r.fileId?fileById(r.fileId):null;return f&&f.private?f:null}
+function privateToggleButton(r){let f=linkedPrivateFile(r);return `<button data-toggle-private="${r.id}" ${f?'disabled title="关联私密原件，不能单独改回公开"':''}>${f?'关联私密原件 · 不可公开':r.private?'改回公开':'标为私密'}</button>`}
+function privateLockNote(r,scope='record'){let f=linkedPrivateFile(r);return f?`<p class="small-note" id="private-lock-note-${esc(r.id)}-${esc(scope)}">关联私密原件「${esc(f.name)}」：这条记录不能改回公开；需先在资料目录取消原件私密，再逐条确认记录。</p>`:''}
+function clearPrivateSelections(id){let a=state.selected.delete(id),b=state.timelineSelected.delete(id);return a||b}
+function clearPrivateOutputs(id){clearPrivateSelections(id);clearStaleDraftOutputs()}
+function clearStaleDraftOutputs(){let d=$('#draft'),s=$('#copy-status'),had=(d&&d.value!=='')||(s&&s.textContent!=='');if(d)d.value='';if(s)s.textContent='';return had}
+function applyRecordPrivacy(r,next){if(!r)return false;next=!!next;if(next===!!r.private)return true;if(!next){let f=linkedPrivateFile(r);if(f){toast(`关联私密原件「${f.name}」的记录不能改回公开；请先取消原件私密，再逐条确认`);return false}}r.private=next;if(next){let had=state.selected.has(r.id)||state.timelineSelected.has(r.id)||($('#draft')?.value||'')!==''||($('#copy-status')?.textContent||'')!=='';clearPrivateOutputs(r.id);toast(had?'已标为私密：已移出本次选择并清空页内 AI 草稿（系统剪贴板与已下载文件不受影响）；默认不进摘要/导出':'已标为私密：默认不进摘要/导出和 AI 草稿；如需纳入请逐条勾选')}else{let stale=clearStaleDraftOutputs();toast(`已改回公开：不会自动加入摘要/导出，请逐条勾选；${stale?'旧草稿与复制状态已清空（仅页内；系统剪贴板与已下载文件不受影响）；':''}重新生成草稿可能包含这条记录，生成的是新的 AI 草稿`)}resetHistoryExpansion();return true}
+function rec(r,owner=false){if(r.kind==='医嘱记录')return adviceRec(r,owner);let pub=publicHistoryEntries(r);return `<div class="row"><span class="tag ${r.private?'private-tag':''}">${r.private?'私密':'本人记录'}</span> ${r.kind==='消化症状'||r.kind==='消化道检查'?`<span class="tag">${esc(r.kind)}</span> `:''}<small>${esc(dateText(r))}${r.kind==='消化症状'||r.kind==='消化道检查'?esc(rawDateNote(r)):''}${r.kind==='消化症状'||r.kind==='消化道检查'?` · 来源：${esc(r.source?r.source:'未填写')}`:` · ${esc(r.source)}`}</small>${r.kind==='当前用药'&&r.drug!==undefined?`<p>${esc(treatmentFields(r))}</p>`:''}${r.kind==='发作记录'?`<p>开始：${esc(startText(r)+rawStartNote(r))} · 结束：${esc(endText(r))} · 部位：${esc(r.site||'未知')}</p>`:''}<p>${esc(r.text)}</p>${protectedHistoryMarkup(r,owner)}<details${pub.length?` data-history-public="${r.id}"`:''}><summary>⋯ 更多</summary><button data-correct="${r.id}">改这一条</button>${privateToggleButton(r)}${pub.length?`<p>更正前：${pub.map(h=>esc(historyText(r,h))).join('；')}</p>`:''}</details></div>`}
+function episodeForm(r={}){let known=!!(r.datePrecision||r.date),p=known?datePrecision(r):'day',dayVal=/^\d{4}-\d{2}-\d{2}$/.test(String(r.date||''))?r.date:'',monthVal=/^\d{4}-\d{2}$/.test(String(r.date||''))?r.date:'';return `<p>仅保存在本页内存，刷新后重置。开始日期可只记到月份或标为未知；未知不会用今天或推测日期代替，也不会推算持续时间。</p>${rawStartNote(r)?`<p>开始日期待核：${esc(rawStartNote(r))}。未修改日期精度时保留原值；选择其他精度可更正。</p>`:''}<p id="episode-errors" role="alert"></p><label class="field">开始日期精度<select id="entry-precision"><option value="day" ${p==='day'?'selected':''}>具体到日</option><option value="month" ${p==='month'?'selected':''}>只记得月份</option><option value="unknown" ${p==='unknown'?'selected':''}>日期未知</option></select></label><label class="field" id="entry-date-field" style="${p==='day'?'':'display:none'}">开始日期<input id="entry-date" type="date" min="${DATE_MIN_YEAR}-01-01" max="${DATE_MAX_YEAR}-12-31" value="${esc(dayVal)}"></label><label class="field" id="entry-month-field" style="${p==='month'?'':'display:none'}">开始月份（只记得月份时填写）<input id="entry-month" type="month" min="${DATE_MIN_YEAR}-01" max="${DATE_MAX_YEAR}-12" value="${esc(monthVal)}"></label><p id="entry-unknown-note" class="muted" style="${p==='unknown'?'':'display:none'}">开始日期未知：不会用任何推测日期补齐，也不参与按日排序。</p>${r.endDate&&!isDayDate(r.endDate)?`<p>结束日期待核，原始值：${esc(r.endDate)}。默认保留；勾选后可填写正确日期或留空表示未知。</p><label><input type="checkbox" id="entry-end-replace"> 更正结束日期</label>`:''}<label class="field">结束日期（未知可留空）<input id="entry-end" type="date" min="${DATE_MIN_YEAR}-01-01" max="${DATE_MAX_YEAR}-12-31" value="${esc(r.endDate||'')}" ${r.endDate&&!isDayDate(r.endDate)?'disabled':''}></label><label class="field">部位<input id="entry-site" value="${esc(r.site||'')}" placeholder="例如口腔；未知可留空"></label><label class="field">原文<textarea id="entry-text" placeholder="按自己的话记录">${esc(r.text||'')}</textarea></label><label class="field">来源<input id="entry-source" value="${esc(r.source||'')}" placeholder="例如本人记录；未知可留空"></label><label><input type="checkbox" id="entry-private" ${r.private?'checked':''} ${linkedPrivateFile(r)?'disabled':''}> 标记为私密</label>${privateLockNote(r,'episode-form')}`}
+function readEpisode(){let precision=$('#entry-precision')?$('#entry-precision').value:'day';let dayInput=$('#entry-date'),monthInput=$('#entry-month');let date=precision==='month'?(monthInput?monthInput.value:''):precision==='day'?(dayInput?dayInput.value:''):'';let endDate=$('#entry-end').value,text=$('#entry-text').value.trim(),errors=[];document.querySelectorAll('#dialog-body [aria-invalid]').forEach(el=>{el.removeAttribute('aria-invalid');el.removeAttribute('aria-describedby')});if(precision==='day'){if(!date)errors.push(['#entry-date','请填写开始日期，或把精度改为“只记得月份”或“日期未知”']);else if(!isDayDate(date))errors.push(['#entry-date','开始日期需是有效的公历日期，年份在 '+DATE_MIN_YEAR+'–'+DATE_MAX_YEAR+' 之间'])}else if(precision==='month'){if(!date)errors.push(['#entry-month','请填写开始月份，或把精度改为“日期未知”']);else if(!isMonthDate(date))errors.push(['#entry-month','开始月份需在 '+DATE_MIN_YEAR+'–'+DATE_MAX_YEAR+' 之间'])}if(!text)errors.push(['#entry-text','请填写原文']);if(endDate&&!$('#entry-end').disabled){if(!isDayDate(endDate))errors.push(['#entry-end','结束日期需是有效的公历日期，年份在 '+DATE_MIN_YEAR+'–'+DATE_MAX_YEAR+' 之间']);else{let cmp=compareStartEnd(date,precision,endDate);if(cmp==='endBefore')errors.push(['#entry-end',precision==='month'?'结束日期不能早于开始月份':'结束日期不能早于开始日期'])}}let box=$('#episode-errors');box.textContent=errors.map(x=>x[1]).join('；');if(errors.length){errors.forEach(([selector])=>{let el=$(selector);if(el){el.setAttribute('aria-invalid','true');el.setAttribute('aria-describedby','episode-errors')}});let first=$(errors[0][0]);if(first)first.focus();return null}return {date,datePrecision:precision,endDate,site:$('#entry-site').value.trim(),text,source:$('#entry-source').value.trim()||'来源未知',private:$('#entry-private').checked}}
+function treatmentFields(r){return r.kind==='当前用药'&&r.drug!==undefined?`药名：${r.drug||'未知'} · 剂量原文：${r.dose||'未知'} · 时间：${dateText(r)} · 结束：${r.ongoing?'仍在进行':(r.endDate||'未记录')} · `:''}
+function treatmentForm(r={}){let p=r.datePrecision||datePrecision(r);return `<p>仅记录本人抄录的内容，不提供治疗建议。仅存本页内存，刷新后重置；请勿输入真实个人资料。</p><p id="treatment-errors" role="alert"></p><label class="field">药名原文<input id="t-drug" value="${esc(r.drug||'')}" placeholder="未知可留空"></label><label class="field">剂量原文<input id="t-dose" value="${esc(r.dose||'')}" placeholder="未知可留空"></label><label class="field">治疗记录原文<textarea id="t-text" placeholder="按原文记录，不推断用药状态">${esc(r.text||'')}</textarea></label><label class="field">时间精度<select id="t-precision"><option value="unknown" ${p==='unknown'?'selected':''}>时间未知</option><option value="month" ${p==='month'?'selected':''}>只记得月份</option><option value="day" ${p==='day'?'selected':''}>具体到日</option></select></label><label class="field" id="t-day-field" ${p==='day'?'':'hidden'}>日期<input id="t-day" type="date" min="1900-01-01" max="2100-12-31" value="${p==='day'?esc(r.date):''}"></label><label class="field" id="t-month-field" ${p==='month'?'':'hidden'}>月份<input id="t-month" type="month" min="1900-01" max="2100-12" value="${p==='month'?esc(r.date):''}"></label><label class="field">来源<input id="t-source" value="${esc(r.source||'')}" placeholder="例如处方抄录；未知可留空"></label><label class="field" id="t-end-field" ${p==='day'?'':'hidden'}>结束日期（可留空）<input id="t-end" type="date" min="1900-01-01" max="2100-12-31" value="${esc(isDayDate(r.endDate||'')?r.endDate:'')}" ${r.ongoing?'disabled':''}></label><label><input type="checkbox" id="t-ongoing" ${r.ongoing?'checked':''}> 仍在进行</label><label><input type="checkbox" id="t-private" ${r.private?'checked':''} ${linkedPrivateFile(r)?'disabled':''}> 标记为私密</label>${privateLockNote(r,'treatment-form')}`}
+function readTreatment(){let drug=$('#t-drug').value.trim(),dose=$('#t-dose').value.trim(),text=$('#t-text').value.trim(),precision=$('#t-precision').value,date=precision==='day'?$('#t-day').value:precision==='month'?$('#t-month').value:'',errors=[];let endRaw=$('#t-end')?$('#t-end').value:'',ongoing=$('#t-ongoing')?$('#t-ongoing').checked:false,end=ongoing?'':(isDayDate(endRaw)?endRaw:'');document.querySelectorAll('#dialog-body [aria-invalid]').forEach(el=>{el.removeAttribute('aria-invalid');el.removeAttribute('aria-describedby')});if(!drug&&!text)errors.push(['#t-drug','请填写药名或治疗记录原文']);if(precision==='day'&&!isDayDate(date))errors.push(['#t-day','请填写有效日期（1900–2100），或选择时间未知']);if(precision==='month'&&!isMonthDate(date))errors.push(['#t-month','请填写有效月份（1900–2100），或选择时间未知']);if(endRaw&&!ongoing&&!isDayDate(endRaw))errors.push(['#t-end','结束日期需为 1900–2100 之间的日期，或清空']);
+if(precision==='day'&&end&&date&&day(end)<day(date))errors.push(['#t-end','结束日期不能早于开始日期']);$('#treatment-errors').textContent=errors.map(e=>e[1]).join('；');if(errors.length){errors.forEach(([id])=>{$(id).setAttribute('aria-invalid','true');$(id).setAttribute('aria-describedby','treatment-errors')});$(errors[0][0]).focus();return null}return {drug,dose,text,date,datePrecision:precision,endDate:end,ongoing,source:$('#t-source').value.trim()||'来源未知',private:$('#t-private').checked}}
+function pageHeader(title,desc,noDiscuss=false){return `<div class="eyebrow">我的资料 · 合成示例</div><h1>${title}</h1><p class="muted">${desc}</p><div class="actions">${noDiscuss?'':'<button data-action="discuss">和 AI 讨论</button>'}<button data-view="看板">回到看板</button></div>`}
+function dashboard(){let visible=state.records.filter(r=>!r.private);return `<div class="hero"><div class="eyebrow">BEIPAL · 你的记录，由你做主</div><h1>把零散的日子，慢慢整理起来。</h1><p>白塞病是一种慢性、反复发作的炎症性疾病，可能影响口腔、皮肤、眼睛和其他部位；每个人的表现不同。</p><p>记下自己的感受，回看资料，为下一次见面做好准备。</p><span class="tag">合成示例数据</span> <span class="tag">原型 · 刷新后重置</span><div class="actions"><button class="primary" data-view="发作与病程" data-sub="发作记录">记录这次发作 →</button><button data-action="discuss">和 AI 讨论</button><button class="primer-home" data-primer-open data-primer-entry="hero" aria-haspopup="dialog" aria-label="疾病概要：白塞病是什么？定义、医学资料与指南情况、治疗全景、发展趋势">疾病概要：白塞病是什么？</button></div><p class="guide-note">这个病是什么、指南里列了哪些治疗类别、这些年有什么变化，都在疾病概要里。指南与来源：国家卫生健康委《86 个罕见病病种诊疗指南（2025 年版）》第 9 章（原件已取得）· NHS 患者页 · EULAR 2018 / 2025 更新（全文未取得）。本项目患者访谈 0 次、临床审核 0 次。</p></div><div class="section"><h2>从今天想做的事开始</h2></div><div class="grid">${[['今天要记什么','记录发作','发作与病程','发作记录'],['时间线上看变化','跨科时间线','病情一图秀','治疗与事件节点'],['安全提示','求助信息','复诊与准备','什么情况要马上就医'],['家人帮我记','以代记者身份记录','授权与隐私',''], ['资料整理','血管资料','器官与专科','血管'],['今天要记什么','消化症状','器官与专科','消化道'],['用药','记录治疗','治疗与用药','当前用药'],['下次复诊','记录医嘱','复诊与准备','医嘱记录'],['今天要记什么','生活影响','长期与生活','工作·费用·异地就医'],['最近检查','整理报告','病情整理','整理草稿 / 核对'],['下次复诊','准备材料','复诊与准备','就诊准备与导出'],['只给我自己看','私密问题','复诊与准备','问题清单'],['用药','用药前检查记录','治疗与用药','用药前检查记录']].map(([a,b,v,s])=>`<div class="card"><small>${a}</small><h3>${b}</h3>${b==='整理报告'?`<p class="task-meta">${checkTaskMeta()}</p>`:''}<button class="link" ${v?`data-view="${v}" data-sub="${s}"`:'data-action="privacy"'}>查看 →</button></div>`).join('')}<div class="card"><small>这个病是什么</small><h3>疾病概要与指南来源</h3><p class="muted">定义 · 医学资料与指南 · 治疗全景 · 趋势</p><button class="link" data-primer-open aria-label="打开疾病概要：定义、医学资料与指南情况、治疗全景、发展趋势">打开介绍 →</button></div><div class="card private"><h3>只给我自己看</h3><p>私密记录默认不进入摘要、导出和 AI 草稿。</p><button class="link" data-action="privacy">私密标记 →</button></div></div>${checkSummary()}<div class="section"><h2>最近的记录</h2><span class="muted">${visible.length} 条</span><button data-view="发作与病程" data-sub="发作记录">查看记录</button></div><div class="card">${visible.length?visible.map(r=>rec(r)).join(''):'<div class="empty">还没有记录。可以从上面的任务开始，或先记录这次发作。</div>'}</div>`}
+function pathwayCard(s,index){
+  const blocks=window.BEIPAL_PATHWAY_MODEL.BLOCKS;
+  const sid='phase-'+s.recordId+'-'+index;
+  const body=blocks.map(([id,label],i)=>{
+    const b=s.detail[id]||{summary:'无记录；该块不可用',items:[['说明','该块不可用；本页不补写、不推断。']]};
+    const titleId=sid+'-'+id;
+    return `<section class="pd-block" data-block="${id}" aria-labelledby="${titleId}"><h3 id="${titleId}"><span class="pd-num" aria-hidden="true">${i+1}</span>${esc(label)}</h3><p class="pd-summary">${esc(b.summary)}</p><dl class="pd-items">${b.items.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></section>`;
+  }).join('');
+  return `<details class="phase-fold" data-phase-id="${esc(s.recordId)}" data-private="${s.private?'true':'false'}"><summary><span class="ph-dot" aria-hidden="true">●</span> <span class="ph-name">${esc(s.phase)}</span><span class="ph-sep"> · </span><span class="ph-date">${esc(s.d)}</span><span class="ph-sep"> · </span><span class="ph-text">${esc(s.text)}</span><span class="ph-sep"> · </span><span class="ph-hint">展开细节</span></summary><div class="phase-detail">${body}</div></details>`;
+}
+function pathwaySection(){
+  const stages=window.BEIPAL_PATHWAY_MODEL.build(state.records,currentDataset?currentDataset.metrics:demoMetrics);
+  const rows=stages.map(s=>`<tr><td>${esc(s.phase)}<br><small>${esc(s.d)}</small></td><td>${esc(s.plan)}</td><td>${esc(s.actual)}</td></tr>`).join('');
+  return `<div class="pathway" aria-labelledby="pathway-title"><div class="section"><h2 id="pathway-title">治疗阶段折叠卡</h2><span class="tag">合成示例</span></div><p class="muted">按治疗记录的开始日期分段，只用于回看本人抄录。以下均为合成示例，不是真实病历，也不构成医学建议。</p><p class="pathway-note">默认收起；点开一段看五块细节。打印时自动展开全部阶段，打印后恢复原状。</p>${stages.length?stages.map(pathwayCard).join(''):'<div class="empty">暂无可折叠的治疗阶段记录。</div>'}<div class="pathway-table-wrap"><table class="pathway-table"><caption>计划 vs 实际（按记录重述）</caption><thead><tr><th scope="col">阶段</th><th scope="col">计划（按记录重述）</th><th scope="col">实际（按记录重述）</th></tr></thead><tbody>${rows||'<tr><td colspan="3">无记录</td></tr>'}</tbody></table></div><p class="pathway-note">对照仅并排抄录，不核对差异、不判断是否达到计划。阶段划分只按记录开始日期先后，不代表治疗线、阶段顺序或疗效；日期未知的阶段排在最后，不参与按日排序，也不归入指标。</p><p class="pathway-note">口径：每块都有概要；空白写「无记录」+说明，不补写、不推断。影像与副作用只抄原文，不判读、不归因；效果只保留本人引号内原话，不评疗效。私密阶段只显示「记录存在 + 已过滤」，不显示数值或原文。</p></div>`;
+}
+function adviceRecordDate(r){if(!r.date)return '未知';let p=datePrecision(r);if(p==='day')return r.date;if(p==='month')return r.date+'（仅月份）';return `待核（原始值：${r.date}）`}
+function adviceDayText(v){if(!v)return '未知';return isDayDate(v)?v:`待核（原始值：${v}）`}
+function adviceFields(r){if(r.kind!=='医嘱记录')return '';return `原文：${r.text||'未知'} · 提出者：${r.proposer||'未知'} · 来源：${r.source||'未知'} · 记录日期：${adviceRecordDate(r)} · 拟复查日期：${adviceDayText(r.reviewDate)}`}
+function adviceHistoryText(h){let old=h&&typeof h==='object'?h:{text:String(h||'')};return adviceFields({kind:'医嘱记录',text:old.text,proposer:old.proposer,source:old.source,date:old.date,datePrecision:old.datePrecision,reviewDate:old.reviewDate})+` · ${old.private===true?'私密':old.private===false?'非私密':'隐私状态未知'}`}
+function adviceForm(r={}){return `<p>只抄录医生给出的复查安排原文，不转成用药，也不进入治疗阶段。所有字段都可未知；至少抄录一项已知事实。仅存本页内存，刷新后重置。</p><p id="advice-errors" role="alert"></p><label class="field">医嘱原文<textarea id="a-text" placeholder="按医生原话抄录；未抄到可留空">${esc(r.text||'')}</textarea></label><label class="field">提出者<input id="a-proposer" value="${esc(r.proposer||'')}" placeholder="例如复诊医生；未知可留空"></label><label class="field">来源<input id="a-source" value="${esc(r.source||'')}" placeholder="例如复诊口述、纸质医嘱；未知可留空"></label><label class="field">记录日期（未知可留空）<input id="a-date" type="date" min="${DATE_MIN_YEAR}-01-01" max="${DATE_MAX_YEAR}-12-31" value="${esc(isDayDate(r.date)?r.date:'')}"></label><label class="field">拟复查日期（未知可留空）<input id="a-review-date" type="date" min="${DATE_MIN_YEAR}-01-01" max="${DATE_MAX_YEAR}-12-31" value="${esc(isDayDate(r.reviewDate)?r.reviewDate:'')}"></label><label><input type="checkbox" id="a-private" ${r.private?'checked':''} ${linkedPrivateFile(r)?'disabled':''}> 标记为私密（默认不进入摘要、导出和 AI 草稿）</label>${privateLockNote(r,'advice-form')}`}
+function readAdvice(){let text=$('#a-text').value.trim(),proposer=$('#a-proposer').value.trim(),source=$('#a-source').value.trim(),date=$('#a-date').value,reviewDate=$('#a-review-date').value,errors=[];document.querySelectorAll('#dialog-body [aria-invalid]').forEach(el=>{el.removeAttribute('aria-invalid');el.removeAttribute('aria-describedby')});if(!text&&!proposer&&!source&&!date&&!reviewDate)errors.push(['#a-text','请至少抄录一项已知信息；不确定的字段可以留空']);if(date&&!isDayDate(date))errors.push(['#a-date','记录日期需是有效的公历日期，年份在 '+DATE_MIN_YEAR+'–'+DATE_MAX_YEAR+' 之间']);if(reviewDate&&!isDayDate(reviewDate))errors.push(['#a-review-date','拟复查日期需是有效的公历日期，年份在 '+DATE_MIN_YEAR+'–'+DATE_MAX_YEAR+' 之间']);$('#advice-errors').textContent=errors.map(x=>x[1]).join('；');if(errors.length){errors.forEach(([selector])=>{let el=$(selector);if(el){el.setAttribute('aria-invalid','true');el.setAttribute('aria-describedby','advice-errors')}});let first=$(errors[0][0]);if(first)first.focus();return null}return {text,proposer,source,date,datePrecision:date?'day':'unknown',reviewDate,private:$('#a-private').checked}}
+function adviceRec(r,owner=false){let pub=publicHistoryEntries(r);return `<div class="row" data-advice-row="${r.id}"><span class="tag ${r.private?'private-tag':''}">${r.private?'私密':'本人记录'}</span> <small>记录日期：${esc(adviceRecordDate(r))}</small><p>${r.text?esc(r.text):'<span class="muted">医嘱原文未知（未抄录）</span>'}</p><p class="muted">提出者：${esc(r.proposer||'未知')} · 来源：${esc(r.source||'未知')} · 拟复查日期：${esc(adviceDayText(r.reviewDate))}</p><div class="actions"><button data-advice-view="${r.id}" data-advice-owner="${owner?'1':'0'}">回看全文</button><button data-correct="${r.id}">改这一条</button>${privateToggleButton(r)}</div>${protectedHistoryMarkup(r,owner)}${pub.length?`<details data-history-public="${r.id}"><summary>更正前（${pub.length}）</summary>${pub.map(h=>`<p>${esc(adviceHistoryText(h))}</p>`).join('')}</details>`:''}</div>`}
+function adviceDialog(r,owner=false){let pub=publicHistoryEntries(r),hidden=protectedHistoryEntries(r,owner);dialog('回看医嘱记录',`<p><strong>医嘱原文</strong><br>${r.text?esc(r.text):'<span class="muted">未知（未抄录）</span>'}</p><p>提出者：${esc(r.proposer||'未知')}<br>来源：${esc(r.source||'未知')}<br>记录日期：${esc(adviceRecordDate(r))}<br>拟复查日期：${esc(adviceDayText(r.reviewDate))}</p>${(pub.length||hidden.length)?`<h3>更正前</h3>${pub.map(h=>`<p>${esc(adviceHistoryText(h))}</p>`).join('')}${protectedHistoryMarkup(r,owner)}`:''}<p class="muted">边界：医嘱记录与当前用药分开保存；本页不把医嘱转成用药，也不进入治疗阶段。未填日期保持未知，不推算医学间隔。无账号授权：这里的「本人」只是本页演示视图，不是登录身份或访问控制。</p>`,`<button data-action="cancel">关闭</button><button class="primary" data-correct="${r.id}">改这一条</button>`)}
+function doctorAdvicePage(){let items=state.records.filter(r=>r.kind==='医嘱记录');return `<div class="card"><div class="section" style="margin:0 0 12px"><h2>医嘱记录</h2><span class="tag">合成示例 · 仅本页内存</span><button data-action="add">记录一条医嘱</button></div><p>只抄录医生给出的复查安排原文，与「当前用药」分开保存；不把医嘱转成用药，也不进入治疗阶段。</p><p class="muted">原文、提出者、来源、记录日期、拟复查日期都可未知。未填写就显示未知，不补日期、不按「三个月后」等说法推算复查间隔。</p><p class="small-note" data-owner-demo-note>本人演示视图（无账号授权）：私密或未知更正历史默认不渲染正文，可逐条展开；公开历史仍显示。</p><div class="section" style="margin:18px 0 6px"><h3>已记录（${items.length}）</h3></div>${items.length?items.map(r=>adviceRec(r,true)).join(''):'<div class="empty">暂无医嘱记录。点「记录一条医嘱」抄录原文；不确定的字段可以留空。</div>'}<p class="muted">隐私：私密医嘱默认不进入摘要、导出和 AI 草稿；如要带出，需在就诊准备中逐条勾选。刷新页面后，本次新增与更正都会清空。</p></div>`}
+function recordPage(){let items=state.records.filter(r=>r.kind===state.sub);let cross=state.sub==='症状记录'?`<p class="notice" id="symptom-cross-entry-note">消化道相关症状请到「器官与专科 / 消化道」记录，那里可与检查按日期并列；本页记录不会自动归入消化道页，避免把其他症状误标为消化症状。</p><div class="actions" style="margin:8px 0 0"><button data-view="器官与专科" data-sub="消化道">去消化道页</button></div>`:'';return `<div class="card"><div class="section" style="margin:0 0 12px"><h2>${esc(state.sub)}</h2><button data-action="add">手工补一条</button></div><p class="muted">内容由本人填写；未知可以留空，不作医学判断。仅保存在本页内存，刷新后重置。</p><p class="small-note" data-owner-demo-note>本人演示视图（无账号授权）：私密或隐私状态未知的更正历史默认不渲染正文，可逐条展开；导航、记录更正或隐私变动后重新收起。公开更正历史仍显示。</p>${cross}${state.sub==='当前用药'?pathwaySection():''}<div class="section" style="margin:18px 0 6px"><h3>原始记录（可更正）</h3></div>${items.length?items.map(r=>rec(r,true)).join(''):'<div class="empty">暂时没有示例记录。可从“⋯ 更多”手工补一条。</div>'}</div>`}
+let lastRecordId=0;
+function nextRecordId(){let id=Math.max(Date.now(),lastRecordId+1);state.records.forEach(r=>{if(typeof r.id==='number'&&r.id>=id)id=r.id+1});lastRecordId=id;return id}
+function digestiveDateFields(r){let p=r?datePrecision(r):'day',day=p==='day'?String(r&&r.date||''):'',month=p==='month'?String(r&&r.date||''):'',raw=rawDateNote(r);return `${raw?`<p class="muted" id="entry-raw-date-note">原记录日期${esc(raw)}。未修改日期精度时保留原值；选择其他精度可更正。</p>`:''}<label class="field">日期精度<select id="entry-precision"><option value="day"${p==='day'?' selected':''}>具体日期</option><option value="month"${p==='month'?' selected':''}>仅知月份</option><option value="unknown"${p==='unknown'?' selected':''}>日期未知</option></select></label><label class="field" id="entry-date-field" style="${p==='day'?'':'display:none'}">具体日期<input id="entry-date" type="date" min="${DATE_MIN_YEAR}-01-01" max="${DATE_MAX_YEAR}-12-31" value="${esc(day)}"></label><label class="field" id="entry-month-field" style="${p==='month'?'':'display:none'}">月份<input id="entry-month" type="month" min="${DATE_MIN_YEAR}-01" max="${DATE_MAX_YEAR}-12" value="${esc(month)}"></label><p class="muted" id="entry-unknown-note" style="${p==='unknown'?'':'display:none'}">日期未知：只按“日期未知”分组，不补造具体日期。</p><p class="muted">日期不确定时可以只填月份或选择未知；不会替你补造日期。</p>`}
+function readDigestiveEntry(){let precision=$('#entry-precision')?$('#entry-precision').value:'day',text=$('#entry-text')?$('#entry-text').value.trim():'',source=$('#entry-source')?$('#entry-source').value.trim():'',date=precision==='day'?($('#entry-date')?$('#entry-date').value:''):precision==='month'?($('#entry-month')?$('#entry-month').value:''):'';let error=!text?'请填写记录内容':precision==='day'&&!isDayDate(date)?'请填写有效日期（1900–2100）':precision==='month'&&!isMonthDate(date)?'请填写有效月份（1900–2100）':'';let box=$('#digestive-entry-error');if(box){box.textContent=error;box.hidden=!error}if(error){toast(error);let f=precision==='day'?$('#entry-date'):precision==='month'?$('#entry-month'):$('#entry-text');if(f)f.focus();return null}return {date,datePrecision:precision,text,source,private:!!($('#entry-private')&&$('#entry-private').checked)}}
+function digestiveAddForm(kind){const check=kind==='消化道检查';return `<p>仅保存到本页内存，刷新后重置；请勿输入真实个人资料。</p><p class="muted">${check?'只抄检查名称与结论原文，不解读；日期和来源会和症状分开显示。':'按本人原话记录症状；本页不判断症状与检查之间的关系。'}</p><p class="form-error" id="digestive-entry-error" role="alert" hidden></p>${digestiveDateFields()}<label class="field">${check?'检查名称与结论原文':'症状原文'}<textarea id="entry-text" placeholder="${check?'按报告原文抄录，不写判断':'按自己的话记录'}"></textarea></label><label class="field">${check?'检查机构 / 来源':'来源'}（未知可留空，不会补造）<input id="entry-source" placeholder="${check?'例如合成检查报告；未知可留空':'例如本人记录；未知可留空'}"></label><label><input type="checkbox" id="entry-private"> 标记为私密（默认不进入摘要、导出和 AI 草稿）</label><input type="hidden" id="entry-kind" value="${kind}">`}
+function digestiveCorrectionForm(r){return `<p>类型：${esc(r.kind)}。可更正日期、来源、原文和私密标记；保存后保留上一版日期、来源与原文。</p><p class="form-error" id="digestive-entry-error" role="alert" hidden></p>${digestiveDateFields(r)}<label class="field">记录内容<textarea id="entry-text">${esc(r.text)}</textarea></label><label class="field">来源（未知可留空，不会补造）<input id="entry-source" value="${esc(r.source||'')}" placeholder="例如本人记录；未知可留空"></label><label><input type="checkbox" id="entry-private" ${r.private?'checked':''} ${linkedPrivateFile(r)?'disabled':''}> 标记为私密（默认不进入摘要、导出和 AI 草稿）</label>${privateLockNote(r,'digestive-form')}`}
+function digestivePage(){const sym=state.records.filter(r=>r.kind==='消化症状'),chk=state.records.filter(r=>r.kind==='消化道检查'),all=sym.concat(chk);const groups=[{p:'day',title:'具体日期（倒序）',recs:all.filter(r=>datePrecision(r)==='day')},{p:'month',title:'仅知月份（不与具体日期混排）',recs:all.filter(r=>datePrecision(r)==='month')},{p:'unknown',title:'日期未知（不参与日期排序）',recs:all.filter(r=>datePrecision(r)==='unknown')}];const cell=(kind,items)=>`<div class="digest-cell" data-digest-kind="${kind}"><span class="digest-cell-label">${kind}</span>${items.length?items.map(r=>rec(r,true)).join(''):'<p class="digest-cell-empty">未记录</p>'}</div>`;const row=(p,d,items)=>`<div class="digest-day" data-digest-date="${esc(d)}" data-digest-precision="${p}"><div class="digest-date">${esc(p==='month'?d+'（仅月份）':p==='unknown'?'日期未知':d)}</div>${cell('消化症状',items.filter(r=>r.kind==='消化症状'))}${cell('消化道检查',items.filter(r=>r.kind==='消化道检查'))}</div>`;const group=g=>{if(!g.recs.length)return '';let dates=g.p==='unknown'?['unknown']:[...new Set(g.recs.map(r=>String(r.date||'unknown')))].sort((a,b)=>b.localeCompare(a));return `<section class="digest-group" data-digest-precision="${g.p}"><h4 class="digest-group-title">${g.title} <span class="muted">${g.recs.length} 条</span></h4><div class="digest-board" aria-label="${g.title}：消化症状与消化道检查并列"><div class="digest-head" aria-hidden="true"><span>日期</span><span>消化症状</span><span>消化道检查</span></div>${dates.map(d=>row(g.p,d,g.p==='unknown'?g.recs:g.recs.filter(r=>String(r.date||'unknown')===d))).join('')}</div></section>`};return `<div class="card" id="digestive-page"><div class="section" style="margin:0 0 8px"><h2>消化道</h2><span class="tag">症状与检查分开记录</span></div><p class="muted">本页只整理本人录入的消化症状与检查资料；两类记录分开保存，未知内容不补齐，也不作医学判断。</p><p class="small-note" data-owner-demo-note>本人演示视图（无账号授权）：私密或未知更正历史默认不渲染正文，可逐条展开；公开历史仍显示。</p><div class="digest-intro"><section class="digest-entry"><h3>消化症状</h3><p class="muted">按本人原话记录腹部不适等感受；不判断它与检查结果的关系。</p><div class="actions"><button data-action="add">手工补一条</button></div></section><section class="digest-entry"><h3>消化道检查</h3><p class="muted">只抄检查名称、结论原文、日期与来源；不解读报告。</p><div class="actions"><button data-action="add-check">手工补检查</button></div></section></div><div class="section" style="margin:22px 0 6px"><h3>按日期并列</h3><span class="muted">${sym.length} 条症状 · ${chk.length} 条检查</span></div><p class="notice" id="digestive-causality-note">资料只按日期并列，<strong>不推断因果</strong>，也不判断症状与检查所见是否有关。私密记录带「私密」标记，默认不勾选；当前正文在本页、时间线和就诊准备列表仍可见，摘要与导出需逐条勾选，AI 草稿不会包含；私密/未知的更正历史默认不渲染，需在本人记录页逐条展开。</p><p class="notice" id="digestive-cross-entry-note">本页只汇总从本页两个入口录入的消化症状与检查。「发作与病程 / 症状记录」里的其他症状仍留在原页面，不会自动归入这里，避免把非消化症状误标为消化症状。<button class="digest-note-link" data-view="发作与病程" data-sub="症状记录">查看「症状记录」</button></p>${all.length?groups.map(group).join(''):'<div class="empty" id="digest-empty">还没有消化症状或检查资料。请从上方两个入口分别记录；保存后会按日期并列在这里。</div>'}</div>`}
+function timeline(){return `<div class="card"><h2>跨科时间线</h2><p>选择记录后按日期并列展示；具体到日的记录按日倒序，仅知月份和日期未知的记录单独分组、不参与按日排序；不同来源保留各自原文，不判断因果。私密记录默认不选。本演示仅在本页内存中运行，刷新后重置。</p><p class="notice" id="timeline-private-visibility-note">私密内容在本机页面仍可见：下方选择列表会显示记录原文；勾选后也会出现在「所选记录」中。私密只表示默认不进摘要、导出和 AI 草稿，不是在本页隐藏。这里说的是当前记录正文；私密/未知的更正历史默认不渲染，需在本人记录页逐条展开。</p><fieldset><legend>选择要显示的记录</legend>${state.records.map(r=>`<label class="row" style="display:block"><input type="checkbox" data-timeline-select="${r.id}" ${state.timelineSelected.has(r.id)?'checked':''}> ${r.private?'<span class="tag private-tag">私密 · 逐条选择</span> ':''}${esc(dateText(r))} · ${esc(r.department||'科别未知')} · ${esc(r.text)}</label>`).join('')}</fieldset></div>`}
+function timelineResults(){const chosen=state.records.filter(r=>state.timelineSelected.has(r.id));const article=r=>`<article class="row"><strong>${esc(r.department||'科别未知')}</strong> ${r.private?'<span class="tag private-tag">私密</span>':''}${r.history.length?'<span class="tag">当前记录已更正</span>':''}<p>${esc(r.text)}</p><p><small>来源：${esc(r.source||'未填写')}</small></p><button data-timeline-source="${r.id}" aria-label="回看来源：${esc(r.department||'科别未知')} · ${esc(r.text)} · ${esc(dateText(r))} · 记录 ${esc(r.id)}">回看来源</button> ${isMaterialRecord(r)&&!hasOriginal(r)?'<small>无原件</small>':''}</article>`;const dayRecs=chosen.filter(r=>datePrecision(r)==='day'),monthRecs=chosen.filter(r=>datePrecision(r)==='month'),unknownRecs=chosen.filter(r=>!dayRecs.includes(r)&&!monthRecs.includes(r));const dayDates=[...new Set(dayRecs.map(r=>r.date))].sort((a,b)=>b.localeCompare(a));const monthDates=[...new Set(monthRecs.map(r=>r.date))].sort((a,b)=>b.localeCompare(a));let body='';if(dayDates.length)body+=dayDates.map(d=>`<section><h3>${esc(d)}</h3><div class="grid">${dayRecs.filter(r=>r.date===d).map(article).join('')}</div></section>`).join('');if(monthDates.length)body+=`<section class="precision-note"><h3>仅知月份（不与具体日期混排）</h3>${monthDates.map(m=>`<div><h4>${esc(m)}（仅月份）</h4><div class="grid">${monthRecs.filter(r=>r.date===m).map(article).join('')}</div></div>`).join('')}<p class="muted"><small>只知月份时无法确定本月内先后，因此不按天排序，也不与具体日期并列。</small></p></section>`;if(unknownRecs.length)body+=`<section class="precision-note"><h3>日期未知（不参与排序）</h3><div class="grid">${unknownRecs.map(article).join('')}</div><p class="muted"><small>日期未知或超出 ${DATE_MIN_YEAR}–${DATE_MAX_YEAR} 范围的记录保持未知，不用推测日期补齐，也不参与时间排序。</small></p></section>`;return `<div class="card" id="timeline-results"><h2>所选记录</h2>${chosen.length?body:'<div class="empty">尚未选择记录，请勾选要查看的资料。</div>'}</div>`}
+const DATE_MIN_YEAR=1900,DATE_MAX_YEAR=2100;
+function datePart(v){let s=String(v||''),m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);if(m)return {year:+m[1],month:+m[2],day:+m[3]};m=/^(\d{4})-(\d{2})$/.exec(s);return m?{year:+m[1],month:+m[2],day:null}:null}
+function isDayDate(v){let p=datePart(v);if(!p||p.day===null||p.year<DATE_MIN_YEAR||p.year>DATE_MAX_YEAR)return false;let dt=new Date(Date.UTC(p.year,p.month-1,p.day));return dt.getUTCFullYear()===p.year&&dt.getUTCMonth()===p.month-1&&dt.getUTCDate()===p.day}
+function isMonthDate(v){let p=datePart(v);return !!p&&p.day===null&&p.year>=DATE_MIN_YEAR&&p.year<=DATE_MAX_YEAR&&p.month>=1&&p.month<=12}
+function inYearRange(v){let p=datePart(v);return !!p&&p.year>=DATE_MIN_YEAR&&p.year<=DATE_MAX_YEAR}
+function datePrecision(r){let d=String((r&&r.date)||''),declared=String((r&&r.datePrecision)||'');if(declared){if(declared==='day'&&isDayDate(d))return 'day';if(declared==='month'&&isMonthDate(d))return 'month';return 'unknown'}if(isDayDate(d))return 'day';if(isMonthDate(d))return 'month';return 'unknown'}
+function startText(r){let p=datePrecision(r),d=String((r&&r.date)||'');if(p==='unknown'||!d)return '未知';if(p==='month')return d+'（仅月份）';return d}
+function dateText(r){let p=datePrecision(r),d=String((r&&r.date)||'');if(p==='unknown'||!d)return '日期未知';if(p==='month')return d+'（仅月份）';return d}
+function compareStartEnd(start,precision,end){if(precision==='unknown'||!start||!end)return 'uncomparable';if(precision==='month'){let sm=start.slice(0,7),em=end.slice(0,7);if(em<sm)return 'endBefore';if(em===sm)return 'indeterminate';return 'ok'}return end<start?'endBefore':'ok'}
+function episodeFields(r){return r.kind==='发作记录'?`开始：${startText(r)} · 结束：${endText(r)} · 部位：${r.site||'未知'} · `:''}
+function visitSelection(){return state.records.filter(r=>state.selected.has(r.id))}
+function visitLine(r){if(r.kind==='医嘱记录')return `${r.private?'【私密】 ':''}${adviceFields(r)}`;let head=r.kind==='血管资料'||r.kind==='血管'?`检查：${vascularExamDate(r)} · 报告：${vascularReportDate(r)} · `:'';let orig=r.original?'｜有合成原件（不随文本导出）':linkedFileForRecord(r)?'｜有本机登记原件（不随文本导出）':isMaterialRecord(r)?'｜无原件':'';return `${r.private?'【私密】 ':''}${head}${treatmentFields(r)||episodeFields(r)||(head?'':dateText(r)+' · ')}${r.text}${r.source?'｜'+r.source:'｜来源：未填写'}${r.kind==='问题清单'?'':orig}`}
+function visitPreview(){let chosen=visitSelection(),materials=chosen.filter(r=>r.kind!=='问题清单'),questions=chosen.filter(r=>r.kind==='问题清单');let section=(title,items)=>`<h3>${title}（${items.length}）</h3>${items.length?items.map(r=>`<p>${esc(visitLine(r))}</p>`).join(''):'<p class="muted">未选择</p>'}`;return `<h2>输出预览</h2>${section('资料',materials)}${section('问题',questions)}<button class="primary" data-action="download" ${chosen.length?'':'disabled'}>下载所选文本</button><p id="export-status" role="status"></p><p><small>仅输出所选合成示例文本；原件不随文本导出。本页仅存于内存，刷新后重置；不等于医学审核。</small></p>`}
+function visit(){let group=(title,items)=>`<fieldset><legend>${title}</legend>${items.length?items.map(r=>`<label class="row" style="display:block"><input type="checkbox" data-select="${r.id}" ${state.selected.has(r.id)?'checked':''}> ${r.private?'<span class="tag private-tag">私密 · 逐条选择</span> ':''}${r.kind==='医嘱记录'?esc(r.text||'医嘱原文未知'):esc(dateText(r))+' · '+esc(r.text)}</label>`).join(''):'<p class="muted">暂无记录</p>'}</fieldset>`;return `<div class="grid"><div class="card"><h2>选择要带的内容</h2><p>私密项默认不选；勾选会同时更新预览与下载内容。仅为合成示例，选择保存在本页内存，刷新后重置。</p><p class="notice" id="visit-private-visibility-note">私密内容在本机页面仍可见：下方选择列表会显示记录原文；勾选后预览与下载内容也会包含。私密只表示默认不选，不会自动进入摘要、导出和 AI 草稿。这里说的是当前记录正文；私密/未知的更正历史默认不渲染，需在本人记录页逐条展开。</p>${group('资料',state.records.filter(r=>r.kind!=='问题清单'))}${group('问题',state.records.filter(r=>r.kind==='问题清单'))}</div><div class="card" id="export-preview">${visitPreview()}</div></div>`}
+const day=d=>Date.parse(d+'T00:00:00Z');
+function isPinned(id,date){return state.pin?.id===id&&state.pin.date===date}
+function togglePin(id,date){state.pin=isPinned(id,date)?null:{id,date};refreshChart();document.querySelector(`[data-point="${id}"][data-date="${date}"]`)?.focus({preventScroll:true})}
+function bounds(m){const vals=m.dated.filter(p=>p.numeric).map(p=>p.value);let lo=0,hi=0;if(vals.length){lo=hi=vals[0];for(const v of vals){lo=Math.min(lo,v);hi=Math.max(hi,v)}}const scale=Math.max(Math.abs(lo),Math.abs(hi))||1;lo/=scale;hi/=scale;return p=>hi===lo?0:(p.value/scale-lo)/(hi-lo)}
+function groups(){return [...new Set(metrics.map(m=>m.group))]}
+function metricCatalog(){
+  let c=window.BEIPAL_METRIC_CATALOG;
+  if(!c||!Array.isArray(c.categories)||!Array.isArray(c.items))return null;
+  let categories=c.categories.filter(x=>x&&x.id&&x.name).map(x=>({id:String(x.id),name:String(x.name)}));
+  if(!categories.length)return null;
+  let ids=new Set(categories.map(x=>x.id));
+  let items=[],seen=new Set();
+  for(let raw of c.items){
+    if(!raw||!raw.metricId||!raw.displayName)continue;
+    let id=String(raw.metricId),catId=String(raw.categoryId||'');
+    if(seen.has(id)||!ids.has(catId))continue;
+    seen.add(id);
+    let order=Number(raw.displayOrder);
+    items.push({metricId:id,displayName:String(raw.displayName),aliases:Array.isArray(raw.aliases)?raw.aliases.map(String):[],categoryId:catId,displayOrder:Number.isFinite(order)?order:9999,expectedUnits:Array.isArray(raw.expectedUnits)?raw.expectedUnits.map(String):[],note:raw.note?String(raw.note):'',demo:raw.demo===true});
+  }
+  if(!items.length)return null;
+  let order=Array.isArray(c.categoryOrder)?c.categoryOrder.map(String).filter(id=>ids.has(id)):categories.map(x=>x.id);
+  for(let category of categories)if(!order.includes(category.id))order.push(category.id);
+  items.sort((a,b)=>a.displayOrder-b.displayOrder||(a.metricId<b.metricId?-1:a.metricId>b.metricId?1:0));
+  return {version:c.version||0,categories,categoryOrder:order,items,byId:new Map(items.map(item=>[item.metricId,item]))};
+}
+function emptyMetric(item,groupName){
+  return {id:'empty~'+item.metricId,metricId:item.metricId,name:item.displayName,group:groupName,unit:(item.expectedUnits||[])[0]||'',method:'',laboratory:'',source:'',color:'var(--muted)',points:[],dated:[],latest:null,latestRows:[],delta:null,previous:null,segments:[],complete:true,undated:0,catalogItem:item,synthesized:true};
+}
+function fallbackGroups(){
+  return [...new Set(metrics.map(m=>m.group))].map(name=>{
+    let ids=[...new Set(metrics.filter(m=>m.group===name).map(m=>m.metricId))];
+    let entries=ids.map(id=>{let first=metrics.find(m=>m.metricId===id);return {item:{metricId:id,displayName:first.name,categoryId:name,displayOrder:0,expectedUnits:[first.unit],note:''},series:metrics.filter(m=>m.metricId===id)}});
+    let recorded=entries.filter(e=>e.series.some(s=>s.points&&s.points.length));
+    return {id:name,name,entries,recorded,empty:!recorded.length,open:false};
+  });
+}
+function catalogGroups(){
+  let cat=metricCatalog();
+  if(!cat)return null;
+  let entries=new Map(cat.items.map(item=>[item.metricId,{item,series:[]}])),other=[];
+  for(let m of metrics){
+    let entry=entries.get(m.metricId);
+    if(entry)entry.series.push(m);else other.push(m);
+  }
+  let firstEmpty=true;
+  let groups=cat.categoryOrder.map(id=>{
+    let category=cat.categories.find(x=>x.id===id);
+    let list=cat.items.filter(i=>i.categoryId===id).map(i=>entries.get(i.metricId));
+    let recorded=list.filter(e=>e.series.some(s=>s.points&&s.points.length));
+    let group={id,name:category.name,entries:list,recorded,empty:!recorded.length,open:false};
+    if(group.empty){group.open=firstEmpty;firstEmpty=false}
+    return group;
+  });
+  if(other.length){
+    let map=new Map();
+    for(let m of other){
+      if(!map.has(m.metricId))map.set(m.metricId,{item:{metricId:m.metricId,displayName:m.name,categoryId:'__other',displayOrder:0,expectedUnits:[],note:''},series:[]});
+      map.get(m.metricId).series.push(m);
+    }
+    let list=[...map.values()],recorded=list.filter(e=>e.series.some(s=>s.points&&s.points.length));
+    groups.push({id:'__other',name:'其他已记录指标（待核对）',entries:list,recorded,empty:!recorded.length,open:false,other:true});
+  }
+  return groups;
+}
+function metricCardAria(name,{empty=false,drawable=false,flipped=false}={}){
+  if(empty)return `${name}，${flipped?'说明面，按 Enter 或空格返回':'记录面，按 Enter 或空格查看说明'}`;
+  return flipped
+    ?`${name}，${drawable?'趋势面':'记录面'}，按 Enter 或空格返回`
+    :`${name}，最新值，按 Enter 或空格查看${drawable?'趋势':'记录'}`;
+}
+function metricCardHTML(m,groupName,item){
+  let pts=m.dated.filter(p=>p.numeric),has=!!(m.points&&m.points.length),flipped=state.flipped.has(m.id),
+      unit=m.unit||'单位未知',value=p=>esc(p.value??'未记录'),selected=item?item.displayName:m.name,
+      numeric=pts,drawable=numeric.length>=2&&m.segments.some(seg=>seg.length>=2),
+      b=drawable?bounds(m):null,first=pts[0],last=pts.at(-1),
+      x=p=>{if(pts.length===1)return 100;let span=day(last.date)-day(first.date);return 10+(day(p.date)-day(first.date))*180/(span||1)},
+      y=p=>60-(b?b(p):0)*42;
+  let valueHTML=!has?'还没有记录':m.latest?`${value(m.latest)} <small>${esc(unit)}</small>`:m.latestRows.length?'同日多次':'日期待核';
+  let compare=!has?'记录后可查看同组前次变化':m.latestRows.length>1?`同日 ${m.latestRows.length} 条，不合并、不取平均、不算差值`:!numeric.length?'仅显示记录原文，暂不比较':!m.complete?'仅显示记录点；单位、方法或机构不齐，暂不比较':m.delta!==null&&m.latest&&m.previous?`同组前次 ${esc(m.previous.value)} → ${esc(m.latest.value)}（${m.delta>0?'+':''}${Number(m.delta.toFixed(2))} ${esc(unit)}）`:'暂无可比较的前次记录';
+  let meta=has?`${m.points.length} 条记录${m.latest?' · '+esc(m.latest.date):''}${m.undated?' · 日期待核 '+m.undated+' 条':''}<br>${esc(m.source||'来源待补')} · ${esc(m.method||'方法未知')} · ${esc(m.laboratory||'机构未知')}<br>点击卡片查看记录`:'0 条记录 · 目录条目'+(unit!=='单位未知'?` · 目录单位 ${esc(unit)}`:'')+'<br>点击卡片查看目录说明';
+  let aria=metricCardAria(selected,{empty:!has,drawable,flipped});
+  let backId=`mcard-back-${String(m.id).replace(/[^\w-]/g,'_')}`;
+  let back;
+  if(!has){
+    back=`<div class="mface-empty"><h3>还没有记录</h3><p>未记录只表示尚未录入，不代表检查结果，也不代表需要补做。</p>${unit!=='单位未知'?`<p class="muted">目录单位：${esc(unit)}</p>`:''}${item&&item.note?`<p class="muted">${esc(item.note)}</p>`:''}</div>`;
+  }else{
+    let reason=!numeric.length?'只有记录原文，暂不画趋势，也不参与比较。':m.latestRows.length>1?`同一天有 ${m.latestRows.length} 条记录，不合并、不取平均、不连线。`:numeric.length===1?'只有 1 次记录，暂不连线。再记录一次后显示趋势。':'记录点之间缺少数值或可比信息不齐，暂不连线。';
+    let chart=drawable?`<svg viewBox="0 0 200 75" width="100%" height="65" role="group" aria-label="${esc(selected)} 合成记录趋势，选择点查看来源">${m.segments.filter(seg=>seg.length>1).map(seg=>`<polyline fill="none" stroke="${esc(m.color)}" stroke-width="3" points="${seg.map(p=>x(p)+','+y(p)).join(' ')}"/>`).join('')}${pts.map(p=>`<circle cx="${x(p)}" cy="${y(p)}" r="6" fill="${esc(m.color)}" tabindex="0" role="button" data-source="${esc(m.id)}" data-date="${p.key}" aria-label="${esc(selected)} ${esc(p.date)} ${value(p)} ${esc(unit)}，查看来源"/>`).join('')}</svg><small>${m.complete?'同日无序或非数值处断线':'可比信息不完整，仅显示记录点'}</small>`:`<div class="mface-empty"><h3>暂不画趋势</h3><p>${reason}</p></div>`;
+    back=`${chart}<div class="metric-points">${m.points.map(p=>`<button data-source="${esc(m.id)}" data-date="${p.key}">${esc(p.date||(p.rawDate?'日期待核：'+p.rawDate:'日期待核'))} · ${value(p)}</button>`).join('')}</div><small>${esc(m.method||'方法未知')} · ${esc(m.laboratory||'机构未知')}</small>`;
+  }
+  // 卡保持 group；独立透明原生按钮只承担翻转，卡内来源按钮与其平级，避免嵌套 button。
+  return `<div class="mcard" role="group" aria-roledescription="可翻转指标卡" aria-label="${esc(selected)}" data-card="${esc(m.id)}" data-name="${esc(selected)}" data-empty="${!has}" data-drawable="${drawable}" data-flipped="${flipped}"><button class="mcard-hit" type="button" aria-expanded="${flipped}" aria-controls="${esc(backId)}" aria-label="${esc(aria)}" data-card-toggle></button><div class="mcard-inner"><div class="mface front" ${flipped?'inert aria-hidden="true"':''}><small>● ${esc(groupName)}</small><strong>${esc(selected)}</strong><span class="metric-value">${valueHTML}</span><small>${compare}</small><small>${meta}</small></div><div class="mface back" id="${esc(backId)}" ${flipped?'':'inert aria-hidden="true"'}><strong>${esc(selected)} · ${esc(unit)}</strong>${back}</div></div></div>`;
+}
+function renderMetricGroup(g){
+  let entries=g.entries,recorded=g.recorded,emptyEntries=entries.filter(e=>!recorded.includes(e));
+  if(recorded.length){
+    let seriesCount=entries.reduce((n,e)=>n+e.series.length,0);
+    return `<section class="metric-cat" data-has-record="true"${g.other?' data-other="true"':''}><h3 class="cat-head"><span class="cat-name">${esc(g.name)}</span><span class="cat-count">${entries.length} 项 · ${recorded.length} 项有记录 · ${seriesCount} 个可比组</span></h3>${g.other?'<p class="muted">这些记录未出现在检查值目录中，先按原分组保留；核对后再归类。</p>':''}<div class="metric-grid">${recorded.map(e=>e.series.filter(s=>s.points.length).map(s=>metricCardHTML(s,g.name,e.item)).join('')).join('')}</div>${emptyEntries.length?`<details class="metric-more"><summary>展开其余 ${emptyEntries.length} 项未记录指标</summary><div class="metric-grid metric-grid-empty">${emptyEntries.map(e=>e.series.length?e.series.filter(s=>!s.points.length).map(s=>metricCardHTML(s,g.name,e.item)).join(''):metricCardHTML(emptyMetric(e.item,g.name),g.name,e.item)).join('')}</div></details>`:''}</section>`;
+  }
+  return `<details class="metric-cat" data-empty-category="true"${g.open?' open':''}><summary><span class="cat-name">${esc(g.name)}</span><span class="cat-count">${entries.length} 项 · 0 项有记录</span></summary><div class="metric-grid metric-grid-empty">${entries.slice(0,2).map(e=>metricCardHTML(emptyMetric(e.item,g.name),g.name,e.item)).join('')}</div>${entries.length>2?`<details class="metric-more"><summary>展开其余 ${entries.length-2} 项未记录指标</summary><div class="metric-grid metric-grid-empty">${entries.slice(2).map(e=>metricCardHTML(emptyMetric(e.item,g.name),g.name,e.item)).join('')}</div></details>`:''}</details>`;
+}
+function metricCards(){
+  let cat=metricCatalog(),groups=cat?catalogGroups():fallbackGroups();
+  let listed=cat?cat.items.length:new Set(metrics.map(m=>m.metricId)).size;
+  let recorded=new Set(metrics.filter(m=>m.points.length).map(m=>m.metricId));
+  let inCat=cat?[...recorded].filter(id=>cat.byId.has(id)).length:recorded.size;
+  let missing=cat?cat.items.filter(i=>!recorded.has(i.metricId)).length:0;
+  let unmapped=cat?[...recorded].filter(id=>!cat.byId.has(id)).length:0;
+  return `<div class="metric-section"><h2>示例指标卡</h2><p class="muted">仅相同且已知的单位、方法和机构可比较；合成记录不作医学判断。</p><p class="muted metric-catalog-note" role="status">目录共 ${listed} 项 · ${inCat} 项有记录 · ${missing} 项暂无记录${unmapped?` · ${unmapped} 项未归类`:''}。未记录只表示尚未录入，不代表检查结果，也不代表需要补做；不同单位、方法、机构分开看。</p>${metrics.length?'':'<div class="empty">暂无示例指标。目录仍按类别列出全部检查项。</div>'}${groups.map(g=>renderMetricGroup(g)).join('')}</div>`;
+}
+function metricOption(m,item,label){
+  let title=[m.unit,m.method,m.laboratory].filter(Boolean).join(' · '),text=label??(item?item.displayName:m.name);
+  return `<label title="${esc(title)}"><input type="checkbox" data-metric="${esc(m.id)}" ${state.metricIds.has(m.id)?'checked':''}>${esc(text)}</label>`;
+}
+/* 选择项正文只放简称；同名项才补单位/方法/机构，仍相同再补组序，避免两个复选框同名。 */
+function optionLabelMap(entries){
+  let base=e=>e.item?e.item.displayName:e.m.name;
+  let counts=new Map();entries.forEach(e=>{let b=base(e);counts.set(b,(counts.get(b)||0)+1)});
+  let ids=entries.map(e=>counts.get(base(e))>1?[base(e),e.m.unit||'单位未知',e.m.method||'方法未知',e.m.laboratory||'机构未知'].join(' · '):base(e));
+  let idCounts=new Map();ids.forEach(x=>idCounts.set(x,(idCounts.get(x)||0)+1));
+  let seen=new Map();
+  ids.forEach((x,i)=>{if(idCounts.get(x)>1){let n=(seen.get(x)||0)+1;seen.set(x,n);ids[i]=`${x} · 第 ${n} 组`}});
+  return new Map(entries.map((e,i)=>[e.m,ids[i]]));
+}
+function metricOptions(){
+  let cat=metricCatalog(),sections=[],list=[];
+  if(!cat){
+    groups().forEach(g=>{
+      let rows=metrics.filter(m=>m.group===g).map(m=>({m,item:null}));
+      list.push(...rows);sections.push({head:`<strong>${esc(g)}</strong>`,rows,note:''});
+    });
+  } else {
+    let used=new Set();
+    cat.categoryOrder.forEach(id=>{
+      let category=cat.categories.find(x=>x.id===id),items=cat.items.filter(i=>i.categoryId===id);
+      let rec=items.map(i=>({item:i,series:metrics.filter(m=>m.metricId===i.metricId&&m.points.length)})).filter(x=>x.series.length);
+      let rows=rec.flatMap(x=>x.series.map(m=>({m,item:x.item})));
+      rec.forEach(x=>x.series.forEach(m=>used.add(m.id)));
+      list.push(...rows);
+      sections.push({head:`<strong>${esc(category.name)} <span class="cat-count">${items.length} 项 · ${rec.length} 项有记录</span></strong>`,rows,note:rec.length?'':'<p class="muted small-note">目录中暂无记录。</p>'});
+    });
+    let other=metrics.filter(m=>!used.has(m.id)&&!cat.byId.has(m.metricId)&&m.points.length).map(m=>({m,item:null}));
+    if(other.length){list.push(...other);sections.push({head:'<strong>其他已记录指标（待核对）</strong>',rows:other,note:''})}
+  }
+  let labels=optionLabelMap(list);
+  return sections.map(s=>s.head+s.rows.map(e=>metricOption(e.m,e.item,labels.get(e.m))).join('')+s.note).join('');
+}
+function checkDelta(m){
+  if(m.latestRows&&m.latestRows.length>1)return `同日 ${m.latestRows.length} 条，未并列单个数值`;
+  if(m.delta!==null&&Number.isFinite(m.delta)&&m.previous&&m.latest)return `同组前次 ${esc(m.previous.value)} → ${esc(m.latest.value)}（${m.delta>0?'+':''}${Number(m.delta.toFixed(2))} ${esc(m.unit||'单位未知')}）`;
+  return '暂无可比较的前次记录';
+}
+function checkTaskMeta(){
+  let cat=metricCatalog(),recorded=new Set(metrics.filter(m=>m.points.length).map(m=>m.metricId));
+  let total=cat?cat.items.length:new Set(metrics.map(m=>m.metricId)).size;
+  let done=cat?cat.items.filter(i=>recorded.has(i.metricId)).length:recorded.size;
+  if(!total)return '还没有检查值目录';
+  if(!done)return `还没有记录 · 目录 ${total} 项`;
+  return `${done} 项有记录 · ${Math.max(0,total-done)} 项暂无记录`;
+}
+function checkSummary(){
+  let cat=metricCatalog(),live=metrics.filter(m=>!m.private),recorded=[...new Set(live.filter(m=>m.points.length).map(m=>m.metricId))];
+  let total=cat?cat.items.length:new Set(metrics.map(m=>m.metricId)).size;
+  let missing=cat?cat.items.filter(i=>!recorded.includes(i.metricId)).length:0;
+  let unmapped=cat?recorded.filter(id=>!cat.byId.has(id)).length:0;
+  let withLatest=live.filter(m=>m.latest),latest=withLatest.slice().sort((a,b)=>b.latest.date.localeCompare(a.latest.date))[0];
+  let undated=live.reduce((n,m)=>n+(m.undated||0),0),multi=live.filter(m=>!m.latest&&m.latestRows&&m.latestRows.length>1).length;
+  let recordedInCat=cat?recorded.filter(id=>cat.byId.has(id)).length:recorded.length;
+  let count=`有记录 ${recordedInCat} 项 · 目录 ${total} 项 · ${missing} 项暂无记录${unmapped?` · ${unmapped} 项未归类`:''}${latest?` · 最近采样 ${latest.latest.date}`:''}${undated?` · 日期待核 ${undated} 条`:''}`;
+  let head=`<div class="section"><h2>最近检查</h2><button data-view="病情整理" data-sub="指标检测">检查值目录 →</button></div>`;
+  if(!recorded.length){
+    return `${head}<div class="card check-summary" data-check-summary="empty"><p class="muted" role="status">${count}</p><div class="empty"><h3>还没有检查值记录</h3><p>没有记录只表示尚未录入，不代表检查结果，也不代表需要补做；不同单位、方法、机构分开看。</p><div class="actions"><button data-view="病情整理" data-sub="指标检测">查看检查值目录</button><button data-view="病情整理" data-sub="整理草稿 / 核对">导入报告</button></div></div></div>`;
+  }
+  let chips=withLatest.slice().sort((a,b)=>b.latest.date.localeCompare(a.latest.date)).slice(0,3).map(m=>{
+    let item=cat&&cat.byId.get(m.metricId),category=item?(cat.categories.find(c=>c.id===item.categoryId)||{}).name:m.group,name=item?item.displayName:m.name;
+    return `<button class="check-latest" data-source="${esc(m.id)}" data-date="${esc(m.latest.key)}"><span class="ci-cat">${esc(category||'未归类')}</span><strong>${esc(name)}</strong><span class="ci-value">${esc(m.latest.value??'未记录')} <small>${esc(m.unit||'单位未知')}</small></span><span class="ci-meta">${esc(m.latest.date)} · ${esc(m.latest.source||m.source||'来源待补')}</span><span class="ci-compare">${checkDelta(m)}</span></button>`;
+  }).join('');
+  return `${head}<div class="card check-summary" data-check-summary="recorded"><p class="muted" role="status">${count}</p>${undated?`<p class="notice">有 ${undated} 条检查值日期待核；未参与按日排序，也不用推测日期补齐。</p>`:''}${chips?`<div class="check-latest-grid">${chips}</div>`:'<p class="muted">有记录，但最新一条是同日多条或日期待核；请去目录逐条看，不做合并或平均。</p>'}${multi?`<p class="muted">另有 ${multi} 项最近一次为同日多条，未并列单个数值。</p>`:''}${missing?`<details class="check-missing"><summary>目录中还有 ${missing} 项没有记录</summary><ul>${cat.items.filter(i=>!recorded.includes(i.metricId)).map(i=>`<li>${esc(i.displayName)}</li>`).join('')}</ul></details>`:''}</div>`;
+}
+function chartWindow(){let dates=metrics.flatMap(m=>m.dated.map(p=>day(p.date))).concat(events.map(e=>day(e.date))).filter(Number.isFinite);let end=dates.length?Math.max(...dates):Date.UTC(2000,0,1),first=dates.length?Math.min(...dates):end,start=state.range==='all'?first:end-Number(state.range)*86400000;return {end,start:end-(end-start)*state.zoom/100}}
+function pinHTML(){if(!state.pin)return '<p class="pin" role="status">选择图中数据点或图例，固定查看记录。</p>';let m=metrics.find(m=>m.id===state.pin.id),p=m?.points.find(p=>p.key===state.pin.date),w=chartWindow();if(!p)return '<p class="pin" role="status">记录不存在。</p>';let outside=!state.metricIds.has(m.id)||day(p.date)<w.start||day(p.date)>w.end;return `<div class="pin" role="status"><strong>${esc(m.name)} · ${esc(p.value)} ${esc(m.unit||'单位未知')}</strong> · ${esc(p.date||(p.rawDate ? '日期待核：'+p.rawDate : '日期待核'))}<br>${esc(p.source||m.source||'来源待补')} · ${esc((Object.hasOwn(p,'method')?p.method:m.method)||'方法未知')}${outside?' · 该记录已不在当前时间窗或所选指标中':''}<br><button data-source="${esc(m.id)}" data-date="${p.key}">查看来源详情</button> <button data-clear-pin>清除</button></div>`}
+/* 末点数值：一图秀要能直接读到最新值。只标末点，中间点靠点选固定。
+   纵向避让：先给每条算目标基线，再按 16px 行距排布并整体夹在绘图区内；
+   底部最多 4 条也不会压到横轴或越出绘图区。 */
+function endLabels(items){
+  let top=112,bottom=244,gap=16
+  let rows=items.map(it=>({it,y:it.y+4>bottom?it.y-12:it.y+4})).sort((a,b)=>a.y-b.y)
+  let ys=rows.map(r=>r.y)
+  for(let i=1;i<ys.length;i++)ys[i]=Math.max(ys[i],ys[i-1]+gap)
+  if(ys.length&&ys[ys.length-1]>bottom){
+    ys[ys.length-1]=bottom
+    for(let i=ys.length-2;i>=0;i--)ys[i]=Math.min(ys[i],ys[i+1]-gap)
+  }
+  if(ys.length&&ys[0]<top){let d=top-ys[0];ys=ys.map(y=>y+d)}
+  return rows.map((r,i)=>`<text x="${r.it.x}" y="${ys[i]}" text-anchor="end" class="chart-end-value" data-series="${esc(r.it.m.id)}" fill="${esc(r.it.m.color)}">${esc(r.it.last.value)} ${esc(r.it.m.unit||'单位未知')}</text>`).join('')
+}
+function visibleIndex(id){return [...state.metricIds].indexOf(id)}
+/* 治疗条：来源就是「治疗与用药」里本人抄录的记录，不另建一份数据。
+   有开始与结束日期 → 条；只有开始 → 点；勾了仍在进行 → 画到右缘并加箭头。
+   精度不是具体到日的不参与画条，避免把月份当某一天。 */
+function treatmentLane(x,start,end){
+  // 条只裁到绘图区 [60,730]；标题仍保留本人抄录的真实起止日期。
+  let clampBar=(a,b)=>{
+    let x1=Math.max(60,Math.min(730,a)),x2=Math.max(x1,Math.min(730,b)),w=Math.max(4,x2-x1);
+    if(x1+w>730)x1=730-w;
+    if(x1<60)x1=60;
+    return [x1,w];
+  };
+  return state.records.filter(r=>r.kind==='当前用药'&&r.private!==true&&isDayDate(r.date)).map(r=>{
+    let s0=day(r.date),name=esc(r.drug||r.text||'治疗记录')
+    if(r.ongoing){
+      if(s0>end)return ''
+      let [bx,w]=clampBar(x(r.date),730)
+      return `<rect data-treatment="${r.id}" x="${bx}" y="28" width="${w}" height="8" rx="4" fill="#9a5d35"><title>${esc(r.date)} 起，仍在进行 · ${name}</title></rect><path d="M732 32 h8 m-5 -4 l5 4 -5 4" stroke="#9a5d35" stroke-width="2" fill="none"/>`
+    }
+    if(isDayDate(r.endDate)&&day(r.endDate)>=s0){
+      let e0=day(r.endDate)
+      if(e0<start||s0>end)return ''
+      let [bx,w]=clampBar(x(r.date),x(r.endDate))
+      return `<rect data-treatment="${r.id}" x="${bx}" y="28" width="${w}" height="8" rx="4" fill="#9a5d35"><title>${esc(r.date)} 至 ${esc(r.endDate)} · ${name}</title></rect>`
+    }
+    if(s0<start||s0>end)return ''
+    return `<circle data-treatment="${r.id}" cx="${x(r.date)}" cy="32" r="5" fill="#9a5d35"><title>${esc(r.date)} · ${name}</title></circle>`
+  }).join('')
+}
+function labelOf(ms){return new Date(ms).toISOString().slice(0,10)}
+function chartPanel(){let {start,end}=chartWindow(),x=d=>60+(day(d)-start)/(end-start||1)*670,visible=metrics.filter(m=>state.metricIds.has(m.id)),label=d=>new Date(d).toISOString().slice(0,10),has=visible.some(m=>m.dated.some(p=>p.numeric&&day(p.date)>=start&&day(p.date)<=end));/* 各指标独立归一化，所以末点的 y 必须用各自的 bounds 算，再统一做避让。 */
+let lab=visible.map(m=>{let b=bounds(m),yy=p=>250-b(p)*150,rows=m.dated.filter(p=>day(p.date)>=start&&day(p.date)<=end);if(!rows.length)return null;let lastDay=Math.max(...rows.map(p=>day(p.date))),lastRows=rows.filter(p=>day(p.date)===lastDay);if(lastRows.length>1)return {m,ambiguous:lastRows.length};if(!lastRows[0].numeric)return {m,nonNumeric:true};let last=lastRows[0];return {m,last,x:x(last.date),y:yy(last)}}).filter(Boolean)
+let endItems=lab.filter(x=>x.last),ambiguous=lab.filter(x=>x.ambiguous),ambiguousNote=ambiguous.length?`<p class="muted chart-end-ambiguous">${ambiguous.map(x=>`<span data-series="${esc(x.m.id)}">${esc(x.m.name)} 同日 ${x.ambiguous} 条，未取末值</span>`).join('；')}。</p>`:'',nonNumeric=lab.filter(x=>x.nonNumeric),nonNumericNote=nonNumeric.length?`<p class="muted chart-end-nonnumeric">${nonNumeric.map(x=>`<span data-series="${esc(x.m.id)}">${esc(x.m.name)} 最新记录为非数值，未标末值</span>`).join('；')}。</p>`:''
+let graph=has?`<p class="scroll-hint" id="chart-scroll-hint" hidden>图表比当前宽度更宽：请左右滚动查看完整时间范围 →</p><div class="chart-wrap"><svg viewBox="0 0 790 320" role="group" aria-label="示例指标时间图，各组独立缩放，不同指标不可比较"><text x="5" y="28" class="chart-label">治疗</text><text x="5" y="58" class="chart-label">事件</text>${state.showEvents?treatmentLane(x,start,end):''}${state.showEvents?events.filter(e=>e.type!=='治疗'&&day(e.date)>=start&&day(e.date)<=end).map(e=>`<circle cx="${x(e.date)}" cy="62" r="5" fill="#9a5d35"><title>${esc(e.date)} ${esc(e.label)}</title></circle>`).join(''):''}${[100,150,200,250].map(y=>`<line x1="60" y1="${y}" x2="730" y2="${y}" class="chart-grid"/>`).join('')}${visible.map(m=>{let b=bounds(m),y=p=>250-b(p)*150,pts=m.dated.filter(p=>p.numeric&&day(p.date)>=start&&day(p.date)<=end);return `${m.segments.map(seg=>seg.filter(p=>day(p.date)>=start&&day(p.date)<=end)).filter(seg=>seg.length>1).map(seg=>`<path data-series="${esc(m.id)}" pathLength="1" class="series-path" stroke="${esc(m.color)}" d="${seg.map((p,i)=>`${i?'L':'M'} ${x(p.date)} ${y(p)}`).join(' ')}"/>`).join('')}${pts.map(p=>`<circle tabindex="0" role="button" aria-pressed="${isPinned(m.id,p.key)}" aria-label="${esc(m.name)} ${esc(p.value)} ${esc(m.unit||'单位未知')} ${esc(p.date)}，按下固定详情" data-point="${esc(m.id)}" data-date="${p.key}" cx="${x(p.date)}" cy="${y(p)}" r="6" class="chart-point ${isPinned(m.id,p.key)?'active':''}" fill="${esc(m.color)}"><title>${esc(m.name)} ${esc(p.value)} · ${esc(p.date)}</title></circle>`).join('')}`}).join('')}<text x="60" y="280" class="chart-label">${label(start)}</text><text x="730" y="280" text-anchor="end" class="chart-label">${label(end)}</text>${endLabels(endItems)}</svg></div>`:'<div class="empty">当前范围没有可绘制的数值记录。</div>';return `${graph}${ambiguousNote}${nonNumericNote}<p class="muted">单位、方法或机构未知时仅显示点；同日无序及非数值处断线；同日多条末点不任取，最新记录非数值时不标更早数值，只说明未取末值。治疗按开始到结束画条，只有开始日期时画点，勾了「仍在进行」画到右缘；事件单独一行，两者不表示因果。文字和日期待核记录请在指标卡查看。</p><div class="legend">${visible.map(m=>`<span style="--series:${esc(m.color)}">${esc(m.name)} · ${esc(m.unit||'单位未知')} · ${esc(m.method||'方法未知')} · ${esc(m.laboratory||'机构未知')}</span>`).join('')}</div>${pinHTML()}`}
+function oneChart(){return `<div class="card"><h2>指标与时间节点</h2><p>示例记录按日期展示；治疗和事件分开排列，不表示因果关系。</p><div class="onechart-layout"><aside class="chart-sidebar"><fieldset><legend>时间范围</legend><div class="range-buttons">${[['90','近 3 月'],['180','近 6 月'],['365','近 12 月'],['all','全部']].map(([v,t])=>`<button data-range="${v}" aria-pressed="${state.range===v}">${t}</button>`).join('')}</div></fieldset><label>缩放窗口 <input id="chart-zoom" type="range" min="40" max="100" step="10" value="${state.zoom}"> <output id="zoom-value">${state.zoom}%</output></label><fieldset><legend>选择指标（最多 4 项）</legend><div class="metric-options">${metricOptions()}</div></fieldset><label><input id="show-events" type="checkbox" ${state.showEvents?'checked':''}>显示治疗与事件</label></aside><div class="chart-content" id="chart-panel">${chartPanel()}</div></div></div>`}
+function refreshChart(){let panel=$('#chart-panel');if(panel)panel.innerHTML=chartPanel();updateChartScrollHint()}
+function updateChartScrollHint(){let w=document.querySelector('#chart-panel .chart-wrap'),h=$('#chart-scroll-hint');if(!w||!h)return;h.hidden=w.scrollWidth<=w.clientWidth+1}
+function showSource(id,date){let m=metrics.find(m=>m.id===id),p=m?.points.find(p=>p.key===date);if(!p)return;dialog('合成记录来源',`<p>${esc(m.name)} · ${esc(p.value ?? '未记录')} ${esc((Object.hasOwn(p,'unit')?p.unit:m.unit)||'单位未知')}</p><p>采样日期：${esc(p.date||(p.rawDate ? '日期待核：'+p.rawDate : '日期待核'))}；报告日期：未知</p><p>来源：${esc(p.source||m.source||'来源待补')}；方法：${esc((Object.hasOwn(p,'method')?p.method:m.method)||'未知')}；机构：${esc((Object.hasOwn(p,'laboratory')?p.laboratory:m.laboratory)||'未知')}</p><p>报告引用：无原件；转录原文：未知；参考区间：未转录；核对状态：示例，未核对</p><p>这是合成示例，没有原始报告或真实患者资料。</p>`,`<button data-action="cancel">关闭</button>`)}
+/* S04 血管资料：记录仍写入 state.records（单一数据源），原件只引用 state.files 中已登记的条目。
+   页面只整理本人抄录的原文与来源；不联网、不调用 AI，也不生成诊断或治疗建议。 */
+function vascularRecords(){return state.records.filter(r=>r.kind==='血管资料'||r.kind==='血管')}
+function linkedFileForRecord(r){return r&&r.fileId?fileById(r.fileId):null}
+function hasOriginal(r){return !!(r&&(r.original||linkedFileForRecord(r)))}
+function vascularDateText(date,precision){if(!date||precision==='unknown')return '日期未知';return precision==='month'?`${date}（仅月份）`:String(date)}
+function vascularExamDate(r){return vascularDateText(r.date,datePrecision(r))}
+function vascularReportDate(r){if(!r.reportDate)return '日期未知';return vascularDateText(r.reportDate,r.reportDatePrecision||'day')}
+function originalStatusTag(r){let f=linkedFileForRecord(r);if(r.original)return `<span class="tag original-tag" data-original-badge="${esc(r.id)}">有原件（合成）</span>`;if(f)return `<span class="tag original-tag" data-original-badge="${esc(r.id)}">有原件（本机登记）</span>`;return `<span class="tag no-original-tag" data-no-original-badge="${esc(r.id)}">无原件</span>`}
+function isMaterialRecord(r){return !!r&&['资料库','血管资料','血管','消化道检查'].includes(r.kind)}
+function originalDialogMarkup(r){
+  if(!isMaterialRecord(r))return '';
+  let parts=[];
+  if(r.original)parts.push(`<div class="vas-source-box"><h3>${esc(r.original.title)}</h3><p class="vas-text">${esc(r.original.text)}</p><p class="muted">以上为合成演示原件，并非真实病历。</p></div>`);
+  let f=linkedFileForRecord(r);
+  if(f){
+    let excerpt='';
+    if(f.content)excerpt=`<details><summary>查看本机文本摘录（${f.content.length} 字）</summary><pre>${esc(f.content.slice(0,1200))}${f.content.length>1200?'\n…（仅显示前 1200 字）':''}</pre></details><p class="muted">摘录只来自本机内存，不复制进记录，也不随文本导出。</p>`;
+    else excerpt=`<p class="muted">${isTextFile(f)?'本机文本缓存为空，未读取到可展示的文本。':'该类型（PDF/图片）在本演示中不解析、不预览内容，请在原件里查看。'}</p>`;
+    parts.push(`<div class="vas-source-box" data-original-file="${esc(f.id)}"><h3>本机登记原件：${esc(f.name)}</h3><p class="muted">${fmtSize(f.size)} · 登记时间 ${esc(f.addedAt)}${f.private?' · <span class="tag private-tag">私密原件</span>':''}</p>${excerpt}<button type="button" data-vascular-open-file="${esc(f.id)}">下载本机登记原件</button><p class="muted">原件只在本页登记，不上传；这里不复制原件，也不随文本导出。下载是单独操作。</p></div>`);
+  }
+  if(!parts.length)parts.push(`<div class="vas-source-box" data-no-original-note><h3>原件缺失</h3><p>无原件：仅有本人抄录的原文，未提供原始文件；不把抄录内容冒充报告，也不补造报告日期。</p></div>`);
+  return parts.join('');
+}
+function vascularDateControl(id,label,date,precision){
+  let p=precision==='month'?'month':precision==='day'?'day':'unknown';
+  let day=isDayDate(date)?date:'',month=isMonthDate(date)?date:'';
+  return `<fieldset class="vas-source-box"><legend>${label}</legend><label class="field">日期精度<select id="${id}-precision" data-vas-precision="${id}"><option value="day" ${p==='day'?'selected':''}>具体到日</option><option value="month" ${p==='month'?'selected':''}>只记得月份</option><option value="unknown" ${p==='unknown'?'selected':''}>日期未知</option></select></label><label class="field" id="${id}-day-field" style="${p==='day'?'':'display:none'}">具体日期<input id="${id}-day" type="date" min="${DATE_MIN_YEAR}-01-01" max="${DATE_MAX_YEAR}-12-31" value="${esc(day)}"></label><label class="field" id="${id}-month-field" style="${p==='month'?'':'display:none'}">月份<input id="${id}-month" type="month" min="${DATE_MIN_YEAR}-01" max="${DATE_MAX_YEAR}-12" value="${esc(month)}"></label><p class="vas-unknown-note" id="${id}-unknown-note" style="${p==='unknown'?'':'display:none'}">${label}未知：不用今天或推测日期补齐。</p></fieldset>`;
+}
+function vascularForm(r=null){
+  let editing=!!r,examP=r?datePrecision(r):'unknown',examDate=r?String(r.date||''):'';
+  let reportP=r&&r.reportDate?(r.reportDatePrecision==='month'&&isMonthDate(r.reportDate)?'month':isDayDate(r.reportDate)?'day':'unknown'):'unknown';
+  let reportDate=r&&reportP!=='unknown'?String(r.reportDate||''):'';
+  let f=r?linkedFileForRecord(r):null;
+  let privateChecked=r?!!r.private:true;
+  return `<p>只记录本人抄录的检查原文与来源；检查日期、报告日期都可以未知，保持未知，不补造报告。仅保存在本页内存，刷新后重置；不联网、不调用 AI。</p><p class="form-error" id="v-errors" role="alert"></p>
+  ${vascularDateControl('v-exam','检查日期',examDate,examP)}
+  ${vascularDateControl('v-report','报告日期',reportDate,reportP)}
+  <label class="field">检查原文<textarea id="v-text" placeholder="按本人抄录的检查/报告原文填写；看不清或缺失就写未知">${esc(r?r.text||'':'')}</textarea></label>
+  <label class="field">来源<input id="v-source" value="${esc(r?r.source||'':'')}" placeholder="例如门诊报告抄录；未知可留空"></label>
+  <label class="field">关联本机登记原件<select id="v-file" data-prev-private="${f&&f.private?'1':'0'}" data-was-private="${f&&f.private?'1':'0'}" ${state.files.length?'':'disabled'}><option value="">不关联（无原件）</option>${state.files.map(x=>`<option value="${esc(x.id)}" ${r&&String(r.fileId)===String(x.id)?'selected':''}>${esc(x.name)}${x.private?'（私密）':''}</option>`).join('')}</select></label>
+  <p class="small-note">关联只引用「资料目录与云解析」里已登记的原件，不复制文件。没有登记原件时保存为「无原件」；选择私密原件时这条记录会强制为私密，且不能单独改回公开。</p>
+  <p class="vas-file-lock" id="v-file-lock" ${f&&f.private?'':'hidden'}>所选原件为私密：记录将保持私密，取消原件私密后才可逐条确认公开。</p>
+  <p class="small-note" id="v-file-change-note" role="status" hidden></p>
+  <label><input type="checkbox" id="v-private" ${privateChecked?'checked':''} ${f&&f.private?'disabled':''}> 标记为私密（默认私密；默认不进摘要、导出和 AI 草稿）</label>
+  ${editing?'<p class="small-note">保存后会保留上一版字段，可在记录下方展开查看。</p>':''}`;
+}
+function readVascularDate(id,label){
+  let sel=$('#'+id+'-precision'),precision=sel?sel.value:'unknown';
+  let date=precision==='day'?($('#'+id+'-day')?$('#'+id+'-day').value:''):precision==='month'?($('#'+id+'-month')?$('#'+id+'-month').value:''):'';
+  let error='';
+  if(precision==='day'&&!isDayDate(date))error=`请填写有效的${label}（${DATE_MIN_YEAR}–${DATE_MAX_YEAR}），或选择日期未知`;
+  if(precision==='month'&&!isMonthDate(date))error=`请填写有效的${label}月份（${DATE_MIN_YEAR}–${DATE_MAX_YEAR}），或选择日期未知`;
+  let field='#'+id+(precision==='month'?'-month':'-day');
+  return {date:precision==='unknown'?'':date,datePrecision:precision,error,field};
+}
+function readVascularEntry(){
+  let exam=readVascularDate('v-exam','检查日期'),report=readVascularDate('v-report','报告日期');
+  let text=$('#v-text')?$('#v-text').value.trim():'',source=$('#v-source')?$('#v-source').value.trim():'';
+  let fileValue=$('#v-file')&&!$('#v-file').disabled?$('#v-file').value:'',fileId=fileValue?Number(fileValue):null,f=fileId?fileById(fileId):null;
+  let priv=$('#v-private')?$('#v-private').checked:true;if(f&&f.private)priv=true;
+  let errors=[];
+  if(exam.error)errors.push([exam.field,exam.error]);
+  if(report.error)errors.push([report.field,report.error]);
+  if(!text)errors.push(['#v-text','请填写本人抄录的检查原文；看不清或缺失也请写明未知']);
+  document.querySelectorAll('#dialog-body [aria-invalid]').forEach(el=>{el.removeAttribute('aria-invalid');el.removeAttribute('aria-describedby')});
+  let box=$('#v-errors');if(box)box.textContent=errors.map(x=>x[1]).join('；');
+  if(errors.length){errors.forEach(([sel])=>{let el=$(sel);if(el){el.setAttribute('aria-invalid','true');el.setAttribute('aria-describedby','v-errors')}});let first=$(errors[0][0]);if(first)first.focus();return null}
+  return {date:exam.date,datePrecision:exam.datePrecision,reportDate:report.date,reportDatePrecision:report.datePrecision,text,source:source||(f?`原件：${f.name}`:'本人抄录 · 来源未知'),fileId,private:priv};
+}
+function vascularRow(r){
+  let f=linkedFileForRecord(r),pub=publicHistoryEntries(r);
+  return `<article class="vas-row" data-vascular-row="${r.id}"><div class="vas-row-head"><span class="tag ${r.private?'private-tag':''}">${r.private?'私密':'本人记录'}</span>${r.kind==='血管'?' <span class="tag">旧格式记录</span>':''} ${originalStatusTag(r)}<h3>血管检查资料</h3></div><p class="vas-dates">检查：${esc(vascularExamDate(r))} · 报告：${esc(vascularReportDate(r))}</p><p class="vas-text">${esc(r.text)}</p><p class="vas-meta">来源：${esc(r.source||'未填写')}${f?` · 本机原件：${esc(f.name)}${f.private?'（私密原件）':''}`:''}</p><div class="actions"><button data-vascular-source="${r.id}">回源</button><button data-correct="${r.id}">改这一条</button>${privateToggleButton(r)}</div>${privateLockNote(r,'vascular-row')}${protectedHistoryMarkup(r,true)}${pub.length?`<details data-history-public="${r.id}"><summary>更正前（${pub.length}）</summary>${pub.map(h=>`<p>${esc(historyText(r,h))}</p>`).join('')}</details>`:''}</article>`;
+}
+function showVascularSource(id){
+  let r=state.records.find(x=>x.id===+id);if(!r)return;
+  dialog('血管资料回源',`<p><strong>检查日期</strong>：${esc(vascularExamDate(r))}<br><strong>报告日期</strong>：${esc(vascularReportDate(r))}</p><p><strong>来源</strong>：${esc(r.source||'未填写')}</p><p><strong>本人抄录原文</strong></p><blockquote class="vas-text">${esc(r.text)}</blockquote>${originalDialogMarkup(r)}<p class="muted">回源只展示这条记录关联的原文与本机原件信息；没有原件时不伪造报告。私密原件仍按资料目录的隐私状态处理。</p>`,`<button data-action="cancel">关闭</button><button class="primary" data-correct="${r.id}">改这一条</button>`);
+}
+function vascularPage(){
+  let items=vascularRecords(),withOriginal=items.filter(hasOriginal).length,without=items.length-withOriginal;
+  return `<div class="card" id="vascular-page"><div class="section" style="margin:0 0 8px"><h2>血管资料</h2><span class="tag">本页内存 · 合成示例</span><button data-action="add-vascular">录入一条血管资料</button></div><p>整理本人抄录的血管检查原文、来源和日期；日期可以未知，未知就保持未知。关联已登记原件时可回源；没有原件会明确标记，不把抄录内容当成报告。</p><p class="small-note">默认私密：新记录默认不进摘要、导出和 AI 草稿。本页不联网、不调用 AI，也不提供诊断或治疗建议。旧路径里已有的「血管」记录也会显示在这里。</p><div class="vas-stats" data-vascular-total="${items.length}" data-vascular-with-original="${withOriginal}" data-vascular-without-original="${without}" aria-label="血管资料统计：共 ${items.length} 条，有原件 ${withOriginal} 条，无原件 ${without} 条"><div class="vas-stat"><strong>${items.length}</strong><span>血管资料（材料）</span></div><div class="vas-stat"><strong>${withOriginal}</strong><span>有原件可回源</span></div><div class="vas-stat"><strong>${without}</strong><span>无原件（已标记）</span></div></div><div class="actions" style="margin:10px 0"><button class="link" data-go="资料目录与云解析">去资料目录登记原件</button></div>${items.length?`<div class="list">${items.slice().reverse().map(vascularRow).join('')}</div>`:'<div class="empty">还没有血管资料。可以手工录入原文；如果原件已在资料目录登记，可以关联后回源。</div>'}</div>`;
+}
+/* 资料目录与云解析：原件只在本次会话登记名称/大小（文本类另外只在本机内存读一份用于演示抽取），
+   不上传、不复制到记录里。云解析入口未接通 MinerU，按钮叫「本机模拟抽取」并写明不联网。
+   候选必须逐条采纳才进资料库，候选本身不是事实。 */
+function fmtSize(n){return n>=1024?`${(n/1024).toFixed(1)} KB`:`${n} B`}
+function filesPage(){
+  let f=state.files
+  return `<div class="eyebrow">设置 · 本人可控</div><h1>资料目录与云解析</h1>
+  <p class="muted">原件只在本次演示里登记名称与大小：不上传、不复制进记录、刷新即清空。文本类原件会另外在本机内存读一份，仅用于下面的模拟抽取，不离开本机；撤回时清空这份文本缓存。</p>
+  <div class="card"><h2>登记原件</h2>
+    <p>选择自己电脑上的文件登记到资料目录；登记不等于解析，也不等于已核对。</p>
+    <label class="field">选择文件（可多选）<input type="file" id="file-input" multiple accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg"></label>
+    <p class="muted">PDF 与图片在本演示中不做 OCR，登记后只能手工记录；不要把真实病历上传到任何在线服务。</p>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>已登记的原件（${f.length}）</h2>
+    ${f.length?`<div class="list">${f.map(x=>`<div class="row"><div class="spread"><div><h3>${esc(x.name)}</h3>
+      <p class="muted">${fmtSize(x.size)} · 登记时间 ${esc(x.addedAt)} · 关联记录 ${state.records.filter(r=>r.fileId===x.id).length} 条${x.private?' · <span class="tag private-tag">私密原件</span>':''}</p></div>
+      <div class="actions"><label><input type="checkbox" data-file-private="${x.id}" ${x.private?'checked':''}> 私密原件</label>
+      <button data-parse="${x.id}">模拟抽取</button>
+      <button data-file-del="${x.id}">移除</button></div></div>
+      ${isTextFile(x)?(x.content?'':'<p class="muted">本机文本缓存为空；再次「模拟抽取」会重新读取本机文件。</p>'):'<p class="muted">该类型在本演示中不解析（无 OCR/PDF 解析），可手工记录。</p>'}</div>`).join('')}</div>`
+    :'<div class="empty">还没有登记原件。原件登记名称与大小；文本类会为本机模拟抽取读取一份文本，不上传。</div>'}
+  </div>
+  <div class="card" style="margin-top:16px"><h2>候选（${state.candidates.length}）</h2>
+    <p class="muted">抽取结果只是候选，必须逐条采纳才进资料库；候选本身不是事实，也不会自动生成日期或诊断。</p>
+    ${state.candidates.length?`<div class="list">${state.candidates.map(c=>{let cf=fileById(c.fileId),p=!!(cf&&cf.private);return `<div class="row" data-candidate="${c.id}" data-private="${p?1:0}"><p>${p?'<span class="tag private-tag">私密原件</span> ':''}${esc(c.text)}</p>
+      <p class="muted">来自：${esc(c.fileName)}${p?' · 私密原件候选，采纳后为私密记录，不进入摘要、导出和 AI 草稿':''}</p>
+      <div class="actions"><button data-accept="${c.id}">采纳为一条记录</button><button data-drop="${c.id}">丢弃</button></div></div>`}).join('')}</div>`
+    :'<div class="empty">没有候选。先登记一个文本类原件，再点「模拟抽取」。</div>'}
+    ${state.candidates.length||state.files.some(f=>f.content)?`<div class="actions"><button data-parse-revoke="1">${state.candidates.length?'撤回本机授权并清空候选':'清空本机文本缓存'}</button></div>`:''}
+    <p class="muted" id="parse-retention-note">撤回只清空本页候选与本机文本缓存；已采纳记录、原件登记信息和磁盘上的原件保留，可重新授权抽取。本演示没有上传过文件，也没有云端副本可删，因此不会声称已删除云端资料。</p>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>云解析与留存（未接通）</h2>
+    <p>真正的云端解析（MinerU）在本项目里尚未核实：没有接入、没有报价、没有留存与删除条款。因此本原型只提供本机模拟抽取，不会把文件发给任何服务。</p>
+    <p class="muted">将来若接通，须每次显式授权、发送前告知服务方/原件/用途，并在界面上给出撤回与删除本地候选的路径；服务方侧删除无法由本台承诺，也不会用于训练或二次外发。</p>
+  </div>`}
+
+function privacyRow(r){let included=state.selected.has(r.id),locked=linkedPrivateFile(r);let status=r.private?(included?'已逐条显式纳入本次摘要与导出；AI 草稿仍排除。':'默认不进摘要/导出；勾选「本次纳入」才写入。'):(included?'已在本次摘要/导出选择中。':'未在本次摘要/导出选择中。');return `<div class="row privacy-row" data-privacy-row="${r.id}"><div class="privacy-row-main"><span class="tag ${r.private?'private-tag':''}">${r.private?'私密':'本人记录'}</span> <small>${esc(r.kind||'记录')} · ${esc(dateText(r))}</small><p>${esc(r.text||'（没有文字）')}</p><p class="small-note">${status}</p>${locked?`<p class="small-note" id="privacy-lock-${r.id}">关联私密原件「${esc(locked.name)}」：不能改回公开；需先在资料目录取消原件私密，再逐条确认记录。</p>`:''}</div><div class="privacy-controls"><label><input type="checkbox" data-record-private="${r.id}" aria-label="私密：${esc(r.kind||'记录')} · ${esc(dateText(r))}" ${r.private?'checked':''} ${locked?`disabled aria-describedby="privacy-lock-${r.id}"`:''}> 私密</label><label><input type="checkbox" data-privacy-include="${r.id}" aria-label="本次纳入摘要与导出：${esc(r.kind||'记录')} · ${esc(dateText(r))}" ${included?'checked':''}> 本次纳入摘要与导出</label></div></div>`}
+function privacyPanelBody(){let priv=state.records.filter(r=>r.private===true),included=priv.filter(r=>state.selected.has(r.id)),locked=priv.filter(r=>linkedPrivateFile(r));return `<h2>逐条私密标记与纳入</h2>
+  <p id="privacy-default-note">私密记录默认不进入摘要和导出；本人可以逐条把它们显式纳入本次摘要/导出。摘要与导出共用同一选择集。AI 草稿始终排除私密，不提供逐条纳入。</p>
+  <p class="muted" id="privacy-boundary-note">本原型没有账号、登录或身份授权机制，也没有角色/权限校验；只演示本页内存中的数据属性，不宣称加密或服务端隔离，刷新后全部重置。私密记录的当前正文仍在本页可见；私密或隐私状态未知的更正历史默认不渲染正文，只有本人在演示页逐条展开时才显示；非本人视图不显示私密历史，打印不输出这些历史。这里的「本人演示页」不是登录身份，也不是访问控制。系统剪贴板与已下载文件不受本页控制。关联私密原件的记录不能单独改回公开。</p>
+  <div class="privacy-stats"><span class="tag">全部记录 ${state.records.length}</span><span class="tag private-tag">私密 ${priv.length}</span><span class="tag">私密已显式纳入 ${included.length}</span><span class="tag">关联私密原件 ${locked.length}</span></div>
+  <div class="actions"><button data-action="privacy-clear" ${included.length?'':'disabled'}>清空私密纳入（${included.length}）</button><button data-action="privacy-visit">去就诊准备逐条核对</button></div>
+  <div class="list privacy-list">${state.records.length?state.records.map(privacyRow).join(''):'<div class="empty">还没有记录。</div>'}</div>`}
+function privacyPage(){return `<div class="eyebrow">设置 · 本人可控</div><h1>授权与隐私</h1>
+  <div class="card"><h2>私密的三个出口</h2><p>私密记录默认不进入摘要、导出和 AI 草稿。摘要与导出可由本人逐条选择；私密内容目前不能进入 AI 草稿，也不能作为 AI 改写来源。</p>
+  <p class="muted">私密是记录本身的属性；由私密记录改写成的问题同样算私密。</p></div>
+  <div class="card" data-privacy-panel style="margin-top:16px">${privacyPanelBody()}</div>
+  <div class="card" style="margin-top:16px" data-no-account-note><h2>账号与授权边界</h2><p>没有账号授权：本原型没有账号、登录、角色或权限服务，不能识别「本人」或「他人」；页面里的「本人演示页」只是当前内存演示的视图，不构成访问控制。私密/未知更正历史默认不渲染正文，需逐条主动展开。</p></div>
+  <div class="card" style="margin-top:16px"><h2>代记授权</h2><p>代记授权、撤回与读取范围仅为设计占位，尚未连接身份或权限服务；当前演示没有账号体系。</p></div>
+  <div class="card" style="margin-top:16px"><h2>资料目录</h2><p>原件登记、私密标记与云解析授权在「资料目录与云解析」里；文本类原件会为本机模拟抽取读取一份文本，不上传，撤回时清空，刷新即全部清空。</p>
+  <div class="actions"><button data-go="资料目录与云解析">去资料目录</button><button data-view="看板">回到看板</button></div></div>`}
+function privacyDialog(){dialog('授权与隐私',`<div data-privacy-panel>${privacyPanelBody()}</div>`,`<button data-action="cancel">关闭</button><button class="primary" data-action="privacy-visit">去就诊准备逐条核对</button>`)}
+function refreshPrivacySurfaces(selector){render();let dlg=$('#dialog');if(dlg&&dlg.open&&$('#dialog-title').textContent==='授权与隐私'){let body=$('#dialog-body');body.innerHTML=`<div data-privacy-panel>${privacyPanelBody()}</div>`;if(selector){let el=body.querySelector(selector);if(el)el.focus({preventScroll:true})}}else if(selector){let el=document.querySelector('#main '+selector);if(el)el.focus({preventScroll:true})}}
+
+/* 本机模拟抽取：把文本按行切成候选，不判断内容、不补日期、不打分。
+   候选保留原件当时的私密状态；渲染时再按当前原件状态派生，避免标记滞后。 */
+function runMockExtract(file){
+  let lines=String(file.content||'').split(/\r?\n/).map(t=>t.trim()).filter(t=>t.length>=4&&t.length<=160).slice(0,6)
+  state.candidates=lines.map((text,i)=>({id:Date.now()+i,fileId:file.id,fileName:file.name,text,private:!!file.private}))
+  return state.candidates.length
+}
+function isTextFile(f){return /^(text\/|application\/json)/.test(f.type||'')||/\.(txt|md|csv|json)$/i.test(f.name)}
+function registerFiles(list){
+  let added=0
+  ;[...list].forEach(f=>{
+    let id=Date.now()+Math.random(),entry={id,name:f.name,size:f.size,type:f.type||'',addedAt:new Date().toISOString().slice(0,10),private:false,content:'',blob:f}
+    state.files.push(entry);added++
+    if(isTextFile(f)&&f.size<=65536){let rd=new FileReader();rd.onload=()=>{entry.content=String(rd.result||'')};rd.readAsText(f)}
+  })
+  render();if(added)toast(`已登记 ${added} 个原件（仅本会话）`)
+}
+function safetySources(){
+  dialog('来源与审核状态', `<div data-review-state="unreviewed">
+  <p><strong>审核状态：未临床审核（0 次）。</strong> 本页没有经临床核销的患者指导，也没有可用的“什么情况要马上就医”清单。</p>
+  <p class="muted">患者访谈 0 次；临床审核 0 次；核销记录：无。来源可核对，不等于本页文案已审核。</p>
+  </div>
+  <h3>来源清单</h3>
+  <ul class="s03-sources">
+    <li><strong>E08 · 国家卫生健康委《86 个罕见病病种诊疗指南（2025 年版）》第 9 章</strong><br><span class="tag">原件已取得</span>
+      <p>官方 PDF 第 54–60 页（印刷页码 50–56）。<a href="https://www.gov.cn/zhengce/zhengceku/202507/P020250710595668350272.pdf" target="_blank" rel="noopener noreferrer">打开官方 PDF</a></p>
+      <p>用于核对白塞病临床背景与指南范围；本章面向临床，本台不将其作为患者分诊指引，本页没有从其条文中摘出患者可读的就医阈值。</p>
+      <p class="muted">不能支持：个人症状判断、紧急程度分级，或本页急救句已审核。</p>
+    </li>
+    <li><strong>E10 · NHS 白塞病患教页</strong><br><span class="tag">患者信息</span>
+      <p>页面上次复核 2023-04-06；英国语境，诊断框架与 E08 不同。<a href="https://www.nhs.uk/conditions/behcets-disease/" target="_blank" rel="noopener noreferrer">打开 NHS 页面</a></p>
+      <p>仅用于患者信息背景，不能与 E08 拼接成自测或分诊清单。</p>
+    </li>
+    <li><strong>EULAR 2018 / 2025 更新</strong><br><span class="tag">全文未取得</span>
+      <p>2018 原文未取得；2025 仅有 PubMed 题录（PMID 41876291，DOI 10.1016/j.ard.2026.02.009）。</p>
+      <p class="muted">不能据题录声称具体建议已经核对，也不能当作本页审核依据。</p>
+    </li>
+  </ul>
+  <div class="notice"><strong>急救句仍待核。</strong>「出现紧急情况应联系当地急救服务」未核销，不作为本页证据或已审核文案；本页也不会用 AI 生成替代结论。</div>`,
+  `<button data-action="cancel">关闭</button>`)
+}
+function safetyPage(){
+  return `<div class="s03-banner" role="note" data-safety-state="unreviewed" aria-labelledby="s03-title">
+  <h2 id="s03-title">本页内容尚待临床审核</h2>
+  <p><strong>临床审核 0 次；可展示的患者指导 0 条。</strong> 这是原型占位页，不是“已审核”版本，不冒充指南、医生意见或已核实证据。</p>
+  <div class="s03-grid">
+    <div class="s03-fact"><span>审核状态</span><strong>未临床审核</strong></div>
+    <div class="s03-fact"><span>可用的患者指导</span><strong>0 条</strong></div>
+    <div class="s03-fact"><span>核销记录</span><strong>无</strong></div>
+  </div>
+  <p><strong>如果你现在担心症状变化：</strong>请联系你的医生或就近的医疗专业人员，说明症状从什么时候开始、哪里不舒服、有没有变化。是否就诊、去哪个科室，由医疗专业人员和你一起判断。</p>
+  <p class="muted">这是一条联系提示，不是分诊结论；本页不会告诉你“是否需要马上就医”。</p>
+  <p class="s03-source-line"><strong>来源：</strong>国家卫生健康委《86 个罕见病病种诊疗指南（2025 年版）》第 9 章（原件已取得，非患者分诊指引）· NHS 白塞病患教页（E10）· EULAR 2018 / 2025 更新（2018 原文未取得；2025 仅题录）。</p>
+  <div class="actions"><button data-action="s03-sources">查看来源与审核状态</button></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2>为什么这里没有“哪些情况要马上就医”的清单</h2>
+    <p>“什么情况要马上就医”涉及症状判断和紧急程度，属于医疗判断。本页不做分诊，不判断你的症状严重程度，也不根据记录生成“是否紧急”的结论。</p>
+    <p>在相关短语通过临床核销前，本页只保留主题占位，不写患者可读的红旗症状或行动阈值。</p>
+    <p class="muted">主题占位（不构成判断）：眼部新出现或加重的不适 · 神经系统相关症状 · 其他让你担心的变化。</p>
+  </div>
+  <div class="s03-pending" data-emergency-status="pending" role="note" aria-labelledby="s03-emergency-title">
+    <h2 id="s03-emergency-title">急救语句 · 待核占位</h2>
+    <p>「出现紧急情况应联系当地急救服务」</p>
+    <p><span class="tag">【待核】</span> 未临床审核；不是已审核文案，也不作为本页证据或行动指引。核销前不把它写成“指南建议”或“已证实有效”。</p>
+    <p class="muted">本页不判断你是否处于紧急情况，也不会等待 AI 给出这类判断。</p>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2>来源与审核状态</h2>
+    <p>本页只说明来源范围和审核状态，不从这些来源推导个人就医结论。当前没有任何已核销的患者分诊内容。</p>
+    <p><strong>来源：</strong>国家卫生健康委《86 个罕见病病种诊疗指南（2025 年版）》第 9 章（原件已取得；PDF 第 54–60 页，印刷 50–56）· NHS 白塞病患教页（E10，2023-04-06 复核）· EULAR 2018 / 2025 更新（2018 原文未取得；2025 仅题录）。</p>
+    <p class="muted">这些来源均不能证明本页的急救句已经审核，也不能替代对个人症状的评估。</p>
+    <div class="actions"><button data-action="s03-sources">查看来源明细</button><button data-view="复诊与准备" data-sub="就诊准备与导出">去准备就诊材料</button></div>
+  </div>
+  <div class="notice">本页不做 AI 分诊：不提供症状判断、紧急程度分级或“是否就医”的 AI 结论；也不会用 AI 生成未审核的红旗短语。</div>
+  <p class="muted">合成示例 · 页面状态随原型版本变化，刷新后重置；本页没有真实患者资料。</p>`
+}
+function content(){const v=state.view,s=state.sub;if(v==='资料目录与云解析')return filesPage();if(v==='授权与隐私')return privacyPage();if(v==='看板')return dashboard();let body='';if(v==='复诊与准备'&&s==='就诊准备与导出')body=visit();else if(v==='复诊与准备'&&s==='医嘱记录')body=doctorAdvicePage();else if(s==='什么情况要马上就医')body=safetyPage();else if(s==='整理草稿 / 核对')body='<div class="card"><h2>整理草稿 / 核对</h2><p>原件在「资料目录与云解析」里登记；本演示只登记名称与大小，文本类会为本机模拟抽取读取一份文本，不上传，撤回时清空。抽取结果只是候选，需逐条采纳。</p><button data-go="资料目录与云解析">去资料目录</button><button data-view="病情整理" data-sub="资料库">查看资料库</button></div>';else if(v==='病情一图秀'&&s==='治疗与事件节点')body=timeline()+`<div aria-live="polite" aria-atomic="true">${timelineResults()}</div>`;else if(v==='病情一图秀')body=oneChart();else if(v==='病情整理'&&s==='指标检测')body=metricCards();else if(v==='器官与专科'&&s==='血管')body=vascularPage();else if(v==='器官与专科'&&s==='消化道')body=digestivePage();else if(['发作记录','症状记录','当前用药','用药前检查记录','问题清单','工作·费用·异地就医','血管','资料库','指标检测','心理与家庭','生育·性健康与用药'].includes(s))body=recordPage();else body=`<div class="card"><h2>${esc(s)}</h2><div class="empty">此处尚无示例资料。可先查看相关记录，或回看板选择其他任务。</div><div class="actions"><button data-view="发作与病程" data-sub="发作记录">查看发作记录</button><button data-view="看板">回到看板</button></div></div>`;const safety=s==='什么情况要马上就医';return pageHeader(esc(v),safety?'本页内容尚待临床审核；不提供分诊或紧急程度判断。':'整理本人记录与原文；示例内容不构成医学判断。',safety)+`<div class="tabs" role="tablist" aria-label="${esc(v)}">${subs[v].map(x=>`<button role="tab" aria-selected="${x===s}" data-view="${v}" data-sub="${x}">${x}</button>`).join('')}</div>`+body}
+function render(){nav();$('#main').innerHTML=DEMO_OK?content():'<div class="notice" role="alert"><h1>示例数据不可用</h1><p>无法加载示例数据或指标读模型。请检查 demo-data.js 和 metric-model.js 是否存在，然后刷新页面。</p></div>';let label=currentDataset?currentDataset.label:'示例数据';$('.top .status').textContent=DEMO_OK?`合成示例 · ${label} · 仅本页临时演示 · 未连接宿主`:'示例数据不可用 · 未连接宿主';$('.top .status').title=DEMO_OK?`合成示例 · ${label} · 仅本页临时演示 · 未连接宿主`:'示例数据不可用 · 未连接宿主';updateDatasetButton();updateChartScrollHint()}
+let dialogOpener=null,dialogOpenerSelector=null,dialogPrivateIds=[];
+function dialog(title,body,foot){dialogOpener=document.activeElement instanceof Element?document.activeElement:null;dialogOpenerSelector=dialogOpener?.dataset.correct?`[data-correct="${dialogOpener.dataset.correct}"]`:dialogOpener?.dataset.action==='add'?'[data-action="add"]':dialogOpener?.dataset.action==='add-check'?'[data-action="add-check"]':dialogOpener?.dataset.action==='add-vascular'?'[data-action="add-vascular"]':null;$('#dialog-title').textContent=title;const wasOpen=$('#dialog').open;if(!wasOpen)clearDialogPrivateState();$('#dialog-body').innerHTML=body;$('#dialog-foot').innerHTML=foot;dialogPrivateIds=[...new Set([...dialogPrivateIds,...$('#dialog-body').querySelectorAll('[data-history-protected]')].map(box=>String(box.dataset.historyProtected||'')).filter(Boolean))];if(!wasOpen)$('#dialog').showModal()}
+function datasetStats(set){
+  const recs=set&&Array.isArray(set.records)?set.records:[];
+  const built=buildMetricsFor(set);
+  const stages=typeof window.BEIPAL_PATHWAY_MODEL?.build==='function'?window.BEIPAL_PATHWAY_MODEL.build(recs,set.metrics||[]):[];
+  const counts={};recs.forEach(r=>{counts[r.kind]=(counts[r.kind]||0)+1});
+  const order=['发作记录','当前用药','问题清单','资料库'];
+  const kindText=order.filter(k=>counts[k]).map(k=>`${k} ${counts[k]}`).concat(Object.keys(counts).filter(k=>!order.includes(k)).map(k=>`${k} ${counts[k]}`)).join(' · ');
+  const priv=recs.filter(r=>r.private===true).length;
+  const unknown=recs.filter(r=>datePrecision(r)==='unknown').length;
+  const month=recs.filter(r=>datePrecision(r)==='month').length;
+  const unknownGroups=built.filter(m=>!m.unit).length;
+  const incomplete=built.filter(m=>m.complete===false).length;
+  const ambiguous=built.filter(m=>m.complete&&m.dated.length>1&&m.segments.length===0).length;
+  const privateStages=stages.filter(s=>s.private).length;
+  const gaps=[];
+  if(unknown)gaps.push(`日期未知 ${unknown} 条`);
+  if(month)gaps.push(`仅知月份 ${month} 条`);
+  if(unknownGroups)gaps.push(`单位未知 ${unknownGroups} 组`);
+  if(incomplete)gaps.push(`可比信息不完整 ${incomplete} 组`);
+  if(ambiguous)gaps.push(`同日无序 ${ambiguous} 组`);
+  if(privateStages)gaps.push(`私密治疗阶段 ${privateStages} 段`);
+  return {countText:[`${recs.length} 条记录（私密 ${priv}）`,kindText,`${(set.metrics||[]).length} 项指标 / ${built.length} 个可比组`,`${(set.events||[]).length} 个事件`].filter(Boolean).join(' · '),gapText:gaps.length?gaps.join(' · '):'无结构性缺口'};
+}
+function datasetStatsSafe(set){
+  try{return datasetStats(set)}catch(err){
+    const recs=set&&Array.isArray(set.records)?set.records:[];
+    return {countText:`${recs.length} 条记录 · 读模型构建失败，暂时无法预览`,gapText:'切换会失败并保留当前示例组'}
+  }
+}
+function updateDatasetButton(){
+  const b=$('#group-switch');if(!b)return
+  if(!DEMO_OK||!currentDataset){b.hidden=true;return}
+  b.hidden=false
+  const n=state.records.length,text=`示例 ${currentDataset.short||'A'} · ${n} 条`
+  $('#group-switch-text').textContent=text
+  b.title=`当前：${currentDataset.label}（合成示例）`
+  const action=DATASETS.length>1?'切换合成示例组':'查看合成示例组（仅一套可用）'
+  b.setAttribute('aria-label',`${action}，当前 ${currentDataset.label}，本页 ${n} 条记录`)
+}
+function datasetDialog(){
+  if(!currentDataset){toast('示例数据不可用');return}
+  const multiple=DATASETS.length>1
+  const intro=multiple
+    ? '两套彼此独立的合成档案，只在本页内存中提供；不含真实患者资料，也不代表病情轻重。'
+    : '当前只加载到一套可用的合成档案，只在本页内存中提供；不含真实患者资料，也不代表病情轻重。示例组 B 未加载或不可用，暂无可切换的档案。'
+  const notice=multiple
+    ? '<div class="notice" role="note"><strong>切换前请确认：</strong>本页新增记录、更正、勾选、已登记原件和 AI 草稿都会清空，且无法恢复。这里只清空本页内存；系统剪贴板中已复制的内容和已下载到磁盘的文件不会被清除。切换不会保存；刷新页面会回到默认示例组 A。</div>'
+    : '<div class="notice" role="note">示例组 B 未加载或不可用，当前只能查看已加载的示例组；新增、更正、勾选仍只保存在本页内存，刷新后会重置。</div>'
+  const body=`<p class="muted">${intro}当前：<strong>${esc(currentDataset.label)}</strong>。</p>
+  ${notice}
+  <div class="list">${DATASETS.map(g=>{const s=datasetStatsSafe(g);return `<button type="button" class="dataset-row" data-use-dataset="${esc(g.id)}" aria-pressed="${g.id===currentDataset.id}"><span class="dataset-top"><b>${esc(g.label)}</b><span class="tag">${g.id===currentDataset.id?'当前':'切换'}</span></span><p>${esc(s.countText)}</p><p>资料缺口（按数据计数）：${esc(s.gapText)}</p></button>`}).join('')}</div>
+  <p class="muted">资料缺口只说明这组示例覆盖了哪些边界（如日期未知、单位未知、同日无序），不表示疾病严重程度、诊断或预后。</p>`
+  dialog(multiple?'切换合成示例组':'合成示例组（仅一套可用）',body,`<button data-action="cancel">关闭</button>`)
+}
+function datasetSwitchDialog(id){
+  const g=DATASETS.find(x=>x.id===id);if(!g)return
+  if(g===currentDataset){toast(`当前已是${g.label}`);return}
+  dialog('确认切换合成示例组',`<p>从 <strong>${esc(currentDataset.label)}</strong> 切到 <strong>${esc(g.label)}</strong>？</p><div class="notice" role="note">本页新增、更正、勾选、已登记原件与 AI 草稿会全部清空，无法恢复。这里只清空本页内存；系统剪贴板里已复制的内容和已下载的文件不会被清除，请自行核对。</div><p class="muted">切换只影响本页内存，不会保存；刷新后回到默认示例组 A。新组中的私密记录仍默认不进入摘要、导出和 AI 草稿。</p>`,`<button data-action="cancel">留在当前组</button><button class="primary" data-confirm-dataset="${esc(g.id)}">切换并清空本页草稿与选择</button>`)
+}
+function applyDataset(id){
+  const g=DATASETS.find(x=>x.id===id);if(!g||g===currentDataset)return
+  let nextMetrics,nextEvents,nextState
+  try{
+    nextMetrics=buildMetricsFor(g)
+    nextEvents=Array.isArray(g.events)?g.events:[]
+    nextState=initialState(g)
+  }catch(err){
+    $('#dialog').close()
+    toast('切换失败，已保留当前示例组')
+    return
+  }
+  const prev={dataset:currentDataset,metrics,events,state}
+  currentDataset=g;metrics=nextMetrics;events=nextEvents;state=nextState
+  try{
+    render()
+  }catch(err){
+    currentDataset=prev.dataset;metrics=prev.metrics;events=prev.events;state=prev.state
+    try{render()}catch{}
+    $('#dialog').close()
+    toast('切换失败，已保留当前示例组')
+    return
+  }
+  $('#draft').value='';$('#copy-status').textContent=''
+  closePane()
+  $('#pane').style.width=state.width+'%';$('#splitter').setAttribute('aria-valuenow',String(state.width))
+  $('#dialog').close()
+  $('#main').focus({preventScroll:true});window.scrollTo(0,0)
+  toast(`已切换到${g.label}；本页新增记录、草稿与选择已清空；系统剪贴板与已下载文件不受影响`)
+}
+function openPane(){ $('#pane').hidden=false;$('#splitter').hidden=false;$('#pane-close').hidden=false;$('#pane-toggle').textContent='收起 AI 对话演示';$('#pane-toggle').setAttribute('aria-expanded','true') }
+function closePane(){ $('#pane').hidden=true;$('#splitter').hidden=true;$('#pane-close').hidden=true;$('#pane-toggle').textContent='AI 对话演示';$('#pane-toggle').setAttribute('aria-expanded','false') }
+function width(n){state.width=Math.max(25,Math.min(45,n));$('#pane').style.width=state.width+'%';$('#splitter').setAttribute('aria-valuenow',state.width)}
+function flipCard(card){let id=card.dataset.card;state.flipped.has(id)?state.flipped.delete(id):state.flipped.add(id);let flipped=state.flipped.has(id),name=metrics.find(m=>m.id===id)?.name||card.dataset.name||'检查值';card.dataset.flipped=flipped;let empty=card.dataset.empty==='true',drawable=card.dataset.drawable==='true',aria=metricCardAria(name,{empty,drawable,flipped}),toggle=card.querySelector('.mcard-hit');if(toggle){toggle.setAttribute('aria-expanded',String(flipped));toggle.setAttribute('aria-label',aria)}card.querySelectorAll('.mface').forEach(face=>{let hidden=face.classList.contains('front')?flipped:!flipped;face.inert=hidden;face.setAttribute('aria-hidden',hidden)});}
+document.addEventListener('click',e=>{let vs=e.target.closest('[data-vascular-source]');if(vs){showVascularSource(vs.dataset.vascularSource);return}let timelineSource=e.target.closest('[data-timeline-source]');if(timelineSource){let r=state.records.find(x=>String(x.id)===timelineSource.dataset.timelineSource);if(r)dialog('记录来源',`<p>${esc(dateText(r))} · ${esc(r.department||'科别未知')}</p><p>来源：${esc(r.source||'未填写')}</p>${r.history.length?'<p>当前记录已更正；原件保留原始内容。</p>':''}${originalDialogMarkup(r)}`,`<button data-action="cancel">关闭</button>`);return}let source=e.target.closest('[data-source]');if(source){source.focus({preventScroll:true});showSource(source.dataset.source,source.dataset.date);return}let card=e.target.closest('.mcard');if(card&&!e.target.closest('button,a,input,select,textarea,[role=button]')){flipCard(card);return}let point=e.target.closest('[data-point]');if(point){togglePin(point.dataset.point,point.dataset.date);return}let b=e.target.closest('button');if(!b)return;if(b.hasAttribute('data-card-toggle')){flipCard(b.closest('.mcard'));return}if(b.dataset.datasetOpen){datasetDialog();return}if(b.dataset.useDataset){datasetSwitchDialog(b.dataset.useDataset);return}if(b.dataset.confirmDataset){applyDataset(b.dataset.confirmDataset);return}if(b.dataset.range){state.range=b.dataset.range;document.querySelectorAll('[data-range]').forEach(el=>el.setAttribute('aria-pressed',el===b));refreshChart();return}if(b.dataset.pin){state.pin={id:b.dataset.pin,date:b.dataset.date};refreshChart();return}if(b.hasAttribute('data-clear-pin')){state.pin=null;refreshChart();return}if(b.dataset.source){showSource(b.dataset.source,b.dataset.date);return}if(b.dataset.view){go(b.dataset.view,b.dataset.sub);return}if(b.dataset.adviceView){let r=state.records.find(x=>x.id===+b.dataset.adviceView);if(r)adviceDialog(r,b.dataset.adviceOwner==='1');return}if(b.dataset.historyToggle){let id=String(b.dataset.historyToggle),same=b.closest('[data-history-protected]');state.expandedHistory.has(id)?state.expandedHistory.delete(id):state.expandedHistory.add(id);document.querySelectorAll('[data-history-protected]').forEach(box=>{if(box.dataset.historyProtected!==id)return;let next=refreshHistoryProtected(box);if(box===same&&next)next.focus({preventScroll:true})});return}if(b.dataset.togglePrivate){let r=state.records.find(x=>x.id===+b.dataset.togglePrivate);if(!r)return;if(applyRecordPrivacy(r,!r.private)){render();let again=document.querySelector(`[data-toggle-private="${r.id}"]`);if(again)again.focus({preventScroll:true})}return}if(b.dataset.correct){let r=state.records.find(x=>x.id===+b.dataset.correct);dialog('改这一条',r.kind==='血管资料'||r.kind==='血管'?vascularForm(r):r.kind==='发作记录'?episodeForm(r):r.kind==='当前用药'?treatmentForm(r):r.kind==='医嘱记录'?adviceForm(r):r.kind==='消化症状'||r.kind==='消化道检查'?digestiveCorrectionForm(r):`<p>更正后可查看之前的内容。仅影响当前演示。</p><label class="field">记录内容<textarea id="entry-text">${esc(r.text)}</textarea></label><label><input type="checkbox" id="entry-private" ${r.private?'checked':''} ${linkedPrivateFile(r)?'disabled':''}> 标记为私密</label>${privateLockNote(r,'record-dialog')}`,`<button data-action="cancel">取消</button><button class="primary" data-save-correction="${r.id}">保存更正</button>`);return}if(b.dataset.saveCorrection){let r=state.records.find(x=>x.id===+b.dataset.saveCorrection);if(!r)return;let pbox=$('#entry-private')||$('#t-private')||$('#a-private')||$('#v-private');if(linkedPrivateFile(r)&&!$('#v-file')&&(!pbox||!pbox.checked)){toast('关联私密原件的记录不能改回公开；请先取消原件私密，再逐条确认');return}let wasPrivateBefore=!!r.private,hadPrivateSelection=state.selected.has(r.id)||state.timelineSelected.has(r.id);if(r.kind==='血管资料'||r.kind==='血管'){let wasLocked=!!linkedPrivateFile(r),updated=readVascularEntry();if(!updated)return;if(wasLocked&&!updated.private&&String(updated.fileId??'')!==String(r.fileId??'')){toast('关联私密原件的记录不能在同一保存中解除或更换原件并改回公开；请先保存解除或更换关联并保持私密，再单独打开本条改回公开');return}let priorFile=fileById(r.fileId),generatedSource=priorFile?`原件：${priorFile.name}`:'';if(priorFile&&updated.source===generatedSource&&String(updated.fileId??'')!==String(r.fileId??'')){let nextFile=updated.fileId?fileById(updated.fileId):null;updated.source=nextFile?`原件：${nextFile.name}`:'原件已移除'}let keys=['date','datePrecision','reportDate','reportDatePrecision','text','source','fileId','private'];if(keys.every(k=>(updated[k]??'')===(r[k]??''))){$('#dialog').close();toast('内容未变');return}r.history.push({date:r.date,datePrecision:r.datePrecision,reportDate:r.reportDate,reportDatePrecision:r.reportDatePrecision,text:r.text,source:r.source,fileLinked:!!r.fileId,private:r.private});Object.assign(r,updated)}else if(r.kind==='当前用药'){let updated=readTreatment();if(!updated)return;let keys=['drug','dose','text','date','datePrecision','endDate','ongoing','source','private'];if(keys.every(k=>(updated[k]??'')===(r[k]??''))){$('#dialog').close();toast('内容未变');return}r.history.push(Object.fromEntries(keys.map(k=>[k,r[k]])));let wasPrivate=r.private;Object.assign(r,updated);if(!wasPrivate&&r.private){state.selected.delete(r.id);state.timelineSelected.delete(r.id)}}else if(r.kind==='发作记录'){let updated=readEpisode();if(!updated)return;if($('#entry-end-replace')&&!$('#entry-end-replace').checked)updated.endDate=r.endDate;if(!$('#entry-precision').dataset.touched&&(rawStartNote(r)||(!r.datePrecision&&updated.date===r.date))){updated.date=r.date;updated.datePrecision=r.datePrecision}let same=['date','datePrecision','endDate','site','text','source','private'].every(k=>(updated[k]??(k==='private'?false:''))===(r[k]??(k==='private'?false:'')));if(same){$('#dialog').close();toast('内容未变');return}r.history.push({date:r.date,datePrecision:r.datePrecision,endDate:r.endDate,site:r.site,text:r.text,source:r.source,private:r.private});let wasPrivate=r.private;Object.assign(r,updated);if(!wasPrivate&&r.private){state.selected.delete(r.id);state.timelineSelected.delete(r.id)}}else if(r.kind==='医嘱记录'){let updated=readAdvice();if(!updated)return;let keys=['text','proposer','source','date','datePrecision','reviewDate','private'];let same=keys.every(k=>(updated[k]??(k==='private'?false:''))===(r[k]??(k==='private'?false:'')));if(same){$('#dialog').close();toast('内容未变');return}r.history.push(Object.fromEntries(keys.map(k=>[k,r[k]])));let wasPrivate=r.private;Object.assign(r,updated);if(!wasPrivate&&r.private){state.selected.delete(r.id);state.timelineSelected.delete(r.id)}}else if(r.kind==='消化症状'||r.kind==='消化道检查'){let updated=readDigestiveEntry();if(!updated)return;if(!$('#entry-precision').dataset.touched&&rawDateNote(r)){updated.date=r.date;updated.datePrecision=r.datePrecision}let keys=['date','datePrecision','text','source','private'],norm=v=>v===true?'1':v===false||v==null||v===''?'0':String(v);if(keys.every(k=>norm(updated[k])===norm(r[k]))){$('#dialog').close();toast('内容未变');return}r.history.push(Object.fromEntries(keys.map(k=>[k,r[k]])));let wasPrivate=!!r.private;Object.assign(r,updated);if(!wasPrivate&&r.private){state.selected.delete(r.id);state.timelineSelected.delete(r.id);$('#copy-status').textContent=''}}else{let text=$('#entry-text').value.trim(),priv=$('#entry-private')?$('#entry-private').checked:!!r.private;if(!text){toast('请填写记录内容');return}if(text===r.text&&priv===!!r.private){$('#dialog').close();toast('内容未变');return}r.history.push({text:r.text,source:r.source,private:!!r.private});let wasPrivate=!!r.private;r.text=text;r.private=priv;if(!wasPrivate&&priv){state.selected.delete(r.id);state.timelineSelected.delete(r.id);$('#copy-status').textContent=''}}let becamePrivate=!wasPrivateBefore&&!!r.private,madePublic=wasPrivateBefore&&!r.private,privateInvalidated=false,stale=false;if(becamePrivate||(wasPrivateBefore&&r.private)){state.selected.delete(r.id);state.timelineSelected.delete(r.id);privateInvalidated=hadPrivateSelection}if(becamePrivate||madePublic)stale=clearStaleDraftOutputs();else $('#draft').value='';resetHistoryExpansion();render();$('#dialog').close();toast(madePublic?`已保存更正并改回公开：不会自动加入摘要/导出，请逐条勾选；${stale?'旧草稿与复制状态已清空（仅页内；系统剪贴板与已下载文件不受影响）；':''}重新生成草稿可能包含这条记录，生成的是新的 AI 草稿`:privateInvalidated?'已保存更正；该记录涉及私密，已移出摘要/导出与时间线选择':'已在本次演示中保存更正');return}switch(b.dataset.action){case 'add-vascular':dialog('录入血管资料',vascularForm(),`<button data-action="cancel">取消</button><button class="primary" data-action="save-vascular">保存</button>`);break;case 'save-vascular':{let entry=readVascularEntry();if(!entry)return;state.records.push({id:nextRecordId(),kind:'血管资料',department:'血管',...entry,history:[]});render();$('#dialog').close();toast('已记录 1 条血管资料（仅本次演示）');break}case 'add-check':dialog('手工补检查',digestiveAddForm('消化道检查'),`<button data-action="cancel">取消</button><button class="primary" data-action="save">保存示例</button>`);break;case 'add':if(state.sub==='医嘱记录'){dialog('记录医嘱',adviceForm(),`<button data-action="cancel">取消</button><button class="primary" data-action="save-advice">保存示例</button>`);break}if(state.sub==='当前用药'){dialog('记录治疗',treatmentForm(),`<button data-action="cancel">取消</button><button class="primary" data-action="save-treatment">保存示例</button>`);break}if(state.sub==='发作记录'){dialog('手工补一条发作',episodeForm(),`<button data-action="cancel">取消</button><button class="primary" data-action="save-episode">保存示例</button>`);break}if(state.sub==='消化道'){dialog('手工补一条',digestiveAddForm('消化症状'),`<button data-action="cancel">取消</button><button class="primary" data-action="save">保存示例</button>`);break}dialog('手工补一条',`<p>仅保存到本次页面演示；刷新后重置。</p><label class="field">日期<input id="entry-date" type="date"></label><label class="field">本人记录<textarea id="entry-text" placeholder="按自己的话记录"></textarea></label><label><input type="checkbox" id="entry-private" ${['问题清单','心理与家庭','生育·性健康与用药'].includes(state.sub)?'checked':''}> 标记为私密（私密问题建议保留标记）</label>`,`<button data-action="cancel">取消</button><button class="primary" data-action="save">保存示例</button>`);break;case 'save-advice':{let entry=readAdvice();if(!entry)return;state.records.push({id:nextRecordId(),kind:'医嘱记录',...entry,history:[]});render();$('#dialog').close();toast('已添加医嘱记录（仅本次演示）');break}case 'save-treatment':{let entry=readTreatment();if(!entry)return;state.records.push({id:nextRecordId(),kind:'当前用药',...entry,history:[]});render();$('#dialog').close();toast('已添加到本次演示');break}case 'save-episode':{let entry=readEpisode();if(!entry)return;state.records.push({id:nextRecordId(),kind:'发作记录',...entry,history:[]});render();$('#dialog').close();toast('已添加到本次演示');break}case 'save':{let kind=$('#entry-kind')?$('#entry-kind').value:state.sub;if(kind==='消化症状'||kind==='消化道检查'){let entry=readDigestiveEntry();if(!entry)return;state.records.push({id:nextRecordId(),kind,department:'消化',...entry,history:[]});render();$('#dialog').close();toast(kind==='消化道检查'?'已添加检查资料（仅本次演示）':'已添加消化症状（仅本次演示）');break}let text=$('#entry-text').value.trim(),date=$('#entry-date').value,source=$('#entry-source')?$('#entry-source').value.trim():'';if(!text||!date){toast('请填写日期与记录内容');return}state.records.push({id:nextRecordId(),kind,date,text,source:source||'本人记录 · 本次演示',private:$('#entry-private').checked,history:[]});render();$('#dialog').close();toast('已添加到本次演示');break}case 's03-sources':safetySources();break;case 'cancel':$('#dialog').close();break;case 'directory':dialog('资料目录与云解析',`<p>这是设置入口的占位演示。尚未接入目录选择、文件导入或云解析，也不会上传资料。</p><p>解析授权、撤回、候选核对与失败恢复尚未实现；可从资料库手工添加示例记录。</p>`,`<button data-action="cancel">关闭</button><button data-action="open-library">打开资料库</button>`);break;case 'open-library':$('#dialog').close();go('病情整理','资料库');break;case 'privacy':privacyDialog();break;case 'privacy-clear':{let ids=state.records.filter(r=>r.private===true&&state.selected.has(r.id)).map(r=>r.id);ids.forEach(id=>state.selected.delete(id));refreshPrivacySurfaces(null);toast(`已清空 ${ids.length} 条私密纳入；AI 草稿仍排除`);break}case 'privacy-visit':{let d=$('#dialog');if(d&&d.open)d.close();go('复诊与准备','就诊准备与导出');break}case 'discuss':{let rs=state.records.filter(r=>!r.private),stale=clearStaleDraftOutputs();$('#draft').value='讨论草稿（合成示例；本人记录，不等于医学审核）\n'+rs.map(r=>r.kind==='医嘱记录'?adviceFields(r):`${treatmentFields(r)||episodeFields(r)||dateText(r)+' '}${r.text}${r.source?'｜'+r.source:''}`).join('\n')+'\n请帮助我整理这些记录中想问的问题。';openPane();toast(`已重新生成草稿预览；${stale?'旧复制状态已清空（仅页内提示；系统剪贴板与已下载文件不受影响）；':''}没有发送。改回公开后重新生成的 AI 草稿可能已包含该记录，请核对`);break}case 'download':{let chosen=visitSelection();if(!chosen.length)break;let groups=[['资料',chosen.filter(r=>r.kind!=='问题清单')],['问题',chosen.filter(r=>r.kind==='问题清单')]];let text='小贝宝 · 复诊材料示例\n合成数据；本人记录，不等于医学审核；原件不随文本导出\n\n'+groups.map(([title,items])=>title+'\n'+(items.length?items.map(visitLine).join('\n'):'未选择')).join('\n\n');let url;try{url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));let a=document.createElement('a');a.href=url;a.download='beipal-demo.txt';a.click();$('#export-status').textContent='已发起下载；请在浏览器中确认文件是否保存。';}catch(err){$('#export-status').textContent='导出未能发起，已保留选择，请重试。';}finally{if(url)setTimeout(()=>URL.revokeObjectURL(url),1000)}break}}});
+document.addEventListener('keydown',e=>{if(e.target.matches('circle[data-source]')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();showSource(e.target.dataset.source,e.target.dataset.date);return}if(e.target.matches('[data-point]')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();togglePin(e.target.dataset.point,e.target.dataset.date)}});document.addEventListener('input',e=>{if(e.target.id==='entry-month')e.target.dataset.manual='true';if(e.target.id==='chart-zoom'){state.zoom=Number(e.target.value);$('#zoom-value').textContent=state.zoom+'%';refreshChart()}});document.addEventListener('change',e=>{if(e.target.dataset.vasPrecision){let id=e.target.dataset.vasPrecision,p=e.target.value;['day','month'].forEach(s=>{let el=$('#'+id+'-'+s);if(el){el.removeAttribute('aria-invalid');el.removeAttribute('aria-describedby')}});$('#'+id+'-day-field').style.display=p==='day'?'':'none';$('#'+id+'-month-field').style.display=p==='month'?'':'none';$('#'+id+'-unknown-note').style.display=p==='unknown'?'':'none';return}if(e.target.id==='v-file'){let f=fileById(Number(e.target.value)),box=$('#v-private'),hadPrivate=e.target.dataset.prevPrivate==='1'||e.target.dataset.wasPrivate==='1',note=$('#v-file-change-note');if(f&&f.private){box.checked=true;box.disabled=true}else{box.disabled=false;if(hadPrivate)box.checked=true}$('#v-file-lock').hidden=!(f&&f.private);if(note){if(hadPrivate&&!(f&&f.private)){note.hidden=false;note.textContent='已切换或解除私密原件关联：本条记录仍保持私密。若要公开，请先保存本次更改，再重新打开并单独改回公开。'}else if(f&&f.private){note.hidden=false;note.textContent='所选原件为私密：本条记录会保持私密；取消原件私密后仍需逐条确认公开。'}else{note.hidden=true;note.textContent=''}}e.target.dataset.prevPrivate=f&&f.private?'1':'0';return}if(e.target.id==='entry-end-replace'){$('#entry-end').disabled=!e.target.checked;return}if(e.target.id==='t-precision'){$('#t-day-field').hidden=e.target.value!=='day';$('#t-month-field').hidden=e.target.value!=='month';return}if(e.target.id==='entry-month')e.target.dataset.manual='true';if(e.target.id==='entry-precision'){e.target.dataset.touched='true';let p=e.target.value,df=$('#entry-date-field'),mf=$('#entry-month-field'),un=$('#entry-unknown-note');if(df)df.style.display=p==='day'?'':'none';if(mf)mf.style.display=p==='month'?'':'none';if(un)un.style.display=p==='unknown'?'':'none';if(p==='month'){let mi=$('#entry-month'),di=$('#entry-date');if(mi&&di&&isDayDate(di.value)&&!mi.dataset.manual&&(!mi.value||mi.dataset.auto==='true')){mi.value=di.value.slice(0,7);mi.dataset.auto='true'}}return}if(e.target.dataset.timelineSelect){let id=+e.target.dataset.timelineSelect;e.target.checked?state.timelineSelected.add(id):state.timelineSelected.delete(id);$('#timeline-results').outerHTML=timelineResults();return}if(e.target.id==='show-events'){state.showEvents=e.target.checked;refreshChart();return}if(e.target.dataset.metric){let id=e.target.dataset.metric;if(e.target.checked&&state.metricIds.size>=4){e.target.checked=false;toast('先去掉一项再选择新的指标');return}e.target.checked?state.metricIds.add(id):state.metricIds.delete(id);refreshChart();return}if(e.target.dataset.recordPrivate){let id=+e.target.dataset.recordPrivate,r=state.records.find(x=>x.id===id);if(!r){e.target.checked=false;return}if(!applyRecordPrivacy(r,e.target.checked)){e.target.checked=!!r.private;return}refreshPrivacySurfaces(`[data-record-private="${id}"]`);return}if(e.target.dataset.privacyInclude){let id=+e.target.dataset.privacyInclude,r=state.records.find(x=>x.id===id);if(!r)return;e.target.checked?state.selected.add(id):state.selected.delete(id);refreshPrivacySurfaces(`[data-privacy-include="${id}"]`);return}if(e.target.dataset.select){let id=+e.target.dataset.select;e.target.checked?state.selected.add(id):state.selected.delete(id);let preview=document.querySelector('#export-preview');if(preview)preview.innerHTML=visitPreview()}});function clearDialogPrivateState(){let ids=new Set(dialogPrivateIds);$('#dialog-body').querySelectorAll('[data-history-protected]').forEach(box=>{let id=String(box.dataset.historyProtected||'');if(id)ids.add(id)});ids.forEach(id=>{state.expandedHistory.delete(id);document.querySelectorAll('#main [data-history-protected]').forEach(box=>{if(String(box.dataset.historyProtected||'')===id)refreshHistoryProtected(box)})});dialogPrivateIds=[]}
+function clearDialogContent(){clearDialogPrivateState();$('#dialog-title').textContent='';$('#dialog-body').innerHTML='';$('#dialog-foot').innerHTML=''}
+$('#dialog').addEventListener('close',()=>{if($('#dialog').open)return;clearDialogContent();let target=dialogOpener?.isConnected?dialogOpener:dialogOpenerSelector&&document.querySelector(dialogOpenerSelector);if(target){let details=target.closest('details');if(details)details.open=true;target.focus({preventScroll:true})}else $('#main').focus({preventScroll:true});dialogOpener=null;dialogOpenerSelector=null});window.addEventListener('resize',updateChartScrollHint);$('#close-dialog').onclick=()=>$('#dialog').close();$('#large').onclick=()=>document.body.classList.toggle('big');$('#pane-toggle').onclick=()=>$('#pane').hidden?openPane():closePane();$('#pane-close').onclick=closePane;$('#copy').onclick=async()=>{let t=$('#draft').value;if(!t){$('#copy-status').textContent='先在页面选择“和 AI 讨论”生成草稿。';return}try{await navigator.clipboard.writeText(t);$('#copy-status').textContent='已复制草稿；没有发送。'}catch{$('#copy-status').textContent='复制不可用，请选中文字手动复制。';$('#draft').focus();$('#draft').select()}};$('#splitter').addEventListener('keydown',e=>{let n=state.width;if(e.key==='ArrowLeft')n+=2;else if(e.key==='ArrowRight')n-=2;else if(e.key==='Home')n=25;else if(e.key==='End')n=45;else return;e.preventDefault();width(n)});$('#splitter').addEventListener('pointerdown',e=>{e.currentTarget.setPointerCapture(e.pointerId)});$('#splitter').addEventListener('pointermove',e=>{if(!e.currentTarget.hasPointerCapture(e.pointerId))return;let r=$('.layout').getBoundingClientRect();width(Math.round((r.right-e.clientX)/r.width*100))});render();
+
+/* ── 资料目录与云解析的交互（本机演示，不联网） ───────────────────── */
+function fileById(id){return state.files.find(f=>f.id===id)}
+function needFile(id){let f=fileById(id);if(!f)toast('原件已不在目录中');return f}
+function scrubRemovedFileName(value,name){let s=String(value||'').trim();if(!name)return s;return s===`原件：${name}`?'原件已移除':s}
+document.addEventListener('change',e=>{
+  let t=e.target
+  if(t.id==='file-input'){if(t.files&&t.files.length)registerFiles(t.files);t.value='';return}
+  if(t.dataset.filePrivate){let f=needFile(+t.dataset.filePrivate);if(!f)return
+    if(!t.checked&&f.private){
+      t.checked=true
+      dialog('取消原件私密保护',`<p>取消 <strong>${esc(f.name)}</strong> 的「私密原件」保护？</p><p class="muted">取消后，这个原件不再锁定关联记录；已生成的关联记录不会自动公开，仍需逐条确认。已勾选的摘要/导出、AI 草稿和复制状态不会自动改变。你电脑上的原文件不会被修改。</p>`,`<button data-action="cancel">保留私密</button><button class="primary" data-file-unprotect-confirm="${f.id}">确认取消私密</button>`)
+      return
+    }
+    f.private=t.checked
+    state.candidates.forEach(c=>{if(c.fileId===f.id)c.private=!!f.private})
+    let newlyPrivate=[]
+    if(t.checked){
+      state.records.forEach(r=>{if(r.fileId===f.id&&r.private!==true){r.private=true;newlyPrivate.push(r.id)}})
+      newlyPrivate.forEach(id=>{state.selected.delete(id);state.timelineSelected.delete(id)})
+      if(newlyPrivate.length){$('#draft').value='';$('#copy-status').textContent=''}
+    }
+    if(t.checked)toast(newlyPrivate.length?`原件已标为私密：${newlyPrivate.length} 条关联记录同步为私密，已从导出/时间线选择移除，AI 草稿已清空（仅页内；系统剪贴板与已下载文件不受影响）`:'原件已标为私密：关联记录已是私密，保留原有选择')
+    else toast('原件取消私密；已生成的记录不会自动公开，需逐条确认')
+    resetHistoryExpansion();render();return}
+})
+document.addEventListener('click',async e=>{
+  let b=e.target.closest('button');if(!b)return
+  if(b.dataset.vascularOpenFile){let f=needFile(+b.dataset.vascularOpenFile);if(!f||!f.blob)return;let url=URL.createObjectURL(f.blob),a=document.createElement('a');a.href=url;a.download=f.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return}
+  if(b.dataset.go){go(b.dataset.go);return}
+  if(b.dataset.parse){let f=needFile(+b.dataset.parse);if(!f)return
+    dialog('模拟抽取（不联网）',`<p>将要在本机读取的原件：</p><p><strong>${esc(f.name)}</strong>（${fmtSize(f.size)}）</p>
+      <p class="muted">本演示只在你的浏览器里按行切出候选，不会把文件发送给任何服务，也不会生成日期或诊断。</p>
+      ${isTextFile(f)?'':'<p>该类型在本演示中不能抽取（没有 OCR/PDF 解析），可登记后手工记录。</p>'}
+      <label><input type="checkbox" id="parse-consent"> 我已了解：本次抽取只在本机进行</label><p id="parse-err" role="alert"></p>`,
+      `<button data-action="cancel">取消</button><button class="primary" data-parse-run="${f.id}">开始本机抽取</button>`);return}
+  if(b.dataset.parseRun){let f=needFile(+b.dataset.parseRun);if(!f)return
+    if(!document.querySelector('#parse-consent').checked){document.querySelector('#parse-err').textContent='请先勾选「只在本机进行」再开始';return}
+    if(!f.content&&f.blob&&f.blob.text){try{f.content=await f.blob.text()}catch{}}
+    if(!f.content){document.querySelector('#parse-err').textContent='该类型不支持本机抽取，请手工记录';return}
+    let n=runMockExtract(f);$('#dialog').close();render();toast(n?`已生成 ${n} 条候选，需逐条采纳`:'这份文本里没有可切出的候选行');return}
+  if(b.dataset.parseRevoke){let had=state.candidates.length;state.candidates=[];state.files.forEach(f=>{f.content=''});render();toast(had?'已撤回本机抽取授权：候选与本机文本缓存已清空；已采纳记录、登记信息和磁盘原件保留。本演示未上传文件，没有云端副本可删。':'已清空本机文本缓存；已采纳记录、登记信息和磁盘原件保留。本演示未上传文件，没有云端副本可删。');return}
+  if(b.dataset.accept){let c=state.candidates.find(x=>x.id===+b.dataset.accept);if(!c)return
+    let f=fileById(c.fileId),p=!!(f&&f.private)
+    state.records.unshift({id:nextRecordId(),kind:'资料库',date:'',datePrecision:'unknown',text:c.text,source:`原件：${c.fileName}`,fileId:c.fileId,original:{title:c.fileName,text:c.text},private:p,history:[]})
+    state.candidates=state.candidates.filter(x=>x.id!==c.id);render();toast(p?'已采纳为私密资料记录（日期未知，可在资料库回看）':'已采纳为一条资料记录（日期未知，可在资料库回看）');return}
+  if(b.dataset.drop){state.candidates=state.candidates.filter(x=>x.id!==+b.dataset.drop);render();return}
+  if(b.dataset.fileUnprotectConfirm){let f=needFile(+b.dataset.fileUnprotectConfirm);if(!f)return
+    f.private=false
+    state.candidates.forEach(c=>{if(c.fileId===f.id)c.private=false})
+    resetHistoryExpansion();$('#dialog').close();render();toast('原件已取消私密保护；已生成的记录不会自动公开，需逐条确认');return}
+  if(b.dataset.fileDel){let f=needFile(+b.dataset.fileDel);if(!f)return
+    dialog('移除原件',`<p>从资料目录移除 <strong>${esc(f.name)}</strong>？</p>${f.private?'<p class="notice">这是「私密原件」。移除登记不会把已采纳记录自动公开；记录会保留私密标记，但不再受这个原件锁定，之后需逐条确认才能公开。</p>':''}<p class="muted">移除登记、相关候选与本机文本缓存；已采纳的记录保留，但不再关联这个原件。来源中的这个文件名会被清除——仅限本页自动生成的「原件：文件名」；你手工填写或修改过的来源不会被改写。你电脑上的原文件不会被删除，本演示也没有云端副本。</p>`,
+      `<button data-action="cancel">取消</button><button class="primary" data-file-del-confirm="${f.id}">${f.private?'移除私密原件':'移除'}</button>`);return}
+  if(b.dataset.fileDelConfirm){let id=+b.dataset.fileDelConfirm,removed=fileById(id)
+    state.files=state.files.filter(f=>f.id!==id);state.candidates=state.candidates.filter(c=>c.fileId!==id)
+    state.records.forEach(r=>{if(r.fileId===id){r.fileId=null;r.original=null;if(removed){r.source=scrubRemovedFileName(r.source,removed.name)||'原件已移除';if(Array.isArray(r.history))r.history.forEach(h=>{if(h&&typeof h==='object'&&typeof h.source==='string')h.source=scrubRemovedFileName(h.source,removed.name)||'原件已移除'})}}})
+    resetHistoryExpansion();$('#dialog').close();render();toast('已移除原件；相关记录保留为「无原件」；自动生成的来源文件名已清除，手工来源未改写');return}
+})
+</script>
+<script>
+/* 打印时展开全部治疗阶段与公开更正历史。Chrome 打印中闭合 details 的内容不参与排版，
+   @media print 单独改 display 无效，所以必须在 beforeprint 打开；打印后恢复原状。
+   私密/未知更正历史正文由 print CSS 隐藏，不随公开历史一起展开。 */
+(function printExpandFoldouts(){
+  let prior=null;
+  const selector='details.phase-fold,details[data-history-public]';
+  const keyOf=d=>d.matches('details.phase-fold')?'phase:'+String(d.dataset.phaseId||''):'history:'+String(d.dataset.historyPublic||'');
+  window.addEventListener('beforeprint',()=>{
+    const folds=[...document.querySelectorAll(selector)];
+    if(prior===null)prior=folds.map(d=>({key:keyOf(d),open:d.open}));
+    folds.forEach(d=>{d.open=true});
+  });
+  window.addEventListener('afterprint',()=>{
+    if(prior===null)return;
+    const saved=new Map(prior.map(x=>[x.key,x.open]));
+    document.querySelectorAll(selector).forEach(d=>{
+      const key=keyOf(d);
+      d.open=saved.has(key)?saved.get(key):false;
+    });
+    prior=null;
+  });
+})();
+</script></body></html>

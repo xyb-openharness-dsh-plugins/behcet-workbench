@@ -1,0 +1,211 @@
+/* 36 号 · 疾病概要（「?」入口）参考样式
+ * 只定义结构与密度；颜色一律走项目令牌，取不到就兜底（各项目命名不同：--violet / --brand / --accent）。
+ * 字号一律 calc(NNpx * var(--tz, 1))，缺 --tz 时按 1 处理。
+ */
+
+:root{
+  --dp-accent: var(--brand, var(--violet, var(--accent, #7B4C9A)));
+  --dp-accent-deep: var(--brand-deep, var(--violet-deep, var(--accent-deep, #4A2D5C)));
+  --dp-accent-soft: var(--brand-soft, var(--violet-soft, var(--accent-soft, #F3EEF8)));
+  --dp-surface: var(--surface, #FFFFFF);
+  --dp-page: var(--paper, var(--page-bg, #FAF9FB));
+  --dp-ink: var(--ink, #2B2430);
+  --dp-ink2: var(--ink-2, #4F4557);
+  --dp-muted: var(--muted, #7C7286);
+  --dp-line: var(--line, #E6E0EC);
+  --dp-tz: var(--tz, 1);
+  --dp-radius: 14px;
+}
+
+/* ---------- 触发按钮 ---------- */
+.dp-trigger{
+  min-width: 34px; min-height: 34px;
+  padding: 0 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: calc(14px * var(--dp-tz)); font-weight: 700; line-height: 1;
+  color: var(--dp-accent-deep);
+  background: var(--dp-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--dp-accent) 34%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.dp-trigger:hover{ background: color-mix(in srgb, var(--dp-accent) 16%, var(--dp-surface)); }
+.dp-trigger:focus-visible{ outline: 3px solid var(--dp-accent-deep); outline-offset: 2px; }
+.dp-trigger-float{ position: fixed; top: 12px; right: 12px; z-index: 55; }
+
+/* ---------- 整页浮层 ---------- */
+html.dp-lock, html.dp-lock body{ overflow: hidden; }
+
+.dp-overlay{
+  position: fixed; inset: 0; z-index: 60;
+  display: flex;
+  background: rgba(28, 20, 36, .34);
+  background: var(--scrim, rgba(28, 20, 36, .34));
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  animation: dp-fade .18s ease-out both;
+}
+.dp-overlay[hidden]{ display: none !important; }
+
+.dp-panel{
+  position: absolute;
+  inset: clamp(8px, 1.2vw, 16px);
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  background: var(--dp-page);
+  border: 1px solid var(--dp-line);
+  border-radius: var(--dp-radius);
+  box-shadow: 0 18px 48px rgba(30, 20, 40, .22);
+  overflow: hidden;
+  animation: dp-rise .2s cubic-bezier(.22,.7,.24,1) both;
+}
+.dp-panel:focus{ outline: none; }
+
+/* ---------- 顶栏 ---------- */
+.dp-head{
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0; min-height: 56px;
+  padding: 0 12px 0 8px;
+  background: var(--dp-surface);
+  border-bottom: 1px solid var(--dp-line);
+}
+.dp-head-title{ flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.dp-crumb{
+  font-size: calc(11px * var(--dp-tz)); color: var(--dp-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dp-title{
+  margin: 0; font-size: calc(15px * var(--dp-tz)); font-weight: 700; color: var(--dp-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dp-en{ font-weight: 500; font-size: calc(11.5px * var(--dp-tz)); color: var(--dp-muted); }
+
+.dp-btn{
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 36px; padding: 0 12px;
+  font-size: calc(12.5px * var(--dp-tz));
+  color: var(--dp-ink); background: var(--dp-surface);
+  border: 1px solid var(--dp-line); border-radius: 9px;
+  cursor: pointer; flex-shrink: 0;
+}
+.dp-btn:hover{ background: var(--dp-accent-soft); border-color: color-mix(in srgb, var(--dp-accent) 34%, transparent); }
+.dp-btn:focus-visible{ outline: 3px solid var(--dp-accent-deep); outline-offset: 2px; }
+.dp-close{ min-width: 36px; justify-content: center; padding: 0; }
+
+/* ---------- 内容 ---------- */
+.dp-body{
+  flex: 1; min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px clamp(14px, 1.6vw, 28px) 56px;
+}
+.dp-inner{ max-width: 980px; margin: 0 auto; }
+
+.dp-note{
+  margin: 0 0 18px;
+  padding: 11px 14px;
+  font-size: calc(12.5px * var(--dp-tz)); line-height: 1.7;
+  color: var(--dp-ink2);
+  background: var(--dp-accent-soft);
+  border-left: 3px solid var(--dp-accent);
+  border-radius: 0 9px 9px 0;
+}
+
+.dp-section{
+  padding: 16px 0 4px;
+  border-top: 1px dashed var(--dp-line);
+}
+.dp-section:first-of-type{ border-top: 0; }
+.dp-section h3{
+  margin: 0 0 10px;
+  font-size: calc(15.5px * var(--dp-tz)); font-weight: 700; color: var(--dp-ink);
+  display: flex; align-items: baseline; gap: 8px;
+}
+.dp-section h3::before{
+  content: ""; width: 4px; height: 15px; border-radius: 2px;
+  background: var(--dp-accent); flex-shrink: 0;
+}
+
+.dp-lead{
+  margin: 0 0 10px;
+  font-size: calc(13px * var(--dp-tz)); line-height: 1.78; color: var(--dp-ink2);
+  /* 36 号 §4.3：正文块不设 max-width——右边界与表格/小标题一致，段落换行点才一致。
+     曾用 68ch（≈557px），表格却吃满容器，视觉上"左边对齐、右边参差"（P9 断言）。 */
+}
+.dp-empty{ color: var(--dp-muted); font-style: normal; }
+
+.dp-group{ margin: 0 0 12px; }
+.dp-group h4{
+  margin: 0 0 5px;
+  font-size: calc(12.5px * var(--dp-tz)); font-weight: 700; color: var(--dp-accent-deep);
+}
+/* 36 号 §4.3：分组内列表同为块级零内边距，只留 li 的符号缩进 */
+.dp-group .dp-points{ margin-bottom: 6px; }
+
+/* 36 号 §4.3：列表块左内边距归零，符号缩进放 li——ul 盒右边界与正文/表格一致 */
+.dp-points{ margin: 0 0 10px; padding-left: 0; list-style: none; }
+.dp-points li{ position: relative; padding-left: 18px; }
+.dp-points li::before{
+  content: ""; position: absolute; left: 6px; top: .72em;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--dp-muted, #7A7186);
+}
+.dp-points li{
+  font-size: calc(12.8px * var(--dp-tz)); line-height: 1.75; color: var(--dp-ink2);
+  margin-bottom: 5px;
+  /* 同上：列表项与正文同宽 */
+}
+
+.dp-table-wrap{ overflow-x: auto; margin: 0 0 12px; }
+/* 36 号 §4.3：窄容器下表格横向滚动，不压缩列宽导致逐字换行 */
+.dp-table{ min-width: 640px; }
+.dp-table{
+  border-collapse: collapse; width: 100%;
+  font-size: calc(12.2px * var(--dp-tz));
+  background: var(--dp-surface);
+  border: 1px solid var(--dp-line); border-radius: 9px;
+}
+.dp-table th, .dp-table td{
+  padding: 7px 10px; text-align: left;
+  border-bottom: 1px solid var(--dp-line);
+  vertical-align: top; line-height: 1.6;
+}
+.dp-table th{
+  background: var(--dp-accent-soft); color: var(--dp-accent-deep);
+  font-weight: 700; white-space: nowrap;
+}
+.dp-table tr:last-child td{ border-bottom: 0; }
+
+.dp-src{
+  margin: 10px 0 0;
+  font-size: calc(11px * var(--dp-tz)); line-height: 1.65;
+  color: var(--dp-muted);
+}
+.dp-src b{ color: var(--dp-ink2); margin-right: 6px; }
+.dp-src-missing{ color: var(--danger, #A3241B); }
+
+.dp-foot{
+  margin: 22px 0 0; padding-top: 14px;
+  border-top: 1px solid var(--dp-line);
+  font-size: calc(11.5px * var(--dp-tz)); line-height: 1.7; color: var(--dp-muted);
+}
+
+@keyframes dp-fade{ from{ opacity: 0 } to{ opacity: 1 } }
+@keyframes dp-rise{ from{ opacity: 0; transform: translateY(6px) scale(.995) } to{ opacity: 1; transform: none } }
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 760px){
+  .dp-panel{ inset: 0; border-radius: 0; border: 0; }
+  .dp-head{ min-height: 52px; }
+  .dp-back span{ display: none; }
+  .dp-body{ padding: 16px 14px 44px; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .dp-overlay, .dp-panel{ animation: none; }
+}
+
+/* 36 号 §2.5：指南原件/二次来源链接（可点开或下载） */
+.dp-link { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.dp-link:hover { text-decoration-thickness: 2px; }
+.dp-miss { color: #b3372e; font-weight: 600; }
