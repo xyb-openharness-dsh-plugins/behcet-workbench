@@ -28,7 +28,7 @@ const OUT = join(root, 'public')
 const checkOnly = process.argv.includes('--check')
 const version = readFileSync(join(root, 'VERSION'), 'utf8').trim()
 
-const FILES = ['demo-data.js', 'demo-data-b.js', 'metric-model.js', 'pathway-model.js', 'primer-data.js']
+const FILES = ['demo-data.js', 'demo-data-b.js', 'metric-model.js', 'pathway-model.js', 'primer-data.js', 'host-bridge.js']
 const PATTERN_FILES = ['disease-primer.css', 'disease-primer.js']
 const read = (dir, name) => readFileSync(join(dir, name), 'utf8')
 

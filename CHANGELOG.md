@@ -2,6 +2,28 @@
 
 只增不删；每条写清"改了什么 + 为什么 + 用户可见结果"。版本号与 VERSION、package.json 三处必须一致。
 
+## 0.2.1 — 2026-11-13
+
+三缺口批量补齐（本仓只剩 C 的 UI 入口）：
+
+- **A 资料目录 / B 临床线**：复核已完整（面板 `pickDirectory` + `/api/root`；试验四段在 0.2.0 已接），未改。
+- **C 新建患者（补齐 UI）**：`host-bridge.js` 早就实现了 `POST /subjects`、切换、删除与 `is_demo` 保护，但**页面上没有任何入口**——「切换合成示例组」弹窗只列两套合成档案。
+  现在该弹窗新增「我的档案（存本机数据库）」区：列出自建档案（点即切换）+「＋ 新建我的档案」（走已有 `data-profile-new` 表单→落库→自动切过去）；bridge 只暴露一个 `window.__BEIPAL_HB__` 只读引用，不复制状态。
+- 校验：三闸门全绿；`npm run check` 仍红在 **45 条既存领域测试**（日期精度未知保持 / 来源墓碑 / 双档案降级 / 消化道并列 / 医嘱独立 / 发作私密），与本轮改动无关（改动前后同为 45）。这批是 M3/M4 的业务事实层欠账，见 `docs/DEV-NODE-ASSESSMENT-2026-11-11.md` §四。
+
+## 0.2.0 — 2026-11-12
+
+从「只能看合成示例」补到**能建自己的档案、记录真落库、临床试验可检索可评分**。
+
+- **修复空白页（0.1.1 装机后无法使用）**：`dsh/index.js` 用 `URL.pathname` 取 `public/`，装机路径含空格（`.../Application Support/...`）时得到 `Application%20Support`，`realpathSync` ENOENT → 所有 `/api/behcet/ui/*` 500 → iframe 空白。改用 `fileURLToPath`，并给 `static.js` 的根解析加降级。日志证据见 `harness.log` 的 `resolveStatic ... static.js:35`。
+- **患者档案（真实用户数据）**：新增 `schema/0001_initial.sql`（subjects / subject_records / trial_profile / saved_trial / app_setting）+ `dsh/store.js` + `dsh/workbench.js`，用 Node 内建 `node:sqlite` 落盘。顶栏新增「档案」切换与「＋ 新建患者」；新建后从空记录开始，记录变更防抖整包保存，失败如实提示且不刷新丢数据；删除只允许删自己建的档案。demo A/B 用 `is_demo=1` 保留为合成示例，永不覆盖用户档案。
+- **资料目录（真入口）**：外壳顶栏「配置目录」调用宿主 `uiWorkspace.pickDirectory()`；服务端 `POST /api/behcet/api/root` 二次校验并切换 sqlite 根，切换失败回滚原库。口径：拒绝主目录本身、桌面、下载根目录、tmp 与 `/`；《本原型为示意，目录未真实挂载》只保留在没有选择能力的降级路径。业务页「资料目录与云解析」也加了同一入口（iframe 经 postMessage 交给外壳）。
+- **临床试验（35 号四段链路）**：新增 `research/behcet/` 真实快照（ClinicalTrials.gov API v2，2026-11-11 采集 33 条，16 条干预性 / 17 条观察登记，33 条都有入排原文；`product-manifest.json` 明写单来源、未核实、非完整）。`dsh/trials.js` 输出三态证据链（✓/✕/?）、四档分层、百分数只在可对照项 ≥2 时给、待确认不填阴/阳；药物靶点不进分母，排除句含限定语时只标"需核对原文"不自动反转。业务页新增「临床研究」三步 Tab：基础档案 → 匹配检查 → 结果分析（大号百分数 + `n/m 项对得上 · k 项待确认` + 收藏）。
+- **API**：`/bootstrap`、`/subjects`（GET/POST/DELETE）、`/subjects/:key/records`（GET/PUT）、`/trial-profile`、`/trials`、`/trials/match`、`/saved-trials`、`/root`；全部走宿主 connection 认证，错误返回 JSON 不白屏。
+- **闸门**：并入 starter 的 `check-patient-create` / `check-data-dir` / `check-trial-chain` 三件（分别覆盖"只能看 demo""假目录入口""裁剪靠推断"三类复发错误），都进 `npm run check`。
+- **实测**：本机 stub 宿主 + 系统 Chrome（Playwright）跑通 新建患者 → 记一条发作 → 刷新后仍在 → 临床研究三步 Tab → 33 张评分卡；API 层验证目录拒绝清单与切换回滚。`node --test test/*.test.mjs` 仍为 **45 条 not ok**（与 0.1.1 相同，属 M3/M4 业务面：日期精度、来源墓碑、双档案、消化道、医嘱、发作记录），本次未新增失败。
+- **未验证**：Desktop 实机点按（面板出现、原生目录选择器、取消是否留空会话）需装机后人工走查；harness 需重启加载新包。
+
 ## 0.1.1 — 2026-11-11
 
 从「只有注册骨架 + /health」补到可装机运行的工作台外壳。

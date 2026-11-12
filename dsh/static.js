@@ -32,7 +32,8 @@ export function resolveStatic(root, urlPath) {
   if (rel.split(/[/\\]/).includes('..')) return null
   const target = (rel === '' || rel.endsWith('/')) ? rel + 'index.html' : rel
   const abs = resolve(root, target)
-  const rootReal = realpathSync(root)
+  let rootReal
+  try { rootReal = realpathSync(root) } catch { return null }
   let absReal
   try { absReal = realpathSync(abs) } catch { return null }
   const r = relative(rootReal, absReal)

@@ -1,6 +1,6 @@
 {
   "name": "@xyb-community/behcet-workbench",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "description": "帮助白塞病成年患者及授权代记者整理从疑似到长期随访的资料。",
   "private": true,
   "type": "module",
@@ -18,10 +18,12 @@
     "assets",
     "cordis.patch.yml",
     "README.md",
-    "NOTICE.md"
+    "NOTICE.md",
+    "schema",
+    "research"
   ],
   "scripts": {
-    "check": "node --check dsh/index.js && node --check dsh/static.js && node --check lib/client.js && node scripts/build-version.mjs --check && node scripts/build-public.mjs --check && node scripts/check-workbench-package.mjs . && node scripts/check-host-contract.mjs && node scripts/smoke-activate.mjs && node scripts/check-probe-coverage.mjs && node scripts/check-version-literal.mjs && node scripts/check-static-refs.mjs && node scripts/check-choice-limit.mjs && node scripts/check-assertion-strength.mjs && node scripts/check-derivative-leftovers.mjs . && node scripts/check-wording.mjs && node scripts/check-clinical-snapshot-commit.mjs && node scripts/check-trial-snapshot.mjs . --if-present && node scripts/check-primer-links.mjs && node --test test/*.test.mjs && node scripts/check-agent-pane-contract.mjs .",
+    "check": "node --check dsh/index.js && node --check dsh/static.js && node --check lib/client.js && node scripts/build-version.mjs --check && node scripts/build-public.mjs --check && node scripts/check-workbench-package.mjs . && node scripts/check-host-contract.mjs && node scripts/smoke-activate.mjs && node scripts/check-probe-coverage.mjs && node scripts/check-version-literal.mjs && node scripts/check-static-refs.mjs && node scripts/check-choice-limit.mjs && node scripts/check-assertion-strength.mjs && node scripts/check-derivative-leftovers.mjs . && node scripts/check-wording.mjs && node scripts/check-clinical-snapshot-commit.mjs && node scripts/check-trial-snapshot.mjs . --if-present && node scripts/check-patient-create.mjs . && node scripts/check-data-dir.mjs . && node scripts/check-trial-chain.mjs . && node scripts/check-primer-links.mjs && node --test test/*.test.mjs && node scripts/check-agent-pane-contract.mjs .",
     "check:wording": "node scripts/check-wording.mjs && node scripts/check-wording.mjs --self-test",
     "check:version-literal": "node scripts/check-version-literal.mjs",
     "check:host": "node scripts/check-host-contract.mjs",
@@ -44,7 +46,10 @@
     "build:public": "node scripts/build-public.mjs",
     "check:public": "node scripts/build-public.mjs --check",
     "build:version": "node scripts/build-version.mjs",
-    "check:version": "node scripts/build-version.mjs --check"
+    "check:version": "node scripts/build-version.mjs --check",
+    "build:trial-snapshot": "node scripts/build-trial-snapshot.mjs",
+    "check:patient": "node scripts/check-patient-create.mjs .",
+    "check:data-dir": "node scripts/check-data-dir.mjs ."
   },
   "dsh": {
     "bundle": {

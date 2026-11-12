@@ -2,7 +2,9 @@
 
 帮助白塞病成年患者及授权代记者整理从疑似到长期随访的资料。
 
-这是接入骨架，尚未实现真实业务。初始化后先将 [项目设计提示词](docs/DESIGN-PROMPT.md) 交给当前Agent；它应展示实际路径并以已有用户/场景/流程素材对齐设计者、研究与取舍原则。癌种项目另有 [完整专用提示词](prompts/NEW-CANCER-WORKBENCH.md)。需求见 [BRIEF](docs/BRIEF.md)，规格见 [SPEC](docs/SPEC.md)，任务见 [TASKS](docs/TASKS.md)；先读 [AGENTS](AGENTS.md)。CLI输出交接与首问，实际对话由Agent接续。
+当前版本 0.2.0：原型交互 + 可装机外壳 + 本机 sqlite 患者档案（新建 / 切换 / 删除，记录防抖落库）+ 真实资料目录选择（拒绝主目录/桌面/下载根/tmp，服务端二次校验与回滚）+ 35 号临床试验四段链路（ClinicalTrials.gov 单来源快照 33 条、三步 Tab：基础档案 / 匹配检查 / 结果分析，登记字段符合度带分母与证据链）。
+
+边界：这是患者自助整理与研究线索工具，不产出诊断或入组资格结论；M3/M4 业务面（日期精度、来源墓碑、双档案细节、医嘱与发作记录）仍有未通过的测试，见 [CHANGELOG](CHANGELOG.md)。初始化后先将 [项目设计提示词](docs/DESIGN-PROMPT.md) 交给当前Agent；它应展示实际路径并以已有用户/场景/流程素材对齐设计者、研究与取舍原则。癌种项目另有 [完整专用提示词](prompts/NEW-CANCER-WORKBENCH.md)。需求见 [BRIEF](docs/BRIEF.md)，规格见 [SPEC](docs/SPEC.md)，任务见 [TASKS](docs/TASKS.md)；先读 [AGENTS](AGENTS.md)。
 
 ## 疾病概要
 

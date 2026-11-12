@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "product-trial-snapshot",
+  "snapshotDate": "2026-11-11",
+  "fetchedAt": "2026-11-11T22:49:22.931Z",
+  "status": "PARTIAL",
+  "query": {
+    "condition": "Behçet",
+    "pageSize": 100,
+    "pages": 1,
+    "totalCount": 33,
+    "urls": [
+      "https://clinicaltrials.gov/api/v2/studies?query.cond=Beh%C3%A7et&pageSize=100&countTotal=true"
+    ]
+  },
+  "api": {
+    "base": "https://clinicaltrials.gov/api/v2",
+    "version": "2.0.5",
+    "dataTimestamp": "2026-11-10T10:00:05"
+  },
+  "sources": [
+    {
+      "sourceId": "CTG",
+      "label": "ClinicalTrials.gov",
+      "state": "SUCCESS",
+      "queried": true,
+      "url": "https://clinicaltrials.gov"
+    },
+    {
+      "sourceId": "ChiCTR",
+      "label": "中国临床试验注册中心",
+      "state": "NOT_QUERIED",
+      "queried": false
+    },
+    {
+      "sourceId": "ChinaDrugTrials",
+      "label": "药物临床试验登记与信息公示平台",
+      "state": "NOT_QUERIED",
+      "queried": false
+    },
+    {
+      "sourceId": "ICTRP",
+      "label": "WHO ICTRP",
+      "state": "NOT_QUERIED",
+      "queried": false
+    }
+  ],
+  "counts": {
+    "fetched": 33,
+    "included": 33,
+    "excluded": 0,
+    "uniqueIds": 33
+  },
+  "filter": "conditions/title/summary/eligibility 文本含 Behçet / Behcet / 白塞",
+  "files": {
+    "trials-2026-11-11.jsonl": {
+      "sha256": "59d8706e48ae0bf6df5b653c3e61236d29dda672c40fd269e6378afababde5c4",
+      "bytes": 108578
+    },
+    "trials.sqlite": {
+      "sha256": "2df6ab6bff8216a0906ad7e0ee4a8f6287a9718241642819f84775ee4709bfea",
+      "bytes": 135168
+    }
+  },
+  "limitations": [
+    "单来源（ClinicalTrials.gov），ChiCTR / 药物临床试验登记平台 / ICTRP 本轮未查询；不能据此说\"全库无匹配\"。",
+    "未逐条核对登记详情与入排原文；登记状态不等于当前招募，也不等于入组资格。",
+    "本快照用于工作台检索与登记字段符合度粗筛，不是生产临床库，也不产出入组结论。"
+  ],
+  "note": "产品快照：单来源、未核实、非完整；只用于候选线索与证据链展示。"
+}
